@@ -64,28 +64,37 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
     <div className="w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
       
       {/* Dynamic Job Feed Banner */}
-      {settings.bannerUrl && (
-        <div className="relative h-32 md:h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs">
+      <div className={`relative h-32 md:h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs ${!settings.bannerUrl ? 'bg-gradient-to-r from-teal-900 via-slate-800 to-indigo-950' : ''}`}>
+        {settings.bannerUrl && (
           <img
             src={settings.bannerUrl}
             alt="Careers Banner"
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
           />
-          {/* Overlay gradient */}
-          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/30 to-transparent flex flex-col justify-end p-5">
-            <span className="px-2 py-0.5 bg-teal-600 text-white text-[9px] font-bold tracking-widest uppercase rounded self-start mb-1.5 shadow-xs font-display">
-              Discover Jobs
-            </span>
-            <h2 className="text-base md:text-lg font-bold text-white leading-tight tracking-tight font-display">
-              Work with the most innovative companies on the planet
-            </h2>
-            <p className="text-[10px] text-slate-200 mt-0.5 font-medium hidden sm:block">
-              Apply in seconds and text hiring managers directly.
-            </p>
-          </div>
+        )}
+        {/* Overlay gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/50 to-transparent flex flex-col justify-end p-5 text-white">
+          {settings.bannerHtml ? (
+            <div 
+              className="text-white text-xs font-medium w-full wysiwyg-content select-text leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: settings.bannerHtml }}
+            />
+          ) : (
+            <>
+              <span className="px-2 py-0.5 bg-teal-600 text-white text-[9px] font-bold tracking-widest uppercase rounded self-start mb-1.5 shadow-xs font-display animate-pulse">
+                Discover Jobs
+              </span>
+              <h2 className="text-base md:text-lg font-bold text-white leading-tight tracking-tight font-display">
+                Work with the most innovative companies on the planet
+              </h2>
+              <p className="text-[10px] text-slate-200 mt-0.5 font-medium hidden sm:block">
+                Apply in seconds and text hiring managers directly.
+              </p>
+            </>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Modern Filter Bars */}
       <div className="bg-white p-3 rounded-xl shadow-xs border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3">

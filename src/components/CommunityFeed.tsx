@@ -287,11 +287,11 @@ export default function CommunityFeed({
               const hrs = Math.floor(diffHours);
               return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
             } else {
-              return `Posted: ${postDate.toLocaleDateString(undefined, {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric'
-              })}`;
+              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+              const day = postDate.getDate();
+              const month = months[postDate.getMonth()];
+              const year = postDate.getFullYear();
+              return `Posted: ${day} ${month} ${year}`;
             }
           };
 

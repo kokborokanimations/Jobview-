@@ -271,6 +271,50 @@ function writeDB(data: any) {
   }
 }
 
+// Serve uploaded media statically
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+
+// Media Upload endpoint
+app.post('/api/upload', (req, res) => {
+  try {
+    const { file, name } = req.body;
+    if (!file) {
+      return res.status(400).json({ error: 'No file data received' });
+    }
+
+    const uploadDir = path.join(process.cwd(), 'uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const matches = file.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: 'Invalid base64 string' });
+    }
+
+    const mimeType = matches[1];
+    const buffer = Buffer.from(matches[2], 'base64');
+    
+    let ext = 'png';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+    else if (mimeType.includes('gif')) ext = 'gif';
+    else if (mimeType.includes('svg')) ext = 'svg';
+    else if (mimeType.includes('webp')) ext = 'webp';
+
+    const cleanName = name ? name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'uploaded';
+    const fileName = `${cleanName}_${Date.now()}.${ext}`;
+    const filePath = path.join(uploadDir, fileName);
+    
+    fs.writeFileSync(filePath, buffer);
+    
+    const fileUrl = `/uploads/${fileName}`;
+    res.json({ success: true, url: fileUrl });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ error: 'Failed to upload image' });
+  }
+});
+
 // REST endpoints
 // 1. Admin settings
 app.get('/api/settings', (req, res) => {
@@ -425,16 +469,26 @@ app.put('/api/users/:id', (req, res) => {
 // 5. Custom Footer Pages endpoints
 app.get('/api/pages', (req, res) => {
   const db = readDB();
-  res.json(db.pages || []);
+  const pages = (db.pages || []).map((p: any) => {
+    const visibility = p.isVisibleInFooter !== undefined ? p.isVisibleInFooter : (p.showInFooter !== undefined ? p.showInFooter : true);
+    return {
+      ...p,
+      isVisibleInFooter: visibility,
+      showInFooter: visibility
+    };
+  });
+  res.json(pages);
 });
 
 app.post('/api/pages', (req, res) => {
   const db = readDB();
   if (!db.pages) db.pages = [];
-  const { id, title, slug, content, showInFooter, isSystem } = req.body;
+  const { id, title, slug, content, showInFooter, isVisibleInFooter, isSystem } = req.body;
   if (!title || !slug) {
     return res.status(400).json({ error: 'Title and slug are required' });
   }
+
+  const visibility = isVisibleInFooter !== undefined ? isVisibleInFooter : (showInFooter !== undefined ? showInFooter : true);
 
   const existingIndex = db.pages.findIndex((p: any) => p.id === id || p.slug === slug);
   let page;
@@ -444,7 +498,8 @@ app.post('/api/pages', (req, res) => {
       title,
       slug,
       content,
-      showInFooter: showInFooter !== undefined ? showInFooter : db.pages[existingIndex].showInFooter,
+      showInFooter: visibility,
+      isVisibleInFooter: visibility,
       isSystem: db.pages[existingIndex].isSystem || isSystem
     };
     page = db.pages[existingIndex];
@@ -454,13 +509,38 @@ app.post('/api/pages', (req, res) => {
       title,
       slug,
       content: content || '',
-      showInFooter: showInFooter !== undefined ? showInFooter : true,
+      showInFooter: visibility,
+      isVisibleInFooter: visibility,
       isSystem: !!isSystem
     };
     db.pages.push(page);
   }
   writeDB(db);
   res.json({ success: true, page });
+});
+
+app.put('/api/pages/:id', (req, res) => {
+  const db = readDB();
+  if (!db.pages) db.pages = [];
+  const index = db.pages.findIndex((p: any) => p.id === req.params.id);
+
+  if (index !== -1) {
+    const { title, slug, content, isVisibleInFooter, showInFooter } = req.body;
+    const visibility = isVisibleInFooter !== undefined ? isVisibleInFooter : (showInFooter !== undefined ? showInFooter : db.pages[index].showInFooter);
+
+    db.pages[index] = {
+      ...db.pages[index],
+      title: title !== undefined ? title : db.pages[index].title,
+      slug: slug !== undefined ? slug : db.pages[index].slug,
+      content: content !== undefined ? content : db.pages[index].content,
+      showInFooter: visibility,
+      isVisibleInFooter: visibility
+    };
+    writeDB(db);
+    res.json({ success: true, page: db.pages[index] });
+  } else {
+    res.status(404).json({ error: 'Page not found' });
+  }
 });
 
 app.delete('/api/pages/:id', (req, res) => {

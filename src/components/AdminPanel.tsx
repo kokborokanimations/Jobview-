@@ -10,6 +10,7 @@ import {
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
   Clock, CheckCircle, FileText, Globe
 } from 'lucide-react';
+import WysiwygEditor from './WysiwygEditor';
 
 interface AdminPanelProps {
   settings: AdminSettings;
@@ -45,6 +46,9 @@ export default function AdminPanel({
   const [tagline, setTagline] = useState(settings.tagline || '');
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
   const [bannerUrl, setBannerUrl] = useState(settings.bannerUrl || '');
+  const [bannerHtml, setBannerHtml] = useState(settings.bannerHtml || '');
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [premiumMode, setPremiumMode] = useState(settings.premiumMode);
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
   const [currency, setCurrency] = useState(settings.currency || 'INR');
@@ -80,6 +84,7 @@ export default function AdminPanel({
   // Payment Logs
   const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
 
   const [adminPosts, setAdminPosts] = useState<CommunityPost[]>(posts);
   const [pages, setPages] = useState<any[]>([]);
@@ -93,6 +98,22 @@ export default function AdminPanel({
   useEffect(() => {
     setAdminPosts(posts);
   }, [posts]);
+
+  // Synchronize local form states when settings prop is updated from server/parent
+  useEffect(() => {
+    setBrandName(settings.brandName || '');
+    setTagline(settings.tagline || '');
+    setLogoUrl(settings.logoUrl || '');
+    setBannerUrl(settings.bannerUrl || '');
+    setBannerHtml(settings.bannerHtml || '');
+    setPremiumMode(settings.premiumMode);
+    setMembershipPrice(settings.membershipPrice || 499);
+    setCurrency(settings.currency || 'INR');
+    setPaywallFeaturesText((settings.paywallFeatures || []).join('\n'));
+    setCashfreeAppId(settings.cashfreeAppId || '');
+    setCashfreeSecretKey(settings.cashfreeSecretKey || '');
+    setPostApprovalMode(settings.postApprovalMode || false);
+  }, [settings]);
 
   const handleApprovePost = async (postId: string) => {
     try {
@@ -225,6 +246,7 @@ export default function AdminPanel({
       tagline,
       logoUrl,
       bannerUrl,
+      bannerHtml,
       premiumMode,
       membershipPrice: Number(membershipPrice),
       currency,
@@ -349,6 +371,72 @@ export default function AdminPanel({
       updates.trialExpiryDate = new Date(Date.now() + 30 * 86400000).toISOString();
     }
     await onUpdateUserSubscription(user.id, updates);
+  };
+
+  const handleFileUpload = async (file: File, name: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload a valid image file (PNG, JPG, GIF, WebP, SVG).');
+        resolve(null);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              file: base64Data,
+              name: name
+            })
+          });
+          
+          const data = await res.json();
+          if (data.success && data.url) {
+            resolve(data.url);
+          } else {
+            alert('Upload failed: ' + (data.error || 'Unknown error'));
+            resolve(null);
+          }
+        } catch (err) {
+          console.error('Upload fetch error:', err);
+          alert('Failed to connect to upload service.');
+          resolve(null);
+        }
+      };
+      reader.onerror = () => {
+        alert('Error reading file.');
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleLogoChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploadingLogo(true);
+      const url = await handleFileUpload(e.target.files[0], 'app_logo');
+      setIsUploadingLogo(false);
+      if (url) {
+        setLogoUrl(url);
+      }
+    }
+  };
+
+  const handleBannerChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploadingBanner(true);
+      const url = await handleFileUpload(e.target.files[0], 'jobs_banner');
+      setIsUploadingBanner(false);
+      if (url) {
+        setBannerUrl(url);
+      }
+    }
   };
 
   return (
@@ -483,26 +571,105 @@ export default function AdminPanel({
                 />
               </div>
 
+              {/* App Logo */}
               <div>
-                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Logo Image URL</label>
-                <input
-                  type="url"
-                  placeholder="https://example.com/logo.png"
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 focus:bg-white rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
-                />
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">App Logo Branding</label>
+                <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
+                  {logoUrl ? (
+                    <div className="relative group w-20 h-20 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white flex items-center justify-center p-1">
+                      <img src={logoUrl} alt="App Logo" className="max-w-full max-h-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => setLogoUrl('')}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center p-2">
+                      <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="text-[10px] font-bold text-teal-600 mt-1 cursor-pointer hover:underline">
+                        Upload Logo
+                      </span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">PNG, JPG, WebP, SVG</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="hidden"
+                    id="logo-file-input"
+                    disabled={isUploadingLogo}
+                  />
+                  {!logoUrl && (
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('logo-file-input')?.click()}
+                      className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                    >
+                      {isUploadingLogo ? 'Uploading...' : 'Browse File'}
+                    </button>
+                  )}
+                </div>
               </div>
 
+              {/* Job Feed Banner */}
               <div>
-                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Job Feed Banner URL</label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://unsplash.com/.../banner.jpg"
-                  value={bannerUrl}
-                  onChange={(e) => setBannerUrl(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 focus:bg-white rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Banner Image Upload</label>
+                <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
+                  {bannerUrl ? (
+                    <div className="relative group w-full h-24 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white">
+                      <img src={bannerUrl} alt="Careers Banner" className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => setBannerUrl('')}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center p-2">
+                      <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                      <span className="text-[10px] font-bold text-teal-600 mt-1 cursor-pointer hover:underline">
+                        Upload Banner
+                      </span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">Landscape aspect ratio</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleBannerChange}
+                    className="hidden"
+                    id="banner-file-input"
+                    disabled={isUploadingBanner}
+                  />
+                  {!bannerUrl && (
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('banner-file-input')?.click()}
+                      className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                    >
+                      {isUploadingBanner ? 'Uploading...' : 'Browse File'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Banner Text Customization - Classic WYSIWYG Editor */}
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display block mb-1">Banner Text Customization</label>
+                <WysiwygEditor 
+                  value={bannerHtml}
+                  onChange={(val) => setBannerHtml(val)}
+                  placeholder="<h1>Discover Jobs</h1><p>Work with the most innovative companies on the planet. Apply in seconds and text hiring managers directly.</p>"
                 />
               </div>
 
@@ -901,11 +1068,29 @@ export default function AdminPanel({
 
       {/* SUBTAB CONTENT: USER & SUBSCRIPTION OVERRIDES */}
       {activeSubTab === 'users' && (
-        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4 animate-fade-in">
-          <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-3 flex items-center gap-1.5 font-display">
-            <Users size={15} className="text-teal-600" />
-            Registered Users & Override States
-          </h3>
+        <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4 animate-fade-in font-sans">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 pb-3">
+            <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest flex items-center gap-1.5 font-display">
+              <Users size={15} className="text-teal-600" />
+              Registered Users & Plan Control
+            </h3>
+            
+            {/* Search Bar */}
+            <div className="relative w-full md:w-72">
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-gray-200 focus:bg-white rounded-xl p-2 pl-8 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+              />
+              <span className="absolute left-2.5 top-2.5 text-gray-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </span>
+            </div>
+          </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
@@ -914,73 +1099,96 @@ export default function AdminPanel({
                   <th className="py-2">User details</th>
                   <th className="py-2">Join Date</th>
                   <th className="py-2">Trial Expiry</th>
-                  <th className="py-2">Subscription Mode</th>
-                  <th className="py-2 text-right">Actions Override</th>
+                  <th className="py-2">Current Tier Badge</th>
+                  <th className="py-2">Change Plan Tier</th>
+                  <th className="py-2 text-right">Quick Helpers</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map((user) => {
-                  const isExpired = new Date() > new Date(user.trialExpiryDate) && user.subscriptionStatus === 'Free Trial';
-                  
-                  return (
-                    <tr key={user.id} className="border-b border-gray-50 hover:bg-slate-50/50">
-                      <td className="py-3 font-medium flex items-center gap-2.5">
-                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                        <div>
-                          <span className="font-bold text-gray-900 block">{user.name}</span>
-                          <span className="text-gray-400 text-[10px]">{user.email}</span>
-                        </div>
-                      </td>
-
-                      <td className="py-3 text-gray-500 font-semibold">
-                        {new Date(user.joinDate).toLocaleDateString()}
-                      </td>
-
-                      <td className="py-3">
-                        <span className={`font-semibold ${isExpired ? 'text-rose-500 font-bold' : 'text-gray-500'}`}>
-                          {new Date(user.trialExpiryDate).toLocaleDateString()}
-                        </span>
-                        {isExpired && <span className="text-[9px] bg-rose-50 text-rose-600 font-bold ml-1.5 px-1 py-0.5 rounded">Expired</span>}
-                      </td>
-
-                      <td className="py-3">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wide border ${
-                          user.subscriptionStatus === 'Active'
-                            ? 'bg-teal-50 text-teal-700 border-teal-100'
-                            : user.subscriptionStatus === 'Expired' || isExpired
-                            ? 'bg-rose-50 text-rose-700 border-rose-100'
-                            : 'bg-emerald-50 text-emerald-700 border-emerald-100'
-                        }`}>
-                          {user.subscriptionStatus === 'Active' ? '👑 Active' : 'Trial Period'}
-                        </span>
-                      </td>
-
-                      <td className="py-3 text-right space-x-1.5 font-display">
-                        <button
-                          onClick={() => handleUserOverrideStatus(user, 'Active')}
-                          title="Set Subscribed Active"
-                          className="px-2 py-1 bg-teal-50 hover:bg-teal-100 text-teal-600 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex"
-                        >
-                          Mark Active
-                        </button>
-                        <button
-                          onClick={() => handleTrialExtend(user)}
-                          title="Extend Trial +15 Days"
-                          className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex"
-                        >
-                          +15d Trial
-                        </button>
-                        <button
-                          onClick={() => handleUserOverrideStatus(user, 'Expired')}
-                          title="Manually Expire Sub"
-                          className="px-2 py-1 bg-slate-50 hover:bg-rose-50 hover:text-rose-600 text-gray-500 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex"
-                        >
-                          Expire Sub
-                        </button>
-                      </td>
-                    </tr>
+                {(() => {
+                  const filteredUsers = users.filter((u) => 
+                    u.name.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+                    u.email.toLowerCase().includes(userSearchQuery.toLowerCase())
                   );
-                })}
+
+                  if (filteredUsers.length === 0) {
+                    return (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-gray-400 font-medium italic">
+                          No users found matching "{userSearchQuery}"
+                        </td>
+                      </tr>
+                    );
+                  }
+
+                  return filteredUsers.map((user) => {
+                    const isExpired = new Date() > new Date(user.trialExpiryDate) && user.subscriptionStatus === 'Free Trial';
+                    
+                    return (
+                      <tr key={user.id} className="border-b border-gray-50 hover:bg-slate-50/50">
+                        <td className="py-3 font-medium flex items-center gap-2.5">
+                          <img 
+                            src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email)}`} 
+                            alt="" 
+                            className="w-8 h-8 rounded-lg object-cover border border-slate-100 shrink-0" 
+                          />
+                          <div>
+                            <span className="font-bold text-gray-900 block">{user.name}</span>
+                            <span className="text-gray-400 text-[10px]">{user.email}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 text-gray-500 font-semibold">
+                          {new Date(user.joinDate).toLocaleDateString()}
+                        </td>
+
+                        <td className="py-3">
+                          <span className={`font-semibold ${isExpired ? 'text-rose-500 font-bold' : 'text-gray-500'}`}>
+                            {new Date(user.trialExpiryDate).toLocaleDateString()}
+                          </span>
+                          {isExpired && <span className="text-[9px] bg-rose-50 text-rose-600 font-bold ml-1.5 px-1 py-0.5 rounded">Expired</span>}
+                        </td>
+
+                        <td className="py-3">
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wide border ${
+                            user.subscriptionStatus === 'Active'
+                              ? 'bg-teal-50 text-teal-700 border-teal-100'
+                              : user.subscriptionStatus === 'Expired' || isExpired
+                              ? 'bg-rose-50 text-rose-700 border-rose-100'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                          }`}>
+                            {user.subscriptionStatus === 'Active' ? '👑 Premium' : user.subscriptionStatus === 'Expired' || isExpired ? '🛑 Expired' : '🌱 Trial'}
+                          </span>
+                        </td>
+
+                        <td className="py-3">
+                          <select
+                            value={user.subscriptionStatus}
+                            onChange={async (e) => {
+                              const val = e.target.value as 'Free Trial' | 'Active' | 'Expired';
+                              await handleUserOverrideStatus(user, val);
+                            }}
+                            className="bg-slate-50 border border-gray-200 text-xs font-bold rounded-lg p-1.5 text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-500/15 cursor-pointer font-display"
+                          >
+                            <option value="Free Trial">Trial</option>
+                            <option value="Active">Premium (Active)</option>
+                            <option value="Expired">Expired</option>
+                          </select>
+                        </td>
+
+                        <td className="py-3 text-right space-x-1.5 font-display">
+                          <button
+                            onClick={() => handleTrialExtend(user)}
+                            title="Extend Trial +15 Days"
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-100 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex"
+                          >
+                            +15d Trial
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>

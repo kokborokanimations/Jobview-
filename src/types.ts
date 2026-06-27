@@ -64,6 +64,7 @@ export interface AdminSettings {
   tagline: string;
   logoUrl: string; // If empty, we can render a gorgeous Lucide icon
   bannerUrl: string; // Job Feed Banner
+  bannerHtml?: string; // Customizable Rich Text Banner
   premiumMode: boolean;
   membershipPrice: number;
   currency: string;
