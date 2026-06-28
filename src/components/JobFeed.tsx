@@ -151,6 +151,17 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                 onClick={() => onSelectJob(job)}
                 className="group relative bg-white p-5 rounded-xl shadow-xs border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
               >
+                {/* Dynamic Absolutely Positioned LIVE Badge with Pulsing Red Dot */}
+                {job.isLive && (
+                  <div className="absolute -top-2.5 right-4 flex items-center gap-1.5 px-2 py-0.5 bg-red-500 hover:bg-red-600 text-white text-[9px] font-extrabold tracking-widest uppercase rounded-md shadow-sm shadow-red-500/20 border border-red-400/30 z-10 font-display transition-colors">
+                    <span className="relative flex h-1.5 w-1.5">
+                      <span className="animate-live-pulse-ring absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                      <span className="animate-live-pulse-dot relative inline-flex rounded-full h-1.5 w-1.5 bg-white"></span>
+                    </span>
+                    <span>LIVE</span>
+                  </div>
+                )}
+
                 {/* Job Logo & Basic details */}
                 <div className="flex items-start gap-4">
                   {/* Styled Placeholder Logo with dynamic brand gradient */}
@@ -163,10 +174,6 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                       <h4 className="font-bold text-slate-900 group-hover:text-teal-600 transition-colors tracking-tight text-sm font-display">
                         {job.title}
                       </h4>
-                      <span className="inline-flex items-center gap-1 text-[9px] font-semibold tracking-wider uppercase bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full border border-teal-100/60">
-                        <span className="w-1 h-1 bg-teal-500 rounded-full" />
-                        Active
-                      </span>
                     </div>
 
                     <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
@@ -181,59 +188,6 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                     <p className="text-xs text-slate-600 line-clamp-2 pr-6 mt-1.5 leading-relaxed">
                       {job.shortDescription}
                     </p>
-                  </div>
-                </div>
-
-                {/* Right side element with salary & action */}
-                <div className="flex sm:flex-col items-end justify-between sm:justify-center w-full sm:w-auto border-t sm:border-t-0 pt-3 sm:pt-0 border-slate-100 gap-2">
-                  {job.salary && (
-                    <div className="text-right">
-                      <span className="text-xs font-bold text-slate-900 font-display">
-                        {job.salary}
-                      </span>
-                      <p className="text-[9px] text-slate-400 font-medium uppercase tracking-widest font-display">
-                        EST. PACKAGE
-                      </p>
-                    </div>
-                  )}
-                  
-                  <div className="flex items-center gap-2 mt-1">
-                    {/* Bookmark Icon */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleToggleBookmark(job.id);
-                      }}
-                      className={`p-2 rounded-lg border transition-all cursor-pointer ${
-                        bookmarkedJobIds.includes(job.id)
-                          ? 'border-amber-200 bg-amber-50 text-amber-600'
-                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600'
-                      }`}
-                      title={bookmarkedJobIds.includes(job.id) ? 'Remove Bookmark' : 'Bookmark Job'}
-                    >
-                      <Bookmark size={13} fill={bookmarkedJobIds.includes(job.id) ? 'currentColor' : 'none'} />
-                    </button>
-
-                    {/* Share Icon */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleShare(job.id);
-                      }}
-                      className={`p-2 rounded-lg border transition-all cursor-pointer ${
-                        sharedJobId === job.id
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-600'
-                          : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-400 hover:text-slate-600'
-                      }`}
-                      title="Share Job Link"
-                    >
-                      {sharedJobId === job.id ? <Check size={13} /> : <Share2 size={13} />}
-                    </button>
-                    
-                    <div className="inline-flex items-center gap-1 text-[11px] text-teal-600 font-bold group-hover:translate-x-0.5 transition-transform font-display ml-1.5">
-                      <span>View</span>
-                      <ChevronRight size={12} />
-                    </div>
                   </div>
                 </div>
 

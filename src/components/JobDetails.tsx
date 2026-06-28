@@ -38,6 +38,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
     } else {
       ids.push(job.id);
       setIsBookmarked(true);
+      window.showJobSavedToast?.('Job Saved!');
     }
     localStorage.setItem('jobview_bookmarked_jobs', JSON.stringify(ids));
   };

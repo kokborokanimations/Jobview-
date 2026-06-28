@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, FormEvent } from 'react';
+import React, { useState, useEffect, FormEvent } from 'react';
 import { User } from '../types';
 import { LogIn, Sparkles, Mail, User as UserIcon } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface LoginModalProps {
   onLogin: (user: User) => void;
@@ -57,6 +58,103 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
       setIsLoading(false);
     }
   };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    
+    if (!supabase) {
+      setError('Google Sign-In is not configured. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY first.');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (oauthError) {
+        throw oauthError;
+      }
+
+      if (!data || !data.url) {
+        throw new Error('No authorization URL returned from Supabase Auth');
+      }
+
+      // Open OAuth provider URL directly in popup
+      const width = 600;
+      const height = 700;
+      const left = window.screen.width / 2 - width / 2;
+      const top = window.screen.height / 2 - height / 2;
+      
+      const authWindow = window.open(
+        data.url,
+        'supabase_oauth_popup',
+        `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`
+      );
+
+      if (!authWindow) {
+        setError('Popup blocked. Please allow popups for this site to complete sign-in.');
+        setIsLoading(false);
+      }
+    } catch (err: any) {
+      console.error('Google Sign-In Error:', err);
+      setError(err.message || 'Failed to initiate Google Sign-In.');
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleOAuthMessage = async (event: MessageEvent) => {
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        const session = event.data.session;
+        if (session && session.user) {
+          const { user: oauthUser } = session;
+          setIsLoading(true);
+          try {
+            const response = await fetch('/api/users/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: oauthUser.user_metadata?.full_name || oauthUser.user_metadata?.name || oauthUser.email?.split('@')[0],
+                email: oauthUser.email,
+                avatar: oauthUser.user_metadata?.avatar_url || oauthUser.user_metadata?.picture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(oauthUser.email)}`
+              })
+            });
+
+            if (response.ok) {
+              const syncedUser = await response.json();
+              localStorage.setItem('sb-access-token', session.access_token);
+              localStorage.setItem('sb-refresh-token', session.refresh_token);
+              onLogin(syncedUser);
+            } else {
+              setError('Failed to sync authenticated profile with server.');
+            }
+          } catch (err) {
+            setError('Profile synchronization failed.');
+          } finally {
+            setIsLoading(false);
+          }
+        }
+      } else if (event.data?.type === 'OAUTH_AUTH_FAILURE') {
+        setError(event.data.error || 'Authentication aborted or failed.');
+        setIsLoading(false);
+      }
+    };
+
+    window.addEventListener('message', handleOAuthMessage);
+    return () => window.removeEventListener('message', handleOAuthMessage);
+  }, [onLogin]);
 
   const loginAsAdmin = async () => {
     setIsLoading(true);
@@ -132,6 +230,41 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
 
         {/* Modal Body */}
         <div className="px-8 pb-8">
+          
+          {/* Google Sign-In Button */}
+          <div className="mb-4">
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl font-bold tracking-wide shadow-xs transition-all text-sm flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 font-display"
+            >
+              {isLoading ? (
+                <div className="w-5 h-5 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" width="16" height="16" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="matrix(1, 0, 0, 1, 0, 0)">
+                      <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.56h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.48c0,-0.61 -0.05,-1.2 -0.15,-1.78Z" fill="#4285F4" />
+                      <path d="M12,20.6c2.56,0 4.71,-0.85 6.28,-2.3l-3.3,-2.56c-0.91,0.61 -2.08,0.98 -2.98,0.98c-2.3,0 -4.25,-1.55 -4.94,-3.64H3.63v2.64c1.55,3.08 4.75,5.18 8.37,5.18Z" fill="#34A853" />
+                      <path d="M7.06,13.08c-0.18,-0.54 -0.28,-1.11 -0.28,-1.7s0.1,-1.16 0.28,-1.7V7.04H3.63c-0.6,1.2 -0.94,2.56 -0.94,4c0,1.44 0.34,2.8 0.94,4l3.43,-2.66Z" fill="#FBBC05" />
+                      <path d="M12,6.12c1.39,0 2.64,0.48 3.63,1.42l2.72,-2.72C16.71,3.22 14.56,2.4 12,2.4c-3.62,0 -6.82,2.1 -8.37,5.18l3.43,2.66c0.69,-2.09 2.64,-3.64 4.94,-3.64Z" fill="#EA4335" />
+                    </g>
+                  </svg>
+                  <span>Sign in with Google</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="relative my-4 text-center">
+            <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
+            <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
+              Or Enter Email Details
+            </span>
+          </div>
+
           <form onSubmit={handleDemoLogin} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">

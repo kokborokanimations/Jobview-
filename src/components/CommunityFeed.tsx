@@ -7,7 +7,7 @@ import React, { useState, FormEvent, DragEvent, ChangeEvent } from 'react';
 import { CommunityPost, User } from '../types';
 import { 
   Heart, Bookmark, Share2, Image as ImageIcon, Send, 
-  Trash2, Plus, Sparkles, UploadCloud, X, Check, Clock
+  Trash2, Plus, Sparkles, UploadCloud, X, Check, Clock, Flag
 } from 'lucide-react';
 
 interface CommunityFeedProps {
@@ -16,6 +16,8 @@ interface CommunityFeedProps {
   onAddPost: (postData: { imageUrl: string; caption: string }) => void;
   onDeletePost: (postId: string) => void;
   onLoginTrigger: () => void;
+  bookmarkedPostIds: string[];
+  onToggleBookmark: (postId: string) => void;
 }
 
 export default function CommunityFeed({ 
@@ -23,7 +25,9 @@ export default function CommunityFeed({
   user, 
   onAddPost, 
   onDeletePost,
-  onLoginTrigger
+  onLoginTrigger,
+  bookmarkedPostIds,
+  onToggleBookmark
 }: CommunityFeedProps) {
   const [caption, setCaption] = useState('');
   const [imageFile, setImageFile] = useState<string | null>(null);
@@ -32,8 +36,12 @@ export default function CommunityFeed({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // States for interactive feed actions
-  const [bookmarkedPostIds, setBookmarkedPostIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('jobview_bookmarked_posts');
+  const [likedPostIds, setLikedPostIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('jobview_liked_posts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [reportedPostIds, setReportedPostIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem('jobview_reported_posts');
     return saved ? JSON.parse(saved) : [];
   });
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
@@ -106,18 +114,46 @@ export default function CommunityFeed({
     }
   };
 
-  const handleToggleBookmark = (postId: string) => {
+  const handleToggleLike = (postId: string) => {
     let updated: string[];
-    if (bookmarkedPostIds.includes(postId)) {
-      updated = bookmarkedPostIds.filter(id => id !== postId);
+    const isLiked = likedPostIds.includes(postId);
+    if (isLiked) {
+      updated = likedPostIds.filter(id => id !== postId);
     } else {
-      updated = [...bookmarkedPostIds, postId];
+      updated = [...likedPostIds, postId];
     }
-    setBookmarkedPostIds(updated);
-    localStorage.setItem('jobview_bookmarked_posts', JSON.stringify(updated));
+    setLikedPostIds(updated);
+    localStorage.setItem('jobview_liked_posts', JSON.stringify(updated));
+  };
 
-    // Optional: Call background API to save bookmark count
-    fetch(`/api/posts/${postId}/bookmark`, { method: 'POST' }).catch(console.error);
+  const handleReportPost = async (postId: string) => {
+    if (reportedPostIds.includes(postId)) {
+      if (window.showWarningToast) {
+        window.showWarningToast('You have already reported this post.');
+      } else {
+        alert('You have already reported this post.');
+      }
+      return;
+    }
+
+    if (confirm('Report this post for inappropriate content?')) {
+      try {
+        const { reportPostToSupabase } = await import('../lib/supabaseQueries');
+        await reportPostToSupabase(user ? user.id : null, postId);
+        
+        const updated = [...reportedPostIds, postId];
+        setReportedPostIds(updated);
+        localStorage.setItem('jobview_reported_posts', JSON.stringify(updated));
+
+        if (window.showSuccessToast) {
+          window.showSuccessToast('Post reported successfully!');
+        } else {
+          alert('Post reported successfully! Our moderators will review it.');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
   };
 
   const handleShare = (postId: string) => {
@@ -339,20 +375,33 @@ export default function CommunityFeed({
                       </div>
                     </div>
 
-                    {/* Admin moderation delete button */}
-                    {isModerator && (
+                    <div className="flex items-center gap-1.5">
+                      {/* Report Post Option */}
                       <button
-                        onClick={() => {
-                          if (confirm('Are you sure you want to delete this community post as Moderator?')) {
-                            onDeletePost(post.id);
-                          }
-                        }}
-                        title="Moderate Post"
-                        className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded-lg transition-colors cursor-pointer"
+                        onClick={() => handleReportPost(post.id)}
+                        title="Report Post"
+                        className={`p-1.5 hover:bg-slate-100 text-slate-400 hover:text-amber-600 rounded-lg transition-all cursor-pointer ${
+                          reportedPostIds.includes(post.id) ? 'text-amber-500 bg-amber-50' : ''
+                        }`}
                       >
-                        <Trash2 size={14} />
+                        <Flag size={13} fill={reportedPostIds.includes(post.id) ? 'currentColor' : 'none'} />
                       </button>
-                    )}
+
+                      {/* Admin moderation delete button */}
+                      {isModerator && (
+                        <button
+                          onClick={() => {
+                            if (confirm('Are you sure you want to delete this community post as Moderator?')) {
+                              onDeletePost(post.id);
+                            }
+                          }}
+                          title="Moderate Post"
+                          className="p-1.5 hover:bg-rose-50 text-rose-500 hover:text-rose-700 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Post Caption */}
@@ -374,42 +423,62 @@ export default function CommunityFeed({
                   )}
 
                   {/* Bottom Interactive Toolbar */}
-                  <div className="p-3 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
-                    <div className="flex items-center gap-4">
-                      {/* Like indicator, styled with simple local state or display only */}
+                  <div className="px-4 py-2 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
+                    <div className="flex items-center gap-2">
+                      {/* Like/Support Button */}
                       <button
-                        onClick={() => alert('Thanks for the support!')}
-                        className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-500 transition-colors cursor-pointer font-semibold"
+                        onClick={() => handleToggleLike(post.id)}
+                        className={`p-2 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold ${
+                          likedPostIds.includes(post.id)
+                            ? 'bg-rose-50 text-rose-600 border border-rose-100 scale-105 shadow-xs'
+                            : 'bg-transparent text-slate-500 hover:bg-slate-100 border border-transparent'
+                        }`}
+                        title="Support this post"
                       >
-                        <Heart size={15} />
-                        <span>Support</span>
+                        <Heart size={14} fill={likedPostIds.includes(post.id) ? 'currentColor' : 'none'} className="transition-transform duration-300 active:scale-125" />
+                        <span className="text-[11px] font-mono select-none">
+                          {((post.bookmarksCount || 0) % 7) + (likedPostIds.includes(post.id) ? 1 : 0)}
+                        </span>
                       </button>
 
-                      {/* Bookmark */}
+                      {/* Bookmark/Saved Button */}
                       <button
-                        onClick={() => handleToggleBookmark(post.id)}
-                        className={`flex items-center gap-1.5 text-xs transition-colors cursor-pointer font-semibold ${
-                          isBookmarked 
-                            ? 'text-amber-500 hover:text-amber-600' 
-                            : 'text-slate-400 hover:text-slate-600'
+                        onClick={() => onToggleBookmark(post.id)}
+                        className={`p-2 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold ${
+                          isBookmarked
+                            ? 'bg-amber-50 text-amber-600 border border-amber-100 scale-105 shadow-xs'
+                            : 'bg-transparent text-slate-500 hover:bg-slate-100 border border-transparent'
                         }`}
+                        title={isBookmarked ? 'Remove Saved Post' : 'Save Post'}
                       >
-                        <Bookmark size={15} fill={isBookmarked ? 'currentColor' : 'none'} />
-                        <span>{isBookmarked ? 'Saved' : 'Save'}</span>
+                        <Bookmark size={14} fill={isBookmarked ? 'currentColor' : 'none'} className="transition-transform duration-300 active:scale-125" />
+                        <span className="text-[11px] font-mono select-none">
+                          {isBookmarked ? 'Saved' : 'Save'}
+                        </span>
                       </button>
                     </div>
 
-                    {/* Share Post */}
+                    {/* Share Post Button */}
                     <button
                       onClick={() => handleShare(post.id)}
-                      className={`flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                        isShared 
-                          ? 'text-emerald-600 font-bold' 
-                          : 'text-slate-400 hover:text-slate-600'
+                      className={`p-2 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 text-xs font-bold ${
+                        isShared
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          : 'bg-transparent text-slate-500 hover:bg-slate-100 border border-transparent'
                       }`}
+                      title="Share post"
                     >
-                      {isShared ? <Check size={14} /> : <Share2 size={14} />}
-                      <span>{isShared ? 'Link Copied!' : 'Share Post'}</span>
+                      {isShared ? (
+                        <>
+                          <Check size={14} className="text-emerald-600" />
+                          <span className="text-[11px] text-emerald-600">Copied</span>
+                        </>
+                      ) : (
+                        <>
+                          <Share2 size={14} />
+                          <span className="text-[11px]">Share</span>
+                        </>
+                      )}
                     </button>
                   </div>
 

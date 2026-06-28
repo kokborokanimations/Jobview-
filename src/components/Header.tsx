@@ -5,6 +5,7 @@
 
 import { User, AdminSettings } from '../types';
 import { Briefcase, LogOut, User as UserIcon, ShieldAlert } from 'lucide-react';
+import { getUserBadge } from '../lib/badgeUtils';
 
 interface HeaderProps {
   user: User | null;
@@ -57,18 +58,32 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
         <div className="flex items-center gap-3">
           {user ? (
             <div className="flex items-center gap-2.5">
-              {user.subscriptionStatus !== 'Active' && !isAdmin && onUpgradeClick && (
+              {getUserBadge(user, settings) === 'EXPIRED' && !isAdmin && settings.premiumMode && onUpgradeClick && (
                 <button
                   onClick={onUpgradeClick}
-                  className="px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-full text-[10px] font-bold tracking-wider uppercase transition-all hover:scale-105 shadow-xs cursor-pointer flex items-center gap-1 shrink-0 font-display"
+                  title="Get Premium"
+                  aria-label="Get Premium"
+                  className="w-8 h-8 flex items-center justify-center bg-amber-500 hover:bg-amber-600 text-white rounded-full transition-all hover:scale-110 shadow-xs cursor-pointer shrink-0 text-sm relative group/btn"
                 >
-                  <span>👑 Get Premium</span>
+                  <span>👑</span>
+                  {/* Modern micro-tooltip */}
+                  <span className="absolute top-10 right-0 scale-0 group-hover/btn:scale-100 transition-all origin-top-right duration-150 bg-slate-950 text-white text-[9px] font-extrabold tracking-widest uppercase px-2 py-1 rounded-lg shadow-lg pointer-events-none whitespace-nowrap z-50 border border-slate-800">
+                    Get Premium
+                  </span>
                 </button>
               )}
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-gray-800 line-clamp-1">{user.name}</p>
-                <p className="text-[10px] text-teal-600 font-bold uppercase tracking-widest font-display">
-                  {user.subscriptionStatus === 'Active' ? '👑 Premium' : 'Free Trial'}
+                <p className="text-[10px] font-bold uppercase tracking-widest font-display mt-0.5">
+                  {getUserBadge(user, settings) === 'PREMIUM' && (
+                    <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200/50">👑 Premium</span>
+                  )}
+                  {getUserBadge(user, settings) === 'TRIAL' && (
+                    <span className="text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200/50">🌱 Trial</span>
+                  )}
+                  {getUserBadge(user, settings) === 'EXPIRED' && (
+                    <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200/50">🛑 Expired</span>
+                  )}
                 </p>
               </div>
 
@@ -89,9 +104,15 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
                     <p className="text-[10px] text-gray-400 truncate">{user.email}</p>
                   </div>
                   
-                  {user.subscriptionStatus !== 'Active' && !isAdmin && (
+                  {!isAdmin && settings.premiumMode && getUserBadge(user, settings) === 'TRIAL' && (
                     <div className="px-3 py-1.5 bg-teal-50/50 m-1.5 rounded-lg text-[10px] text-teal-700 font-medium flex items-center gap-1 font-display">
                       <span>⚡ Trial Expires: {new Date(user.trialExpiryDate).toLocaleDateString()}</span>
+                    </div>
+                  )}
+
+                  {!isAdmin && settings.premiumMode && getUserBadge(user, settings) === 'EXPIRED' && (
+                    <div className="px-3 py-1.5 bg-rose-50/50 m-1.5 rounded-lg text-[10px] text-rose-700 font-medium flex items-center gap-1 font-display">
+                      <span>🛑 Trial Expired</span>
                     </div>
                   )}
 

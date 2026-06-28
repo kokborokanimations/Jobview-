@@ -40,3 +40,35 @@
   margin-bottom: 0.25rem !important;
 }
 
+/* Custom Pulsing LIVE Dot Animation */
+@keyframes live-pulse-ring {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.8;
+  }
+  70%, 100% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+}
+
+@keyframes live-pulse-dot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.8;
+  }
+}
+
+.animate-live-pulse-ring {
+  animation: live-pulse-ring 1.8s cubic-bezier(0.25, 0, 0, 1) infinite;
+}
+
+.animate-live-pulse-dot {
+  animation: live-pulse-dot 1.8s cubic-bezier(0.25, 0, 0, 1) infinite;
+}
+
+

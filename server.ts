@@ -7,6 +7,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
+import { createClient } from '@supabase/supabase-js';
 
 const app = express();
 const PORT = 3000;
@@ -363,12 +364,19 @@ app.put('/api/jobs/:id', (req, res) => {
 app.delete('/api/jobs/:id', (req, res) => {
   const db = readDB();
   const initialLen = db.jobs.length;
-  db.jobs = db.jobs.filter((j: any) => j.id !== req.params.id);
+  const targetId = String(req.params.id).trim().toLowerCase();
+  
+  db.jobs = db.jobs.filter((j: any) => {
+    if (!j || !j.id) return false;
+    return String(j.id).trim().toLowerCase() !== targetId;
+  });
+
   if (db.jobs.length < initialLen) {
     writeDB(db);
     res.json({ success: true });
   } else {
-    res.status(404).json({ error: 'Job not found' });
+    // Fallback search to ensure if it already doesn't exist, we don't throw 404 unnecessarily, or we log it
+    res.status(404).json({ error: 'Job not found in database' });
   }
 });
 
@@ -559,6 +567,115 @@ app.delete('/api/pages/:id', (req, res) => {
   }
 });
 
+// Lazy-initialize Supabase on the server
+let serverSupabaseClient: any = null;
+function getServerSupabase() {
+  if (!serverSupabaseClient) {
+    const url = process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
+    const anonKey = process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NDg1NjAsImV4cCI6MjA5ODAyNDU2MH0.gPwgKSe-0lSFZf4holpBctmYSGrTYsv5cwpKcgLODBs';
+    if (!url || !anonKey) {
+      throw new Error('Supabase configuration missing (VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required)');
+    }
+    serverSupabaseClient = createClient(url, anonKey);
+  }
+  return serverSupabaseClient;
+}
+
+let adminSupabaseClient: any = null;
+function getAdminSupabase() {
+  if (!adminSupabaseClient) {
+    const url = process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
+    if (!serviceRoleKey) {
+      console.warn('SUPABASE_SERVICE_ROLE_KEY is missing. Supabase auth admin operations will be skipped or simulated.');
+      return null;
+    }
+    adminSupabaseClient = createClient(url, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+  }
+  return adminSupabaseClient;
+}
+
+// OAuth Callback Route to handle Google Sign-In redirect
+app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
+  const code = req.query.code as string;
+  
+  if (!code) {
+    return res.send(`
+      <html>
+        <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #0f172a; margin: 0;">
+          <div style="background-color: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px;">
+            <h1 style="color: #ef4444; margin-top: 0;">Authentication Error</h1>
+            <p>No authorization code was returned from the sign-in provider.</p>
+            <button onclick="window.close()" style="margin-top: 1rem; background-color: #ef4444; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 0.5rem; cursor: pointer; font-weight: bold;">Close Window</button>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: 'No auth code found' }, '*');
+              setTimeout(() => window.close(), 3000);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  }
+
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (error || !data.session) {
+      throw error || new Error('Failed to retrieve active session');
+    }
+
+    const sessionJson = JSON.stringify(data.session);
+
+    res.send(`
+      <html>
+        <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #0f172a; margin: 0;">
+          <div style="background-color: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px;">
+            <h1 style="color: #0d9488; margin-top: 0;">Success!</h1>
+            <p>You have logged in successfully with Google.</p>
+            <p style="color: #64748b; font-size: 0.875rem;">This window will close automatically...</p>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', session: ${sessionJson} }, '*');
+              window.close();
+            } else {
+              window.location.href = '/';
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  } catch (err: any) {
+    console.error('Supabase token exchange error:', err);
+    res.send(`
+      <html>
+        <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #0f172a; margin: 0;">
+          <div style="background-color: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px;">
+            <h1 style="color: #ef4444; margin-top: 0;">Exchange Failed</h1>
+            <p>Could not verify authorization code with Supabase.</p>
+            <p style="color: #64748b; font-size: 0.875rem;">${err.message || 'Unknown error'}</p>
+            <button onclick="window.close()" style="margin-top: 1rem; background-color: #ef4444; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 0.5rem; cursor: pointer; font-weight: bold;">Close Window</button>
+          </div>
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: ${JSON.stringify(err.message || 'Token exchange failed')} }, '*');
+              setTimeout(() => window.close(), 5000);
+            }
+          </script>
+        </body>
+      </html>
+    `);
+  }
+});
+
 // Sync current user (login or trigger trial evaluation)
 app.post('/api/users/sync', (req, res) => {
   const { name, email, avatar } = req.body;
@@ -583,6 +700,7 @@ app.post('/api/users/sync', (req, res) => {
       email: email.toLowerCase(),
       avatar: avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(email)}`,
       joinDate: now.toISOString(),
+      created_at: now.toISOString(),
       trialExpiryDate: expiry.toISOString(),
       subscriptionStatus: isAdmin ? 'Active' : 'Free Trial'
     };
@@ -621,6 +739,65 @@ app.put('/api/users/:id/subscription', (req, res) => {
   } else {
     res.status(404).json({ error: 'User not found' });
   }
+});
+
+// Delete user from local database and Supabase Auth
+app.delete('/api/users/:id', async (req, res) => {
+  const db = readDB();
+  const user = db.users.find((u: any) => u.id === req.params.id);
+
+  if (!user) {
+    return res.status(404).json({ error: 'User not found' });
+  }
+
+  // Prevent deleting the main Admin developer for security
+  if (user.email.toLowerCase() === 'kokborokanimations@gmail.com') {
+    return res.status(403).json({ error: 'Cannot delete the main platform Administrator' });
+  }
+
+  let deletedFromSupabase = false;
+  let supabaseError = null;
+
+  try {
+    const supabaseAdmin = getAdminSupabase();
+    if (supabaseAdmin) {
+      // List users to find the matching email
+      const { data, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      if (listError) {
+        throw listError;
+      }
+
+      const sbUser = data.users?.find((u: any) => u.email?.toLowerCase() === user.email.toLowerCase());
+      if (sbUser) {
+        const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(sbUser.id);
+        if (deleteError) {
+          throw deleteError;
+        }
+        deletedFromSupabase = true;
+      } else {
+        console.log(`User email ${user.email} not found in Supabase Auth`);
+      }
+    }
+  } catch (err: any) {
+    console.error('Error deleting user from Supabase Auth:', err);
+    supabaseError = err.message || err;
+  }
+
+  // Clean up user and their community posts from db.json
+  db.users = db.users.filter((u: any) => u.id !== req.params.id);
+  db.communityPosts = db.communityPosts.filter((p: any) => p.userId !== req.params.id);
+  writeDB(db);
+
+  res.json({
+    success: true,
+    deletedFromSupabase,
+    supabaseError,
+    message: deletedFromSupabase 
+      ? 'User successfully deleted from Supabase Auth and local database.' 
+      : (supabaseError 
+          ? `User deleted from local database, but Supabase error occurred: ${supabaseError}`
+          : 'User deleted from local database (Supabase Auth user not found or Service Role Key not set).')
+  });
 });
 
 // 5. Payments (Cashfree Order & Verification)

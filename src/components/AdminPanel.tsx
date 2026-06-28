@@ -11,19 +11,22 @@ import {
   Clock, CheckCircle, FileText, Globe
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
+import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
 
 interface AdminPanelProps {
   settings: AdminSettings;
   jobs: Job[];
   posts: CommunityPost[];
   users: User[];
-  onUpdateSettings: (newSettings: AdminSettings) => Promise<void>;
+  onUpdateSettings: (newSettings: AdminSettings) => Promise<boolean>;
   onAddJob: (job: Omit<Job, 'id' | 'createdAt'>) => Promise<void>;
   onUpdateJob: (id: string, jobUpdates: Partial<Job>) => Promise<void>;
   onDeleteJob: (id: string) => Promise<void>;
   onDeletePost: (postId: string) => Promise<void>;
   onUpdateUserSubscription: (userId: string, updates: { subscriptionStatus: string; trialExpiryDate?: string }) => Promise<void>;
   onRefreshPages?: () => void;
+  onApprovePost?: (postId: string) => void;
+  onDeleteUser?: (userId: string) => Promise<void>;
 }
 
 export default function AdminPanel({
@@ -37,7 +40,9 @@ export default function AdminPanel({
   onDeleteJob,
   onDeletePost,
   onUpdateUserSubscription,
-  onRefreshPages
+  onRefreshPages,
+  onApprovePost,
+  onDeleteUser
 }: AdminPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'cashfree' | 'posts' | 'pages'>('branding');
   
@@ -56,6 +61,7 @@ export default function AdminPanel({
   const [cashfreeAppId, setCashfreeAppId] = useState(settings.cashfreeAppId || '');
   const [cashfreeSecretKey, setCashfreeSecretKey] = useState(settings.cashfreeSecretKey || '');
   const [postApprovalMode, setPostApprovalMode] = useState(settings.postApprovalMode || false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   
   // Secret Keys visibility toggle
   const [showSecret, setShowSecret] = useState(false);
@@ -85,6 +91,10 @@ export default function AdminPanel({
   const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
+  const [isDeletingJob, setIsDeletingJob] = useState(false);
 
   const [adminPosts, setAdminPosts] = useState<CommunityPost[]>(posts);
   const [pages, setPages] = useState<any[]>([]);
@@ -118,10 +128,13 @@ export default function AdminPanel({
   const handleApprovePost = async (postId: string) => {
     try {
       const res = await fetch(`/api/posts/${postId}/approve`, {
-        method: 'POST'
+        method: 'PUT'
       });
       if (res.ok) {
         setAdminPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'Live' } : p));
+        if (onApprovePost) {
+          onApprovePost(postId);
+        }
         alert('Post approved successfully!');
       } else {
         alert('Failed to approve post.');
@@ -236,31 +249,75 @@ export default function AdminPanel({
 
   const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
+    if (isSavingSettings) return;
+
     const features = paywallFeaturesText
       .split('\n')
       .map((f) => f.trim())
       .filter((f) => f.length > 0);
 
-    await onUpdateSettings({
-      brandName,
-      tagline,
-      logoUrl,
-      bannerUrl,
-      bannerHtml,
-      premiumMode,
-      membershipPrice: Number(membershipPrice),
-      currency,
-      paywallFeatures: features,
-      cashfreeAppId,
-      cashfreeSecretKey,
-      postApprovalMode
-    });
+    const propFeatures = settings.paywallFeatures || [];
 
-    alert('Application branding and credentials successfully saved on server.');
+    const hasChanges =
+      brandName !== (settings.brandName || '') ||
+      tagline !== (settings.tagline || '') ||
+      logoUrl !== (settings.logoUrl || '') ||
+      bannerUrl !== (settings.bannerUrl || '') ||
+      bannerHtml !== (settings.bannerHtml || '') ||
+      premiumMode !== settings.premiumMode ||
+      Number(membershipPrice) !== (settings.membershipPrice || 499) ||
+      currency !== (settings.currency || 'INR') ||
+      cashfreeAppId !== (settings.cashfreeAppId || '') ||
+      cashfreeSecretKey !== (settings.cashfreeSecretKey || '') ||
+      postApprovalMode !== (settings.postApprovalMode || false) ||
+      JSON.stringify(features) !== JSON.stringify(propFeatures);
+
+    if (!hasChanges) {
+      if (window.showWarningToast) {
+        window.showWarningToast('No changes detected');
+      } else {
+        alert('No changes detected');
+      }
+      return;
+    }
+
+    setIsSavingSettings(true);
+    try {
+      const success = await onUpdateSettings({
+        brandName,
+        tagline,
+        logoUrl,
+        bannerUrl,
+        bannerHtml,
+        premiumMode,
+        membershipPrice: Number(membershipPrice),
+        currency,
+        paywallFeatures: features,
+        cashfreeAppId,
+        cashfreeSecretKey,
+        postApprovalMode
+      });
+
+      if (success) {
+        if (window.showSuccessToast) {
+          window.showSuccessToast('Settings Saved Successfully!');
+        } else {
+          alert('Application branding and credentials successfully saved on server.');
+        }
+      } else {
+        alert('Failed to save settings. Please try again.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Error saving settings.');
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const handleCreateJobSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const isEdit = !!editingJobId;
     if (editingJobId) {
       await onUpdateJob(editingJobId, {
         title: jobTitle,
@@ -303,6 +360,9 @@ export default function AdminPanel({
       });
       setIsAddingJob(false);
     }
+
+    // Trigger the minimal centered success popup
+    window.showJobSavedToast?.(isEdit ? 'Job Saved!' : 'Job Published!');
 
     // Reset Job creation form
     setJobTitle('');
@@ -675,10 +735,13 @@ export default function AdminPanel({
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 cursor-pointer flex items-center justify-center gap-1.5 font-display"
+                disabled={isSavingSettings}
+                className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                  isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
               >
-                <Save size={14} />
-                <span>Save General Config</span>
+                <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                <span>{isSavingSettings ? 'Saving Config...' : 'Save General Config'}</span>
               </button>
             </form>
           </div>
@@ -937,18 +1000,17 @@ export default function AdminPanel({
                         </td>
                         <td className="py-3 text-right space-x-1">
                           <button
+                            id={`job-edit-${job.id}`}
                             onClick={() => handleEditJobClick(job)}
                             className="p-1 hover:bg-gray-100 text-gray-500 hover:text-teal-600 rounded-lg transition-colors cursor-pointer inline-flex"
                           >
                             <Edit size={14} />
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm('Delete this job from the database?')) {
-                                onDeleteJob(job.id);
-                              }
-                            }}
+                            id={`job-delete-${job.id}`}
+                            onClick={() => setJobToDelete(job)}
                             className="p-1 hover:bg-rose-50 text-rose-400 hover:text-rose-600 rounded-lg transition-colors cursor-pointer inline-flex"
+                            title="Delete job post"
                           >
                             <Trash2 size={14} />
                           </button>
@@ -994,6 +1056,75 @@ export default function AdminPanel({
             </div>
 
           </div>
+
+          {/* Job deletion confirmation modal */}
+          {jobToDelete && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-100 shadow-2xl space-y-4">
+                <div className="flex items-center gap-3 text-rose-600">
+                  <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                    <Trash2 size={20} />
+                  </div>
+                  <div className="text-left">
+                    <h4 className="font-extrabold text-slate-900 tracking-tight text-sm font-display">Delete Job Post</h4>
+                    <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Permanent Action</p>
+                  </div>
+                </div>
+                
+                <div className="text-xs text-gray-600 leading-relaxed font-semibold text-left space-y-2">
+                  <p>Are you sure you want to permanently delete this job post?</p>
+                  <div className="p-3 bg-slate-50 border border-slate-100 rounded-xl space-y-1">
+                    <p className="text-slate-900 font-bold"><span className="text-gray-400 font-medium">Title:</span> {jobToDelete.title}</p>
+                    <p className="text-slate-700 font-medium"><span className="text-gray-400 font-normal">Company:</span> {jobToDelete.companyName}</p>
+                    {jobToDelete.location && (
+                      <p className="text-slate-500 text-[11px]"><span className="text-gray-400 font-normal">Location:</span> {jobToDelete.location}</p>
+                    )}
+                  </div>
+                  <p className="text-slate-500 text-[11px] font-normal italic">
+                    This will permanently delete the job from both the Supabase table and the local store. This action is irreversible.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setJobToDelete(null)}
+                    disabled={isDeletingJob}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    id="confirm-job-delete-btn"
+                    onClick={async () => {
+                      setIsDeletingJob(true);
+                      try {
+                        await onDeleteJob(jobToDelete.id);
+                        setJobToDelete(null);
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to delete job post.');
+                      } finally {
+                        setIsDeletingJob(false);
+                      }
+                    }}
+                    disabled={isDeletingJob}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-rose-600/10 disabled:opacity-50"
+                  >
+                    {isDeletingJob ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={12} />
+                        <span>Permanently Delete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
       )}
@@ -1057,10 +1188,13 @@ export default function AdminPanel({
 
             <button
               type="submit"
-              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 cursor-pointer flex items-center justify-center gap-1.5 font-display"
+              disabled={isSavingSettings}
+              className={`w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+              }`}
             >
-              <Save size={14} />
-              <span>Update Pricing Controls</span>
+              <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+              <span>{isSavingSettings ? 'Updating Pricing Controls...' : 'Update Pricing Controls'}</span>
             </button>
           </form>
         </div>
@@ -1122,7 +1256,10 @@ export default function AdminPanel({
                   }
 
                   return filteredUsers.map((user) => {
-                    const isExpired = new Date() > new Date(user.trialExpiryDate) && user.subscriptionStatus === 'Free Trial';
+                    const dynBadge = getUserBadge(user, settings);
+                    const trialInfo = getTrialInfo(user);
+                    const isExpired = dynBadge === 'EXPIRED';
+                    const trialExpiryShow = trialInfo ? trialInfo.expiryDate : new Date(user.trialExpiryDate);
                     
                     return (
                       <tr key={user.id} className="border-b border-gray-50 hover:bg-slate-50/50">
@@ -1144,20 +1281,23 @@ export default function AdminPanel({
 
                         <td className="py-3">
                           <span className={`font-semibold ${isExpired ? 'text-rose-500 font-bold' : 'text-gray-500'}`}>
-                            {new Date(user.trialExpiryDate).toLocaleDateString()}
+                            {trialExpiryShow.toLocaleDateString()}
                           </span>
                           {isExpired && <span className="text-[9px] bg-rose-50 text-rose-600 font-bold ml-1.5 px-1 py-0.5 rounded">Expired</span>}
+                          {dynBadge === 'TRIAL' && trialInfo && (
+                            <span className="text-[9px] bg-teal-50 text-teal-600 font-bold ml-1.5 px-1 py-0.5 rounded">{trialInfo.daysRemaining}d left</span>
+                          )}
                         </td>
 
                         <td className="py-3">
                           <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wide border ${
-                            user.subscriptionStatus === 'Active'
+                            dynBadge === 'PREMIUM'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : dynBadge === 'TRIAL'
                               ? 'bg-teal-50 text-teal-700 border-teal-100'
-                              : user.subscriptionStatus === 'Expired' || isExpired
-                              ? 'bg-rose-50 text-rose-700 border-rose-100'
-                              : 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                              : 'bg-rose-50 text-rose-700 border-rose-100'
                           }`}>
-                            {user.subscriptionStatus === 'Active' ? '👑 Premium' : user.subscriptionStatus === 'Expired' || isExpired ? '🛑 Expired' : '🌱 Trial'}
+                            {dynBadge === 'PREMIUM' ? '👑 Premium' : dynBadge === 'TRIAL' ? '🌱 Trial' : '🛑 Expired'}
                           </span>
                         </td>
 
@@ -1176,14 +1316,23 @@ export default function AdminPanel({
                           </select>
                         </td>
 
-                        <td className="py-3 text-right space-x-1.5 font-display">
+                        <td className="py-3 text-right space-x-1.5 font-display flex items-center justify-end">
                           <button
                             onClick={() => handleTrialExtend(user)}
                             title="Extend Trial +15 Days"
-                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-100 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex"
+                            className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-100 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex animate-fade-in"
                           >
                             +15d Trial
                           </button>
+                          {onDeleteUser && user.email.toLowerCase() !== 'kokborokanimations@gmail.com' && (
+                            <button
+                              onClick={() => setUserToDelete(user)}
+                              title="Delete User Account"
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-100 rounded-lg text-[10px] font-bold transition-all cursor-pointer inline-flex animate-fade-in"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1192,6 +1341,65 @@ export default function AdminPanel({
               </tbody>
             </table>
           </div>
+
+          {/* User deletion confirmation modal */}
+          {userToDelete && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 border border-gray-100 shadow-2xl space-y-4">
+                <div className="flex items-center gap-3 text-rose-600">
+                  <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                    <Trash2 size={20} />
+                  </div>
+                  <div className="text-left">
+                    <h4 className="font-extrabold text-slate-900 tracking-tight text-sm font-display">Delete User Account</h4>
+                    <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Permanent Action</p>
+                  </div>
+                </div>
+                
+                <p className="text-xs text-gray-600 leading-relaxed font-semibold text-left">
+                  Are you sure you want to permanently delete <span className="font-bold text-slate-900">{userToDelete.name}</span> (<span className="text-slate-500">{userToDelete.email}</span>)? This will permanently remove their account from Supabase Authentication and clear all of their custom profile and community data. This action is irreversible.
+                </p>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setUserToDelete(null)}
+                    disabled={isDeletingUser}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!onDeleteUser) return;
+                      setIsDeletingUser(true);
+                      try {
+                        await onDeleteUser(userToDelete.id);
+                        setUserToDelete(null);
+                      } catch (err: any) {
+                        alert(err.message || 'Failed to delete user.');
+                      } finally {
+                        setIsDeletingUser(false);
+                      }
+                    }}
+                    disabled={isDeletingUser}
+                    className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-rose-600/10 disabled:opacity-50"
+                  >
+                    {isDeletingUser ? (
+                      <>
+                        <RefreshCw size={12} className="animate-spin" />
+                        <span>Deleting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 size={12} />
+                        <span>Permanently Delete</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1245,10 +1453,13 @@ export default function AdminPanel({
 
               <button
                 type="submit"
-                className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 cursor-pointer flex items-center justify-center gap-1.5 font-display"
+                disabled={isSavingSettings}
+                className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                  isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
               >
-                <Save size={14} />
-                <span>Save Credentials</span>
+                <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                <span>{isSavingSettings ? 'Saving Credentials...' : 'Save Credentials'}</span>
               </button>
             </form>
           </div>
@@ -1343,16 +1554,36 @@ export default function AdminPanel({
               </span>
               
               <button
+                disabled={isSavingSettings}
                 onClick={async () => {
+                  if (isSavingSettings) return;
                   const newVal = !postApprovalMode;
                   setPostApprovalMode(newVal);
-                  // Save on server immediately
-                  await onUpdateSettings({
-                    ...settings,
-                    postApprovalMode: newVal
-                  });
+                  setIsSavingSettings(true);
+                  try {
+                    const success = await onUpdateSettings({
+                      ...settings,
+                      postApprovalMode: newVal
+                    });
+                    if (success) {
+                      if (window.showSuccessToast) {
+                        window.showSuccessToast('Approval Mode Updated Successfully!');
+                      }
+                    } else {
+                      alert('Failed to update approval mode.');
+                      setPostApprovalMode(!newVal);
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert('Error updating approval mode.');
+                    setPostApprovalMode(!newVal);
+                  } finally {
+                    setIsSavingSettings(false);
+                  }
                 }}
-                className="text-teal-600 hover:text-teal-700 transition-colors cursor-pointer"
+                className={`text-teal-600 hover:text-teal-700 transition-colors ${
+                  isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
                 title="Toggle Approval Mode"
               >
                 {postApprovalMode ? (
