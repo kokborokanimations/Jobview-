@@ -24,19 +24,20 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
     const saved = localStorage.getItem('jobview_bookmarked_jobs');
     if (saved) {
       const ids = JSON.parse(saved) as string[];
-      setIsBookmarked(ids.includes(job.id));
+      setIsBookmarked(ids.map(String).includes(String(job.id)));
     }
   }, [job.id]);
 
   const handleToggleBookmark = () => {
     const saved = localStorage.getItem('jobview_bookmarked_jobs');
-    let ids: string[] = saved ? JSON.parse(saved) : [];
+    let ids: string[] = saved ? JSON.parse(saved).map(String) : [];
+    const jobIdStr = String(job.id);
     
     if (isBookmarked) {
-      ids = ids.filter(id => id !== job.id);
+      ids = ids.filter(id => id !== jobIdStr);
       setIsBookmarked(false);
     } else {
-      ids.push(job.id);
+      ids.push(jobIdStr);
       setIsBookmarked(true);
       window.showJobSavedToast?.('Job Saved!');
     }
@@ -45,7 +46,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
 
   const handleShare = () => {
     // Generate simple shareable simulated link using window.location.origin
-    const shareUrl = `${window.location.origin}/?job_id=${job.id}`;
+    const shareUrl = `${window.location.origin}/?job_id=${String(job.id)}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       setIsShared(true);
       setTimeout(() => setIsShared(false), 2500);
@@ -115,8 +116,38 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
       <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200 space-y-6 shadow-xs">
         
         {/* Header Summary */}
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-6">
-          <div className="space-y-2">
+        <div className="flex flex-col sm:flex-row items-start gap-4 border-b border-slate-100 pb-6">
+          {/* Logo container */}
+          {job.companyLogoUrl ? (
+            <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200/80 flex items-center justify-center shrink-0 bg-slate-50 shadow-xs">
+              <img
+                src={job.companyLogoUrl}
+                alt={`${job.companyName} logo`}
+                referrerPolicy="no-referrer"
+                className="w-full h-full object-contain p-1.5"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                  const parent = e.currentTarget.parentElement;
+                  if (parent) {
+                    parent.className = "w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-lg text-amber-700 tracking-wide shadow-xs shrink-0 font-display";
+                    parent.innerHTML = `
+                      <svg class="w-8 h-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
+                      </svg>
+                    `;
+                  }
+                }}
+              />
+            </div>
+          ) : (
+            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-lg text-amber-700 tracking-wide shadow-xs shrink-0 font-display">
+              <svg className="w-8 h-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
+              </svg>
+            </div>
+          )}
+
+          <div className="space-y-2 flex-1">
             <span className="px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 rounded-full inline-flex items-center gap-1 mb-1 border border-emerald-100/60">
               <span className="w-1 h-1 bg-emerald-500 rounded-full" />
               Verified & Active
@@ -144,26 +175,14 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
         </div>
 
         {/* Info Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/50 flex items-center gap-3">
             <div className="w-9 h-9 bg-white text-teal-600 rounded-lg border border-slate-200 flex items-center justify-center shrink-0 shadow-xs">
               <Briefcase size={16} />
             </div>
             <div>
               <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-display">Employment Type</p>
-              <p className="text-xs font-bold text-slate-800">Full-Time / Direct Hiring</p>
-            </div>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200/50 flex items-center gap-3">
-            <div className="w-9 h-9 bg-white text-teal-600 rounded-lg border border-slate-200 flex items-center justify-center shrink-0 shadow-xs">
-              <Calendar size={16} />
-            </div>
-            <div>
-              <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider font-display">Posted Date</p>
-              <p className="text-xs font-bold text-slate-800">
-                {new Date(job.createdAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
-              </p>
+              <p className="text-xs font-bold text-slate-800">{job.contractType || "Full-Time / Direct Hiring"}</p>
             </div>
           </div>
         </div>
@@ -179,34 +198,25 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
           </p>
         </div>
 
-        {/* Qualifications Section */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 font-display">
-            <span className="w-1 h-3 bg-teal-600 rounded-full" />
-            Core Qualifications
-          </h3>
-          <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-xl border border-slate-200/50">
-            {job.qualifications}
-          </p>
-        </div>
+
 
       </div>
 
       {/* Action Sheet (Sleek Bottom Section) */}
-      {((job.emailEnabled !== false) || (job.callEnabled !== false) || (job.whatsappEnabled !== false) || (job.applyEnabled !== false)) && (
+      {((job.emailEnabled !== false && job.email) || (job.callEnabled !== false && job.phone) || (job.whatsappEnabled !== false && job.whatsapp) || (job.applyEnabled !== false && job.applyLink)) && (
         <div className="border border-slate-200 p-5 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 rounded-2xl shadow-xs">
-          <div className="space-y-1 text-center sm:text-left hidden md:block">
+          <div className="space-y-1 text-center sm:text-left w-full sm:w-auto">
             <h4 className="text-xs font-bold tracking-wider uppercase text-slate-400 font-display">
-              Contact & Apply Channel
+              Send your CV / HR Contact
             </h4>
-            <p className="text-[10px] text-slate-500 leading-none">
-              Choose your preferred channel below.
+            <p className="text-[10px] text-slate-500">
+              Apply directly or reach out to the recruiter via the contacts below.
             </p>
           </div>
           
           <div className="flex gap-3 w-full sm:w-auto justify-center sm:justify-start">
             {/* Email */}
-            {job.emailEnabled !== false && (
+            {job.emailEnabled !== false && job.email && (
               <a
                 href={`mailto:${job.email}?subject=${emailSubject}&body=${emailBody}`}
                 title="Apply via Email"
@@ -217,7 +227,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
             )}
             
             {/* Phone */}
-            {job.callEnabled !== false && (
+            {job.callEnabled !== false && job.phone && (
               <a
                 href={`tel:${job.phone}`}
                 title="Call Recruiter Direct"
@@ -228,7 +238,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
             )}
             
             {/* WhatsApp */}
-            {job.whatsappEnabled !== false && (
+            {job.whatsappEnabled !== false && job.whatsapp && (
               <a
                 href={getWhatsAppLink()}
                 target="_blank"
@@ -240,20 +250,20 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
                   className="w-5 h-5 fill-current" 
                   viewBox="0 0 24 24"
                 >
-                  <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.062 5.248 5.316.002 11.758.002c3.126 0 6.066 1.214 8.275 3.425 2.211 2.213 3.425 5.161 3.421 8.286-.007 6.502-5.261 11.748-11.7 11.748-2.003-.001-3.97-.512-5.711-1.488L0 24zm6.39-4.852c1.653.98 3.273 1.498 4.861 1.499 5.347 0 9.7-.4.004-9.699C20.9 6.27 16.55 1.93 11.761 1.93 6.969 1.93 3.07 5.83 3.067 10.621c-.002 1.683.504 3.327 1.464 4.71L3.58 19.3l4.083-1.071c-.001 0-.001.001 0 0zm11.72-4.89c-.272-.137-1.61-.795-1.86-.885-.25-.09-.432-.136-.613.136-.18.273-.703.885-.862 1.067-.158.182-.317.204-.589.068-.272-.136-1.15-.424-2.19-1.353-.809-.721-1.355-1.613-1.514-1.886-.159-.272-.017-.42.119-.556.123-.122.272-.318.408-.477.136-.159.182-.272.272-.454.09-.181.045-.34-.022-.477-.068-.136-.613-1.477-.84-2.022-.22-.533-.48-.46-.613-.466-.114-.006-.245-.007-.376-.007-.132 0-.346.05-.527.25-.181.2-.693.677-.693 1.654s.71 1.916.81 2.052c.099.136 1.398 2.134 3.387 2.992.473.204.842.326 1.13.418.476.151.909.13 1.25.079.382-.057 1.61-.659 1.838-1.296.227-.636.227-1.181.159-1.295-.068-.114-.25-.182-.523-.319z"/>
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.454 5.709 1.455h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
                 </svg>
               </a>
             )}
           </div>
           
-          {job.applyEnabled !== false && (
+          {job.applyEnabled !== false && job.applyLink && (
             <a
               href={job.applyLink}
               target="_blank"
               rel="noopener noreferrer"
               className="w-full sm:flex-1 text-center bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-md shadow-teal-600/10 hover:shadow-teal-600/20 transition-all flex items-center justify-center gap-2 text-sm cursor-pointer font-display"
             >
-              <span>Apply Website</span>
+              <span>Apply Job</span>
               <ExternalLink size={15} />
             </a>
           )}

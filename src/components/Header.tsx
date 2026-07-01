@@ -17,7 +17,7 @@ interface HeaderProps {
 }
 
 export default function Header({ user, settings, onLogout, onLoginClick, onUpgradeClick, onChangeTab }: HeaderProps) {
-  const isAdmin = user && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
+  const isAdmin = user && user.role === 'admin' && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">

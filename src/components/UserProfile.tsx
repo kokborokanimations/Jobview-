@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { User, CommunityPost, AdminSettings } from '../types';
-import { User as UserIcon, Calendar, FileText, BadgeCheck, AlertTriangle, Clock, Edit3, Save, X, Sparkles, Image as ImageIcon, Bookmark, Heart, Share2, Check, Flag } from 'lucide-react';
+import { User, CommunityPost, AdminSettings, Job } from '../types';
+import { User as UserIcon, Calendar, FileText, BadgeCheck, AlertTriangle, Clock, Edit3, Save, X, Sparkles, Image as ImageIcon, Bookmark, Heart, Share2, Check, Flag, Briefcase, MapPin, Trash2 } from 'lucide-react';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
 
 interface UserProfileProps {
@@ -17,6 +17,10 @@ interface UserProfileProps {
   onSelectPost?: (postId: string) => void;
   bookmarkedPostIds: string[];
   onToggleBookmark: (postId: string) => void;
+  onUpgradeClick?: () => void;
+  jobs?: Job[];
+  onSelectJob?: (job: Job) => void;
+  onDeletePost?: (postId: string) => Promise<void>;
 }
 
 export default function UserProfile({
@@ -27,7 +31,11 @@ export default function UserProfile({
   onLoginTrigger,
   onSelectPost,
   bookmarkedPostIds,
-  onToggleBookmark
+  onToggleBookmark,
+  onUpgradeClick,
+  jobs = [],
+  onSelectJob,
+  onDeletePost
 }: UserProfileProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(user?.name || '');
@@ -66,11 +74,37 @@ export default function UserProfile({
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
   const [selectedPostForView, setSelectedPostForView] = useState<CommunityPost | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const [savedType, setSavedType] = useState<'jobs' | 'posts'>('jobs');
+  const [savedJobs, setSavedJobs] = useState<Job[]>([]);
 
   // Filter posts made by this user
   const myPosts = posts.filter(
     (post) => post.userId === user.id || post.userName === user.name
   );
+
+  // Sync saved jobs from localStorage
+  React.useEffect(() => {
+    if (activeSubTab === 'saved') {
+      const saved = localStorage.getItem('jobview_bookmarked_jobs');
+      const savedIds: string[] = saved ? JSON.parse(saved).map(String) : [];
+      const filtered = (jobs || []).filter(job => savedIds.includes(String(job.id)));
+      setSavedJobs(filtered);
+    }
+  }, [activeSubTab, jobs]);
+
+  const handleUnsaveJob = (jobId: string) => {
+    const saved = localStorage.getItem('jobview_bookmarked_jobs');
+    let savedIds: string[] = saved ? JSON.parse(saved).map(String) : [];
+    const jobIdStr = String(jobId);
+    savedIds = savedIds.filter(id => id !== jobIdStr);
+    localStorage.setItem('jobview_bookmarked_jobs', JSON.stringify(savedIds));
+    setSavedJobs(prev => prev.filter(j => String(j.id) !== jobIdStr));
+    if (window.showSuccessToast) {
+      window.showSuccessToast('Job removed from Saved!');
+    }
+  };
 
   // Dynamically fetch and synchronize saved posts for this specific logged-in user
   React.useEffect(() => {
@@ -349,7 +383,6 @@ export default function UserProfile({
           </div>
         </div>
       </div>
-
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-slate-200">
         <button
@@ -370,7 +403,7 @@ export default function UserProfile({
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
         >
-          Saved Posts ({supabaseSavedPosts.length})
+          Saved ({savedJobs.length + supabaseSavedPosts.length})
         </button>
       </div>
 
@@ -414,18 +447,60 @@ export default function UserProfile({
                           {getRelativeTimestamp(post.createdAt)}
                         </span>
                         
-                        {/* Live or Pending Badge */}
-                        {isLive ? (
-                          <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">
-                            <span className="w-1 h-1 bg-emerald-500 rounded-full" />
-                            Live
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">
-                            <Clock size={9} className="text-amber-500 animate-pulse" />
-                            Approval Pending
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {/* Live or Pending Badge */}
+                          {isLive ? (
+                            <span className="inline-flex items-center gap-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">
+                              <span className="w-1 h-1 bg-emerald-500 rounded-full" />
+                              Live
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-700 border border-amber-100 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">
+                              <Clock size={9} className="text-amber-500 animate-pulse" />
+                              Approval Pending
+                            </span>
+                          )}
+
+                           {/* Delete post button */}
+                           {user && (post.userId === user.id || post.userName === user.name) && onDeletePost && (
+                             <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                               {confirmDeleteId === post.id ? (
+                                 <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 rounded-lg p-0.5 animate-fade-in shrink-0">
+                                   <button
+                                     onClick={async (e) => {
+                                       e.stopPropagation();
+                                       await onDeletePost(post.id);
+                                       setConfirmDeleteId(null);
+                                     }}
+                                     className="px-1.5 py-0.5 text-[9px] font-extrabold bg-rose-600 hover:bg-rose-700 text-white rounded-md transition-colors cursor-pointer shrink-0"
+                                   >
+                                     Confirm
+                                   </button>
+                                   <button
+                                     onClick={(e) => {
+                                       e.stopPropagation();
+                                       setConfirmDeleteId(null);
+                                     }}
+                                     className="px-1.5 py-0.5 text-[9px] font-bold text-slate-500 hover:text-slate-800 rounded-md transition-colors cursor-pointer shrink-0"
+                                   >
+                                     Cancel
+                                   </button>
+                                 </div>
+                               ) : (
+                                 <button
+                                   onClick={(e) => {
+                                     e.stopPropagation();
+                                     setConfirmDeleteId(post.id);
+                                   }}
+                                   className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                                   title="Delete Post"
+                                 >
+                                   <Trash2 size={13} />
+                                 </button>
+                               )}
+                             </div>
+                           )}
+                        </div>
                       </div>
 
                       <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
@@ -449,81 +524,193 @@ export default function UserProfile({
           )}
         </div>
       ) : (
-        <div className="space-y-4 animate-fade-in">
-          <div className="flex items-center gap-2">
-            <Bookmark size={14} className="text-teal-600" />
-            <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider font-display">
-              Saved Community Posts
-            </h4>
-            <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full font-bold">
-              {supabaseSavedPosts.length}
-            </span>
+        <div className="space-y-5 animate-fade-in">
+          {/* Sub-Segment Switcher for Saved Items */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50 border border-slate-200/80 p-2.5 rounded-xl">
+            <div className="flex items-center gap-1.5">
+              <Bookmark size={14} className="text-teal-600" />
+              <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider font-display">
+                Saved Items Browser
+              </span>
+            </div>
+
+            <div className="flex bg-slate-200/60 p-0.5 rounded-lg border border-slate-200 shrink-0 self-start sm:self-auto">
+              <button
+                onClick={() => setSavedType('jobs')}
+                className={`px-3.5 py-1 text-[11px] font-extrabold uppercase tracking-wider rounded-md transition-all font-display cursor-pointer ${
+                  savedType === 'jobs'
+                    ? 'bg-white text-teal-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                💼 Jobs ({savedJobs.length})
+              </button>
+              <button
+                onClick={() => setSavedType('posts')}
+                className={`px-3.5 py-1 text-[11px] font-extrabold uppercase tracking-wider rounded-md transition-all font-display cursor-pointer ${
+                  savedType === 'posts'
+                    ? 'bg-white text-teal-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                💬 Community ({supabaseSavedPosts.length})
+              </button>
+            </div>
           </div>
 
-          {isLoadingSaved ? (
-            <div className="flex flex-col items-center justify-center py-12 space-y-3">
-              <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-              <p className="text-xs text-slate-400 font-medium">Fetching saved posts from Supabase database...</p>
-            </div>
-          ) : supabaseSavedPosts.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4">
-              {supabaseSavedPosts.map((post) => {
-                return (
-                  <div
-                    key={post.id}
-                    onClick={() => setSelectedPostForView(post)}
-                    className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:border-slate-300 transition-colors flex gap-4 items-start relative group cursor-pointer"
-                  >
-                    {post.imageUrl && (
-                      <div className="w-16 h-16 rounded-lg bg-slate-50 overflow-hidden border border-slate-100 shrink-0">
-                        <img
-                          src={post.imageUrl}
-                          alt="Post snapshot"
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    )}
+          {/* List display based on selected segment */}
+          {savedType === 'jobs' ? (
+            <div className="space-y-4">
+              {savedJobs.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {savedJobs.map((job) => {
+                    return (
+                      <div
+                        key={job.id}
+                        onClick={() => onSelectJob?.(job)}
+                        className="group relative bg-white p-4 rounded-xl shadow-xs border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 flex gap-4 items-start relative cursor-pointer"
+                      >
+                        {/* Company Logo or Fallback */}
+                        {job.companyLogoUrl ? (
+                          <div className="w-12 h-12 rounded-lg border border-slate-200/60 flex items-center justify-center shrink-0 bg-slate-50 shadow-xs overflow-hidden">
+                            <img
+                              src={job.companyLogoUrl}
+                              alt={`${job.companyName} logo`}
+                              referrerPolicy="no-referrer"
+                              className="w-full h-full object-contain p-1"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0 font-bold text-[13px] text-amber-700 tracking-wide shadow-xs font-display">
+                            <Briefcase size={20} className="text-amber-600" />
+                          </div>
+                        )}
 
-                    <div className="flex-1 space-y-1.5 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-bold text-slate-800">{post.userName}</span>
-                          <span className="text-[10px] font-mono text-slate-400">
-                            {getRelativeTimestamp(post.createdAt)}
-                          </span>
+                        <div className="flex-1 space-y-1.5 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex flex-col min-w-0">
+                              <h4 className="font-bold text-slate-900 group-hover:text-teal-600 transition-colors tracking-tight text-xs font-display truncate">
+                                {job.title}
+                              </h4>
+                              <span className="text-[10px] font-bold text-slate-500">{job.companyName}</span>
+                            </div>
+                            
+                            {/* Interactive Unsave button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnsaveJob(job.id);
+                              }}
+                              title="Remove from saved jobs"
+                              className="p-1.5 hover:bg-rose-50 text-amber-500 hover:text-rose-600 rounded-lg transition-all cursor-pointer opacity-90 group-hover:opacity-100 shrink-0"
+                            >
+                              <Bookmark size={13} fill="currentColor" />
+                            </button>
+                          </div>
+
+                          {/* Info bar */}
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-400 font-medium font-mono">
+                            <span className="flex items-center gap-0.5">
+                              <MapPin size={10} className="text-slate-400" />
+                              {job.location}
+                            </span>
+                            <span>•</span>
+                            {job.salary && (
+                              <>
+                                <span className="text-emerald-600 font-bold font-sans">{job.salary}</span>
+                                <span>•</span>
+                              </>
+                            )}
+                            <span className="flex items-center gap-0.5">
+                              <Clock size={10} className="text-slate-400" />
+                              <span>{job.datePosted || getRelativeTimestamp(job.createdAt)}</span>
+                            </span>
+                          </div>
                         </div>
-                        
-                        {/* Interactive Unsave button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleSavedInProfile(post.id);
-                          }}
-                          title="Remove from saved posts"
-                          className="p-1 hover:bg-rose-50 text-amber-500 hover:text-rose-600 rounded-lg transition-all cursor-pointer opacity-90 group-hover:opacity-100"
-                        >
-                          <Bookmark size={13} fill="currentColor" />
-                        </button>
                       </div>
-
-                      <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                        {post.caption}
-                      </p>
-                    </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+                  <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Briefcase size={16} />
                   </div>
-                );
-              })}
+                  <p className="text-xs font-bold text-slate-700">No saved jobs yet</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 max-w-xs mx-auto leading-relaxed">
+                    Explore high-quality openings in the Jobs tab, click the bookmark icon on any job to pin them directly here!
+                  </p>
+                </div>
+              )}
             </div>
           ) : (
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
-              <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-2">
-                <Bookmark size={16} />
-              </div>
-              <p className="text-xs font-bold text-slate-700">No saved posts yet</p>
-              <p className="text-[10px] text-slate-400 mt-0.5 max-w-xs mx-auto">
-                Whenever you see an interesting feed item, click the Save icon to bookmark it for future reference!
-              </p>
+            <div className="space-y-4">
+              {isLoadingSaved ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-3">
+                  <div className="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-slate-400 font-medium">Fetching saved posts from database...</p>
+                </div>
+              ) : supabaseSavedPosts.length > 0 ? (
+                <div className="grid grid-cols-1 gap-4">
+                  {supabaseSavedPosts.map((post) => {
+                    return (
+                      <div
+                        key={post.id}
+                        onClick={() => setSelectedPostForView(post)}
+                        className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs hover:border-slate-300 transition-colors flex gap-4 items-start relative group cursor-pointer"
+                      >
+                        {post.imageUrl && (
+                          <div className="w-16 h-16 rounded-lg bg-slate-50 overflow-hidden border border-slate-100 shrink-0">
+                            <img
+                              src={post.imageUrl}
+                              alt="Post snapshot"
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex-1 space-y-1.5 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-bold text-slate-800">{post.userName}</span>
+                              <span className="text-[10px] font-mono text-slate-400">
+                                {getRelativeTimestamp(post.createdAt)}
+                              </span>
+                            </div>
+                            
+                            {/* Interactive Unsave button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleSavedInProfile(post.id);
+                              }}
+                              title="Remove from saved posts"
+                              className="p-1 hover:bg-rose-50 text-amber-500 hover:text-rose-600 rounded-lg transition-all cursor-pointer opacity-90 group-hover:opacity-100 shrink-0"
+                            >
+                              <Bookmark size={13} fill="currentColor" />
+                            </button>
+                          </div>
+
+                          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                            {post.caption}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="bg-slate-50 border border-slate-200 rounded-xl p-8 text-center">
+                  <div className="w-10 h-10 bg-slate-100 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-2">
+                    <Bookmark size={16} />
+                  </div>
+                  <p className="text-xs font-bold text-slate-700">No saved community posts yet</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5 max-w-xs mx-auto leading-relaxed">
+                    Whenever you see an interesting community feed item, click the bookmark icon to review them in this panel.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -5,7 +5,68 @@
 
 import { useState } from 'react';
 import { Job, AdminSettings } from '../types';
-import { Search, MapPin, Briefcase, Calendar, ChevronRight, Activity, Bookmark, Share2, Check } from 'lucide-react';
+import { Search, MapPin, Briefcase, Calendar, ChevronRight, Activity, Bookmark, Share2, Check, Clock } from 'lucide-react';
+
+export function getRelativeTime(dateString: string | undefined, createdAtString?: string): string {
+  const targetStr = dateString || createdAtString;
+  if (!targetStr) return 'Recently';
+
+  const cleanStr = targetStr.trim().toLowerCase();
+
+  // If it already looks like a relative string (e.g., contains 'ago' or 'recently' or 'today' or 'yesterday')
+  if (
+    cleanStr.includes('ago') || 
+    cleanStr.includes('recently') || 
+    cleanStr.includes('today') || 
+    cleanStr.includes('yesterday') ||
+    cleanStr.includes('just now') ||
+    cleanStr.includes('hours') ||
+    cleanStr.includes('days') ||
+    cleanStr.includes('mins') ||
+    cleanStr.includes('weeks') ||
+    cleanStr.includes('months') ||
+    cleanStr.includes('hr') ||
+    cleanStr.includes('day') ||
+    cleanStr.includes('min')
+  ) {
+    // Capitalize first letter cleanly
+    return targetStr.trim().charAt(0).toUpperCase() + targetStr.trim().slice(1);
+  }
+
+  // Otherwise, calculate relative time
+  try {
+    const date = new Date(targetStr);
+    if (isNaN(date.getTime())) {
+      if (createdAtString && createdAtString !== targetStr) {
+        return getRelativeTime(undefined, createdAtString);
+      }
+      return targetStr;
+    }
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    if (diffMs < 0) return 'Just now';
+
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} mins ago`;
+
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hours ago`;
+
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 7) return `${diffDays} days ago`;
+
+    const diffWeeks = Math.floor(diffDays / 7);
+    if (diffWeeks < 4) return `${diffWeeks} weeks ago`;
+
+    const diffMonths = Math.floor(diffDays / 30);
+    if (diffMonths < 12) return `${diffMonths} months ago`;
+
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch (e) {
+    return 'Recently';
+  }
+}
 
 interface JobFeedProps {
   jobs: Job[];
@@ -142,7 +203,9 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
       {filteredJobs.length > 0 ? (
         <div className="grid grid-cols-1 gap-4">
           {filteredJobs.map((job) => {
-            const logoGrad = LOGO_GRADIENTS[job.companyLogoIndex % LOGO_GRADIENTS.length];
+            const idStr = String(job.id || '');
+            const logoIndex = typeof job.companyLogoIndex === 'number' ? job.companyLogoIndex : (idStr ? idStr.charCodeAt(idStr.length - 1) % LOGO_GRADIENTS.length : 0);
+            const logoGrad = LOGO_GRADIENTS[logoIndex % LOGO_GRADIENTS.length];
             const initials = job.companyName.substring(0, 2).toUpperCase();
 
             return (
@@ -163,31 +226,63 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                 )}
 
                 {/* Job Logo & Basic details */}
-                <div className="flex items-start gap-4">
-                  {/* Styled Placeholder Logo with dynamic brand gradient */}
-                  <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${logoGrad} flex items-center justify-center font-bold text-[13px] tracking-wide shadow-xs shrink-0 font-display`}>
-                    {initials}
-                  </div>
+                <div className="flex items-start gap-4 min-w-0 w-full">
+                  {/* Styled logo container: display image if available, else show the fallback government building emblem */}
+                  {job.companyLogoUrl ? (
+                    <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200/60 flex items-center justify-center shrink-0 bg-slate-50 shadow-xs">
+                      <img
+                        src={job.companyLogoUrl}
+                        alt={`${job.companyName} logo`}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-contain p-1"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                          const parent = e.currentTarget.parentElement;
+                          if (parent) {
+                            parent.className = "w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-[13px] text-amber-700 tracking-wide shadow-xs shrink-0 font-display";
+                            parent.innerHTML = `
+                              <svg class="w-6 h-6 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
+                              </svg>
+                            `;
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-[13px] text-amber-700 tracking-wide shadow-xs shrink-0 font-display">
+                      <svg className="w-6 h-6 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
+                      </svg>
+                    </div>
+                  )}
 
-                  <div className="space-y-1">
+                  <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="font-bold text-slate-900 group-hover:text-teal-600 transition-colors tracking-tight text-sm font-display">
+                      <h4 className="font-bold text-slate-900 group-hover:text-teal-600 transition-colors tracking-tight text-sm font-display break-words">
                         {job.title}
                       </h4>
                     </div>
 
-                    <p className="text-[11px] font-semibold text-slate-500 flex items-center gap-1.5">
+                    <p className="text-[11px] font-semibold text-slate-500 flex flex-wrap items-center gap-1.5">
                       <span className="text-slate-800 font-bold">{job.companyName}</span>
                       <span>•</span>
                       <span className="flex items-center gap-0.5">
                         <MapPin size={11} className="inline text-slate-400" />
                         {job.location}
                       </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 text-slate-500 bg-slate-50 border border-slate-200/50 px-1.5 py-0.5 rounded-md text-[10px] font-medium font-mono">
+                        <Clock size={11} className="inline text-indigo-500" />
+                        <span>{getRelativeTime(job.datePosted, job.createdAt)}</span>
+                      </span>
                     </p>
 
                     <p className="text-xs text-slate-600 line-clamp-2 pr-6 mt-1.5 leading-relaxed">
                       {job.shortDescription}
                     </p>
+
+
                   </div>
                 </div>
 

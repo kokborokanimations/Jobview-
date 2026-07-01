@@ -13,7 +13,7 @@ interface NavigationProps {
 }
 
 export default function Navigation({ currentTab, onChangeTab, user }: NavigationProps) {
-  const isAdmin = user && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
+  const isAdmin = user && user.role === 'admin' && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
 
   return (
     <div className="w-full max-w-md mx-auto px-4 mt-6">

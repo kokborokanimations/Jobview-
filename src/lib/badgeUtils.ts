@@ -27,7 +27,19 @@ export function getUserBadge(user: User | null, settings: AdminSettings): UserBa
 
   // If user is explicitly set to paid active membership
   if (user.subscriptionStatus === 'Active') {
+    const planExpiryStr = user.plan_expiry_date || user.planExpiryDate;
+    if (planExpiryStr) {
+      const expiry = new Date(planExpiryStr);
+      const now = new Date();
+      if (now > expiry) {
+        return 'EXPIRED';
+      }
+    }
     return 'PREMIUM';
+  }
+
+  if (user.subscriptionStatus === 'Expired') {
+    return 'EXPIRED';
   }
 
   // 2. Global Paywall Mode = ON:

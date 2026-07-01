@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import { User } from '../types';
-import { LogIn, Sparkles, Mail, User as UserIcon } from 'lucide-react';
+import { LogIn, Sparkles, Mail, User as UserIcon, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface LoginModalProps {
@@ -156,6 +156,15 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
     return () => window.removeEventListener('message', handleOAuthMessage);
   }, [onLogin]);
 
+  // Prevent background scrolling when login modal is active
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
   const loginAsAdmin = async () => {
     setIsLoading(true);
     setError('');
@@ -211,25 +220,36 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md overflow-hidden bg-white rounded-2xl shadow-2xl border border-slate-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full h-full md:h-auto md:max-h-[90vh] md:max-w-md bg-white md:rounded-2xl shadow-2xl border-0 md:border border-slate-200 flex flex-col overflow-y-auto">
         
+        {/* Absolute X Close Button at the top-right */}
+        {isClosable && onClose && (
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors cursor-pointer z-10"
+            aria-label="Close modal"
+          >
+            <X size={18} />
+          </button>
+        )}
+
         {/* Decorative Top Accent */}
-        <div className="h-2 bg-gradient-to-r from-teal-500 to-teal-700 w-full" />
+        <div className="h-2 bg-gradient-to-r from-teal-500 to-teal-700 w-full shrink-0" />
 
         {/* Modal Header */}
-        <div className="p-8 text-center">
-          <div className="inline-flex items-center justify-center w-12 h-12 mb-4 bg-teal-50 text-teal-600 rounded-full">
+        <div className="p-6 md:p-8 text-center shrink-0">
+          <div className="inline-flex items-center justify-center w-12 h-12 mb-3 md:mb-4 bg-teal-50 text-teal-600 rounded-full">
             <LogIn size={24} />
           </div>
-          <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight font-display">Welcome to Jobview</h2>
-          <p className="mt-2 text-sm text-slate-500">
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight font-display">Welcome to Jobview</h2>
+          <p className="mt-1.5 md:mt-2 text-xs md:text-sm text-slate-500 max-w-sm mx-auto">
             Sign in to unlock verified hiring managers, contact details, and our community wall.
           </p>
         </div>
 
         {/* Modal Body */}
-        <div className="px-8 pb-8">
+        <div className="px-6 md:px-8 pb-8 flex-1">
           
           {/* Google Sign-In Button */}
           <div className="mb-4">

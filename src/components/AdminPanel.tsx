@@ -8,10 +8,11 @@ import { Job, CommunityPost, User, AdminSettings, PaymentLog } from '../types';
 import { 
   Settings, Briefcase, Users, CreditCard, Shield, Plus, 
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
-  Clock, CheckCircle, FileText, Globe
+  Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
+import { supabase } from '../lib/supabase';
 
 interface AdminPanelProps {
   settings: AdminSettings;
@@ -27,6 +28,7 @@ interface AdminPanelProps {
   onRefreshPages?: () => void;
   onApprovePost?: (postId: string) => void;
   onDeleteUser?: (userId: string) => Promise<void>;
+  onRefreshJobs?: () => Promise<void> | void;
 }
 
 export default function AdminPanel({
@@ -42,9 +44,10 @@ export default function AdminPanel({
   onUpdateUserSubscription,
   onRefreshPages,
   onApprovePost,
-  onDeleteUser
+  onDeleteUser,
+  onRefreshJobs
 }: AdminPanelProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'cashfree' | 'posts' | 'pages'>('branding');
+  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'cashfree' | 'posts' | 'pages' | 'contacts'>('branding');
   
   // Settings Form state
   const [brandName, setBrandName] = useState(settings.brandName || '');
@@ -58,9 +61,20 @@ export default function AdminPanel({
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
   const [currency, setCurrency] = useState(settings.currency || 'INR');
   const [paywallFeaturesText, setPaywallFeaturesText] = useState((settings.paywallFeatures || []).join('\n'));
+  const [paywallTitle, setPaywallTitle] = useState(settings.paywallTitle || 'Activate Premium');
+  const [paywallSubtitle, setPaywallSubtitle] = useState(settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.');
+  const [paywallButtonText, setPaywallButtonText] = useState(settings.paywallButtonText || 'Activate Membership Now');
+  const [paywallPriceDescription, setPaywallPriceDescription] = useState(settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.');
+  const [paywallFooterText, setPaywallFooterText] = useState(settings.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
+  const [paywallExtendTitle, setPaywallExtendTitle] = useState(settings.paywallExtendTitle || 'Extend Premium');
+  const [paywallExtendSubtitle, setPaywallExtendSubtitle] = useState(settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.');
+  const [paywallExtendButtonText, setPaywallExtendButtonText] = useState(settings.paywallExtendButtonText || 'Extend Membership Now');
   const [cashfreeAppId, setCashfreeAppId] = useState(settings.cashfreeAppId || '');
   const [cashfreeSecretKey, setCashfreeSecretKey] = useState(settings.cashfreeSecretKey || '');
   const [postApprovalMode, setPostApprovalMode] = useState(settings.postApprovalMode || false);
+  const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
+  const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
+  const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || localStorage.getItem('SUPABASE_SERVICE_ROLE_KEY') || '');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   
   // Secret Keys visibility toggle
@@ -82,6 +96,10 @@ export default function AdminPanel({
   const [jobPhone, setJobPhone] = useState('');
   const [jobWhatsapp, setJobWhatsapp] = useState('');
   const [jobLogoIndex, setJobLogoIndex] = useState(0);
+  const [jobContractType, setJobContractType] = useState('Full-Time / Direct Hiring');
+  const [jobCompanyLogoUrl, setJobCompanyLogoUrl] = useState('');
+  const [isUploadingJobCompanyLogo, setIsUploadingJobCompanyLogo] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [jobWhatsappEnabled, setJobWhatsappEnabled] = useState(true);
   const [jobCallEnabled, setJobCallEnabled] = useState(true);
   const [jobEmailEnabled, setJobEmailEnabled] = useState(true);
@@ -95,8 +113,14 @@ export default function AdminPanel({
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
   const [isDeletingJob, setIsDeletingJob] = useState(false);
+  const [confirmPostDeleteId, setConfirmPostDeleteId] = useState<string | null>(null);
 
   const [adminPosts, setAdminPosts] = useState<CommunityPost[]>(posts);
+
+  useEffect(() => {
+    setAdminPosts(posts);
+  }, [posts]);
+
   const [pages, setPages] = useState<any[]>([]);
   const [isEditingPage, setIsEditingPage] = useState<boolean>(false);
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
@@ -104,6 +128,95 @@ export default function AdminPanel({
   const [pageSlug, setPageSlug] = useState('');
   const [pageContent, setPageContent] = useState('');
   const [pageIsVisible, setPageIsVisible] = useState(true);
+
+  // Contact Submissions state
+  const [contacts, setContacts] = useState<any[]>([]);
+  const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [contactSearchQuery, setContactSearchQuery] = useState('');
+  const [contactIdToConfirmDelete, setContactIdToConfirmDelete] = useState<string | null>(null);
+
+  const fetchContacts = async () => {
+    setIsLoadingContacts(true);
+    try {
+      const response = await fetch('/api/contacts');
+      if (response.ok) {
+        const data = await response.json();
+        setContacts(data);
+      }
+    } catch (err) {
+      console.error('Error fetching contacts:', err);
+    } finally {
+      setIsLoadingContacts(false);
+    }
+  };
+
+  const handleDeleteContact = async (id: string) => {
+    try {
+      const response = await fetch(`/api/contacts/${id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setContacts(prev => prev.filter(c => c.id !== id));
+        if (contactIdToConfirmDelete === id) {
+          setContactIdToConfirmDelete(null);
+        }
+      } else {
+        console.error('Failed to delete the contact submission.');
+      }
+    } catch (err) {
+      console.error('Error deleting contact:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSubTab === 'contacts') {
+      fetchContacts();
+    }
+  }, [activeSubTab]);
+
+  const filteredContacts = contacts.filter((c: any) => {
+    const query = contactSearchQuery.toLowerCase();
+    return (
+      c.name?.toLowerCase().includes(query) ||
+      c.email?.toLowerCase().includes(query) ||
+      c.subject?.toLowerCase().includes(query) ||
+      c.message?.toLowerCase().includes(query)
+    );
+  });
+
+  // Supabase Connection Status State
+  const [supabaseStatus, setSupabaseStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured' | 'missing-table'>('checking');
+  const [supabaseErrorDetails, setSupabaseErrorDetails] = useState<string | null>(null);
+  const [showSqlHelper, setShowSqlHelper] = useState(false);
+
+  useEffect(() => {
+    async function checkSupabaseConnection() {
+      if (!supabase) {
+        setSupabaseStatus('not-configured');
+        return;
+      }
+      try {
+        const { error } = await supabase.from('jobs').select('id').limit(1);
+        if (error) {
+          if (error.code === 'PGRST116') {
+            setSupabaseStatus('connected');
+          } else if (error.message && (error.message.includes('relation') || error.message.includes('does not exist'))) {
+            setSupabaseStatus('missing-table');
+            setSupabaseErrorDetails('Connected successfully to Supabase, but the "jobs" table is missing in your Supabase schema.');
+          } else {
+            setSupabaseStatus('error');
+            setSupabaseErrorDetails(error.message);
+          }
+        } else {
+          setSupabaseStatus('connected');
+        }
+      } catch (err: any) {
+        setSupabaseStatus('error');
+        setSupabaseErrorDetails(err.message || String(err));
+      }
+    }
+    checkSupabaseConnection();
+  }, []);
 
   useEffect(() => {
     setAdminPosts(posts);
@@ -120,9 +233,20 @@ export default function AdminPanel({
     setMembershipPrice(settings.membershipPrice || 499);
     setCurrency(settings.currency || 'INR');
     setPaywallFeaturesText((settings.paywallFeatures || []).join('\n'));
+    setPaywallTitle(settings.paywallTitle || 'Activate Premium');
+    setPaywallSubtitle(settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.');
+    setPaywallButtonText(settings.paywallButtonText || 'Activate Membership Now');
+    setPaywallPriceDescription(settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.');
+    setPaywallFooterText(settings.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
+    setPaywallExtendTitle(settings.paywallExtendTitle || 'Extend Premium');
+    setPaywallExtendSubtitle(settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.');
+    setPaywallExtendButtonText(settings.paywallExtendButtonText || 'Extend Membership Now');
     setCashfreeAppId(settings.cashfreeAppId || '');
     setCashfreeSecretKey(settings.cashfreeSecretKey || '');
     setPostApprovalMode(settings.postApprovalMode || false);
+    setSupabaseUrl(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
+    setSupabaseAnonKey(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
+    setSupabaseServiceRoleKey(settings.supabaseServiceRoleKey || localStorage.getItem('SUPABASE_SERVICE_ROLE_KEY') || '');
   }, [settings]);
 
   const handleApprovePost = async (postId: string) => {
@@ -267,9 +391,20 @@ export default function AdminPanel({
       premiumMode !== settings.premiumMode ||
       Number(membershipPrice) !== (settings.membershipPrice || 499) ||
       currency !== (settings.currency || 'INR') ||
+      paywallTitle !== (settings.paywallTitle || 'Activate Premium') ||
+      paywallSubtitle !== (settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.') ||
+      paywallButtonText !== (settings.paywallButtonText || 'Activate Membership Now') ||
+      paywallPriceDescription !== (settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.') ||
+      paywallFooterText !== (settings.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.') ||
+      paywallExtendTitle !== (settings.paywallExtendTitle || 'Extend Premium') ||
+      paywallExtendSubtitle !== (settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.') ||
+      paywallExtendButtonText !== (settings.paywallExtendButtonText || 'Extend Membership Now') ||
       cashfreeAppId !== (settings.cashfreeAppId || '') ||
       cashfreeSecretKey !== (settings.cashfreeSecretKey || '') ||
       postApprovalMode !== (settings.postApprovalMode || false) ||
+      supabaseUrl !== (settings.supabaseUrl || '') ||
+      supabaseAnonKey !== (settings.supabaseAnonKey || '') ||
+      supabaseServiceRoleKey !== (settings.supabaseServiceRoleKey || '') ||
       JSON.stringify(features) !== JSON.stringify(propFeatures);
 
     if (!hasChanges) {
@@ -293,16 +428,32 @@ export default function AdminPanel({
         membershipPrice: Number(membershipPrice),
         currency,
         paywallFeatures: features,
+        paywallTitle,
+        paywallSubtitle,
+        paywallButtonText,
+        paywallPriceDescription,
+        paywallFooterText,
+        paywallExtendTitle,
+        paywallExtendSubtitle,
+        paywallExtendButtonText,
         cashfreeAppId,
         cashfreeSecretKey,
-        postApprovalMode
+        postApprovalMode,
+        supabaseUrl,
+        supabaseAnonKey,
+        supabaseServiceRoleKey
       });
 
       if (success) {
+        // Save to localStorage so browser proxy updates instantly
+        localStorage.setItem('VITE_SUPABASE_URL', supabaseUrl);
+        localStorage.setItem('VITE_SUPABASE_ANON_KEY', supabaseAnonKey);
+        localStorage.setItem('SUPABASE_SERVICE_ROLE_KEY', supabaseServiceRoleKey);
+
         if (window.showSuccessToast) {
           window.showSuccessToast('Settings Saved Successfully!');
         } else {
-          alert('Application branding and credentials successfully saved on server.');
+          alert('Application branding and credentials successfully saved.');
         }
       } else {
         alert('Failed to save settings. Please try again.');
@@ -332,6 +483,8 @@ export default function AdminPanel({
         phone: jobPhone,
         whatsapp: jobWhatsapp,
         companyLogoIndex: Number(jobLogoIndex),
+        companyLogoUrl: jobCompanyLogoUrl,
+        contractType: jobContractType,
         whatsappEnabled: jobWhatsappEnabled,
         callEnabled: jobCallEnabled,
         emailEnabled: jobEmailEnabled,
@@ -352,6 +505,8 @@ export default function AdminPanel({
         phone: jobPhone,
         whatsapp: jobWhatsapp,
         companyLogoIndex: Number(jobLogoIndex),
+        companyLogoUrl: jobCompanyLogoUrl,
+        contractType: jobContractType,
         isLive: true,
         whatsappEnabled: jobWhatsappEnabled,
         callEnabled: jobCallEnabled,
@@ -377,6 +532,8 @@ export default function AdminPanel({
     setJobPhone('');
     setJobWhatsapp('');
     setJobLogoIndex(0);
+    setJobContractType('Full-Time / Direct Hiring');
+    setJobCompanyLogoUrl('');
     setJobWhatsappEnabled(true);
     setJobCallEnabled(true);
     setJobEmailEnabled(true);
@@ -397,6 +554,8 @@ export default function AdminPanel({
     setJobPhone(job.phone);
     setJobWhatsapp(job.whatsapp);
     setJobLogoIndex(job.companyLogoIndex);
+    setJobContractType(job.contractType || 'Full-Time / Direct Hiring');
+    setJobCompanyLogoUrl(job.companyLogoUrl || '');
     setJobWhatsappEnabled(job.whatsappEnabled !== false);
     setJobCallEnabled(job.callEnabled !== false);
     setJobEmailEnabled(job.emailEnabled !== false);
@@ -499,6 +658,15 @@ export default function AdminPanel({
     }
   };
 
+  const handleJobCompanyLogoChange = async (file: File) => {
+    setIsUploadingJobCompanyLogo(true);
+    const url = await handleFileUpload(file, 'company_logo');
+    setIsUploadingJobCompanyLogo(false);
+    if (url) {
+      setJobCompanyLogoUrl(url);
+    }
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
       
@@ -514,10 +682,53 @@ export default function AdminPanel({
           </p>
         </div>
 
-        {/* Dynamic server-saved notification */}
-        <div className="px-3.5 py-1.5 bg-slate-900 text-amber-400 font-mono text-[10px] font-bold rounded-xl shadow-inner inline-flex items-center gap-1.5 self-start">
-          <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
-          <span>WORKSPACE SECURED • PERSISTED</span>
+        {/* Dynamic server-saved notification & Supabase status badge */}
+        <div className="flex flex-wrap gap-2 items-center self-start">
+          <div className="px-3.5 py-1.5 bg-slate-900 text-amber-400 font-mono text-[10px] font-bold rounded-xl shadow-inner inline-flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-ping" />
+            <span>WORKSPACE SECURED • PERSISTED</span>
+          </div>
+
+          {supabaseStatus === 'checking' && (
+            <div className="px-3 py-1.5 bg-slate-100 text-gray-500 font-mono text-[10px] font-bold rounded-xl border border-gray-200 inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse" />
+              <span>CHECKING SUPABASE...</span>
+            </div>
+          )}
+          {supabaseStatus === 'connected' && (
+            <div 
+              title={supabaseErrorDetails || "Connected successfully to Supabase Database API"}
+              className="px-3 py-1.5 bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold rounded-xl border border-emerald-200 inline-flex items-center gap-1.5 cursor-help"
+            >
+              <Database size={11} className="text-emerald-500 animate-pulse" />
+              <span>SUPABASE ACTIVE</span>
+            </div>
+          )}
+          {supabaseStatus === 'missing-table' && (
+            <button 
+              onClick={() => setShowSqlHelper(true)}
+              title="Click to view SQL schema script to create the 'jobs' table"
+              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-mono text-[10px] font-bold rounded-xl border border-amber-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+            >
+              <Database size={11} className="text-amber-500 animate-bounce" />
+              <span>SETUP TABLE (REQUIRED)</span>
+            </button>
+          )}
+          {supabaseStatus === 'error' && (
+            <div 
+              title={supabaseErrorDetails || "Connection failed. Please verify credentials."}
+              className="px-3 py-1.5 bg-rose-50 text-rose-700 font-mono text-[10px] font-bold rounded-xl border border-rose-200 inline-flex items-center gap-1.5 cursor-help"
+            >
+              <Database size={11} className="text-rose-500 animate-bounce" />
+              <span>SUPABASE OFFLINE</span>
+            </div>
+          )}
+          {supabaseStatus === 'not-configured' && (
+            <div className="px-3 py-1.5 bg-amber-50 text-amber-700 font-mono text-[10px] font-bold rounded-xl border border-amber-200 inline-flex items-center gap-1.5">
+              <Database size={11} className="text-amber-500" />
+              <span>SUPABASE LOCAL MODE</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -584,6 +795,19 @@ export default function AdminPanel({
 
         <button
           onClick={() => {
+            setActiveSubTab('contacts');
+          }}
+          className={`pb-3 px-4 text-xs font-bold transition-all relative ${
+            activeSubTab === 'contacts' 
+              ? 'text-teal-600 border-b-2 border-teal-600 font-extrabold' 
+              : 'text-gray-500 hover:text-gray-900'
+          }`}
+        >
+          ✉️ Contact Submissions
+        </button>
+
+        <button
+          onClick={() => {
             setActiveSubTab('cashfree');
             fetchPaymentLogs();
           }}
@@ -593,7 +817,7 @@ export default function AdminPanel({
               : 'text-gray-500 hover:text-gray-900'
           }`}
         >
-          💳 Cashfree Gateway Logs
+          ⚙️ API Keys & DB Config
         </button>
       </div>
 
@@ -757,25 +981,27 @@ export default function AdminPanel({
                   Jobs Inventory Database
                 </h3>
                 
-                {!isAddingJob ? (
-                  <button
-                    onClick={() => {
-                      setEditingJobId(null);
-                      setIsAddingJob(true);
-                    }}
-                    className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-600 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 font-display"
-                  >
-                    <Plus size={14} />
-                    <span>Create Job</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setIsAddingJob(false)}
-                    className="px-3 py-1.5 hover:bg-gray-100 text-gray-500 rounded-xl text-xs font-bold transition-colors cursor-pointer font-display"
-                  >
-                    Cancel
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {!isAddingJob ? (
+                    <button
+                      onClick={() => {
+                        setEditingJobId(null);
+                        setIsAddingJob(true);
+                      }}
+                      className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-600 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 font-display"
+                    >
+                      <Plus size={14} />
+                      <span>Create Job</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsAddingJob(false)}
+                      className="px-3 py-1.5 hover:bg-gray-100 text-gray-500 rounded-xl text-xs font-bold transition-colors cursor-pointer font-display"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Add/Edit Job Form */}
@@ -818,37 +1044,45 @@ export default function AdminPanel({
                         className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
                       />
                     </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase">Employment Type / Hiring Type</label>
+                      <input
+                        type="text" value={jobContractType} onChange={(e) => setJobContractType(e.target.value)}
+                        placeholder="Full-Time / Direct Hiring"
+                        className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase">Application URL</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase">Application URL (Optional)</label>
                       <input
-                        type="url" required value={jobApplyLink} onChange={(e) => setJobApplyLink(e.target.value)}
+                        type="url" value={jobApplyLink} onChange={(e) => setJobApplyLink(e.target.value)}
                         placeholder="https://vercel.com/careers"
                         className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase">HR Recruiter Email</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase">HR Recruiter Email (Optional)</label>
                       <input
-                        type="email" required value={jobEmail} onChange={(e) => setJobEmail(e.target.value)}
+                        type="email" value={jobEmail} onChange={(e) => setJobEmail(e.target.value)}
                         placeholder="careers@company.com"
                         className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase">HR Recruiter Phone</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase">HR Recruiter Phone (Optional)</label>
                       <input
-                        type="text" required value={jobPhone} onChange={(e) => setJobPhone(e.target.value)}
+                        type="text" value={jobPhone} onChange={(e) => setJobPhone(e.target.value)}
                         placeholder="+91 98765 43210"
                         className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-gray-400 font-bold uppercase">WhatsApp Intent Number</label>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase">WhatsApp Intent Number (Optional)</label>
                       <input
-                        type="text" required value={jobWhatsapp} onChange={(e) => setJobWhatsapp(e.target.value)}
+                        type="text" value={jobWhatsapp} onChange={(e) => setJobWhatsapp(e.target.value)}
                         placeholder="919876543210 (with country code)"
                         className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
                       />
@@ -904,6 +1138,70 @@ export default function AdminPanel({
                   </div>
 
                   <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Company Logo Image (Optional)</label>
+                    <div className="mt-1 flex flex-col sm:flex-row items-center gap-4">
+                      {jobCompanyLogoUrl ? (
+                        <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200/60 bg-slate-50 shadow-xs shrink-0 flex items-center justify-center group">
+                          <img src={jobCompanyLogoUrl} alt="Company Logo Preview" className="w-full h-full object-contain" />
+                          <button
+                            type="button"
+                            onClick={() => setJobCompanyLogoUrl('')}
+                            className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white cursor-pointer"
+                            title="Remove Logo"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                          onDragLeave={() => setIsDragOver(false)}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            setIsDragOver(false);
+                            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                              handleJobCompanyLogoChange(e.dataTransfer.files[0]);
+                            }
+                          }}
+                          onClick={() => document.getElementById('job-logo-file-input')?.click()}
+                          className={`w-full sm:flex-1 h-16 border-2 border-dashed rounded-xl flex items-center justify-center gap-2 px-4 cursor-pointer transition-all ${
+                            isDragOver 
+                              ? 'border-teal-500 bg-teal-50/30' 
+                              : 'border-slate-200 hover:border-slate-300 bg-slate-50/50'
+                          }`}
+                        >
+                          <UploadCloud size={18} className={isDragOver ? 'text-teal-500 animate-bounce' : 'text-slate-400'} />
+                          <div className="text-left">
+                            <p className="text-[11px] font-semibold text-slate-700">
+                              {isUploadingJobCompanyLogo ? 'Uploading logo...' : 'Drag & drop or Click to Upload'}
+                            </p>
+                            <p className="text-[9px] text-slate-400">PNG, JPG, WebP up to 5MB</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            handleJobCompanyLogoChange(e.target.files[0]);
+                          }
+                        }}
+                        id="job-logo-file-input"
+                        className="hidden"
+                        disabled={isUploadingJobCompanyLogo}
+                      />
+                      
+                      {jobCompanyLogoUrl && (
+                        <p className="text-[10px] text-gray-500 italic">
+                          Custom logo is set. It will override the color preset below.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase">Company Logo Color Preset (0 - 5)</label>
                     <select
                       value={jobLogoIndex}
@@ -937,14 +1235,7 @@ export default function AdminPanel({
                     />
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase">Hiring Qualifications</label>
-                    <textarea
-                      rows={2} required value={jobQualifications} onChange={(e) => setJobQualifications(e.target.value)}
-                      placeholder="Degree requirements, skill tags, techstack experience..."
-                      className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none font-sans"
-                    />
-                  </div>
+
 
                   <div className="flex justify-end gap-2 pt-2">
                     <button
@@ -1022,38 +1313,7 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {/* Moderating community posts list */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-3 flex items-center gap-1.5 font-display">
-                <Users size={15} className="text-teal-600" />
-                Community Content Moderation
-              </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {posts.map((post) => (
-                  <div key={post.id} className="p-3 border border-gray-100 rounded-xl flex items-start justify-between gap-3 bg-slate-50/20">
-                    <div className="flex gap-2.5">
-                      <img src={post.userAvatar} alt="" className="w-8 h-8 rounded-lg object-cover" />
-                      <div>
-                        <span className="font-extrabold text-xs block text-gray-900">{post.userName}</span>
-                        <p className="text-[10px] text-gray-500 mt-0.5 line-clamp-2 italic pr-2">"{post.caption}"</p>
-                      </div>
-                    </div>
-                    
-                    <button
-                      onClick={() => {
-                        if (confirm('Moderate and permanently delete this community post?')) {
-                          onDeletePost(post.id);
-                        }
-                      }}
-                      className="p-1 hover:bg-rose-50 text-rose-500 rounded-lg shrink-0 cursor-pointer"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
 
           </div>
 
@@ -1126,6 +1386,412 @@ export default function AdminPanel({
             </div>
           )}
 
+          {/* Supabase SQL Schema Helper Modal */}
+          {showSqlHelper && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl max-w-2xl w-full p-6 border border-gray-100 shadow-2xl space-y-4">
+                <div className="flex items-center gap-3 text-amber-600">
+                  <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center shrink-0">
+                    <Database size={20} />
+                  </div>
+                  <div className="text-left">
+                    <h4 className="font-extrabold text-slate-900 tracking-tight text-sm font-display">Supabase Database Tables Schema Helper</h4>
+                    <p className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider">Required Tables Schema Setup</p>
+                  </div>
+                </div>
+                
+                <div className="text-xs text-gray-600 leading-relaxed font-semibold text-left space-y-2">
+                  <p>
+                    Please paste this SQL script into your <a href="https://supabase.com" target="_blank" rel="noreferrer" className="text-indigo-600 underline font-bold animate-pulse">Supabase SQL Editor</a> to create all tables and enable anon Row Level Security (RLS) policies:
+                  </p>
+                  
+                  <div className="relative">
+                    <pre className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-[9px] overflow-x-auto max-h-72 whitespace-pre leading-normal">
+{`-- 1. JOBS TABLE
+CREATE TABLE IF NOT EXISTS public.jobs (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    title TEXT NOT NULL,
+    company_name TEXT,
+    company_logo_url TEXT,
+    location TEXT,
+    salary TEXT,
+    short_description TEXT,
+    full_description TEXT,
+    description TEXT,
+    apply_link TEXT,
+    date_posted TEXT,
+    is_live BOOLEAN DEFAULT TRUE,
+    category TEXT,
+    experience TEXT,
+    contract_type TEXT
+);
+
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.jobs FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.jobs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.jobs FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.jobs FOR DELETE USING (true);
+
+-- 2. COMMUNITY POSTS TABLE
+CREATE TABLE IF NOT EXISTS public.community_posts (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT,
+    user_name TEXT,
+    user_avatar TEXT,
+    image_url TEXT,
+    caption TEXT,
+    bookmarks_count INTEGER DEFAULT 0,
+    shares_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'Pending'
+);
+
+ALTER TABLE public.community_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.community_posts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.community_posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.community_posts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.community_posts FOR DELETE USING (true);
+
+-- 3. USERS TABLE
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    name TEXT,
+    email TEXT,
+    avatar TEXT,
+    join_date TEXT,
+    trial_expiry_date TEXT,
+    subscription_status TEXT,
+    bio TEXT
+);
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.users FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.users FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.users FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.users FOR DELETE USING (true);
+
+-- 4. PAYMENT LOGS TABLE
+CREATE TABLE IF NOT EXISTS public.payment_logs (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT,
+    user_email TEXT,
+    amount NUMERIC,
+    status TEXT,
+    tx_id TEXT
+);
+
+ALTER TABLE public.payment_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.payment_logs FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.payment_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.payment_logs FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.payment_logs FOR DELETE USING (true);
+
+-- 5. PAGES TABLE
+CREATE TABLE IF NOT EXISTS public.pages (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    title TEXT,
+    slug TEXT,
+    content TEXT,
+    show_in_footer BOOLEAN DEFAULT TRUE,
+    is_system BOOLEAN DEFAULT FALSE
+);
+
+ALTER TABLE public.pages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.pages FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.pages FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.pages FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.pages FOR DELETE USING (true);
+
+-- 6. CONTACTS TABLE
+CREATE TABLE IF NOT EXISTS public.contacts (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    name TEXT,
+    email TEXT,
+    subject TEXT,
+    message TEXT
+);
+
+ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.contacts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.contacts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.contacts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.contacts FOR DELETE USING (true);
+
+-- 7. ADMIN SETTINGS TABLE
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+    id TEXT PRIMARY KEY DEFAULT 'global_settings',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    brand_name TEXT,
+    tagline TEXT,
+    logo_url TEXT,
+    banner_url TEXT,
+    banner_html TEXT,
+    premium_mode BOOLEAN DEFAULT TRUE,
+    membership_price NUMERIC DEFAULT 499,
+    currency TEXT DEFAULT 'INR',
+    paywall_features TEXT,
+    paywall_title TEXT,
+    paywall_subtitle TEXT,
+    paywall_button_text TEXT,
+    paywall_price_description TEXT,
+    paywall_footer_text TEXT,
+    paywall_extend_title TEXT,
+    paywall_extend_subtitle TEXT,
+    paywall_extend_button_text TEXT,
+    cashfree_app_id TEXT,
+    cashfree_secret_key TEXT,
+    post_approval_mode BOOLEAN DEFAULT TRUE,
+    supabase_url TEXT,
+    supabase_anon_key TEXT,
+    supabase_service_role_key TEXT
+);
+
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.admin_settings FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.admin_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.admin_settings FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.admin_settings FOR DELETE USING (true);
+
+-- 8. SAVED POSTS TABLE
+CREATE TABLE IF NOT EXISTS public.saved_posts (
+    user_id TEXT NOT NULL,
+    post_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, post_id)
+);
+
+ALTER TABLE public.saved_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.saved_posts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.saved_posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.saved_posts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.saved_posts FOR DELETE USING (true);
+
+-- 9. REPORTED POSTS TABLE
+CREATE TABLE IF NOT EXISTS public.reported_posts (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    user_id TEXT,
+    post_id TEXT,
+    reason TEXT,
+    reported_at TEXT
+);
+
+ALTER TABLE public.reported_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.reported_posts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.reported_posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.reported_posts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (true);`}
+                    </pre>
+                    <button
+                      onClick={() => {
+                        const sqlText = `-- 1. JOBS TABLE
+CREATE TABLE IF NOT EXISTS public.jobs (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    title TEXT NOT NULL,
+    company_name TEXT,
+    company_logo_url TEXT,
+    location TEXT,
+    salary TEXT,
+    short_description TEXT,
+    full_description TEXT,
+    description TEXT,
+    apply_link TEXT,
+    date_posted TEXT,
+    is_live BOOLEAN DEFAULT TRUE,
+    category TEXT,
+    experience TEXT,
+    contract_type TEXT
+);
+
+ALTER TABLE public.jobs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.jobs FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.jobs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.jobs FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.jobs FOR DELETE USING (true);
+
+-- 2. COMMUNITY POSTS TABLE
+CREATE TABLE IF NOT EXISTS public.community_posts (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT,
+    user_name TEXT,
+    user_avatar TEXT,
+    image_url TEXT,
+    caption TEXT,
+    bookmarks_count INTEGER DEFAULT 0,
+    shares_count INTEGER DEFAULT 0,
+    status TEXT DEFAULT 'Pending'
+);
+
+ALTER TABLE public.community_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.community_posts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.community_posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.community_posts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.community_posts FOR DELETE USING (true);
+
+-- 3. USERS TABLE
+CREATE TABLE IF NOT EXISTS public.users (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    name TEXT,
+    email TEXT,
+    avatar TEXT,
+    join_date TEXT,
+    trial_expiry_date TEXT,
+    subscription_status TEXT,
+    bio TEXT
+);
+
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.users FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.users FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.users FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.users FOR DELETE USING (true);
+
+-- 4. PAYMENT LOGS TABLE
+CREATE TABLE IF NOT EXISTS public.payment_logs (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    user_id TEXT,
+    user_email TEXT,
+    amount NUMERIC,
+    status TEXT,
+    tx_id TEXT
+);
+
+ALTER TABLE public.payment_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.payment_logs FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.payment_logs FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.payment_logs FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.payment_logs FOR DELETE USING (true);
+
+-- 5. PAGES TABLE
+CREATE TABLE IF NOT EXISTS public.pages (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    title TEXT,
+    slug TEXT,
+    content TEXT,
+    show_in_footer BOOLEAN DEFAULT TRUE,
+    is_system BOOLEAN DEFAULT FALSE
+);
+
+ALTER TABLE public.pages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.pages FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.pages FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.pages FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.pages FOR DELETE USING (true);
+
+-- 6. CONTACTS TABLE
+CREATE TABLE IF NOT EXISTS public.contacts (
+    id TEXT PRIMARY KEY,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    name TEXT,
+    email TEXT,
+    subject TEXT,
+    message TEXT
+);
+
+ALTER TABLE public.contacts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.contacts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.contacts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.contacts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.contacts FOR DELETE USING (true);
+
+-- 7. ADMIN SETTINGS TABLE
+CREATE TABLE IF NOT EXISTS public.admin_settings (
+    id TEXT PRIMARY KEY DEFAULT 'global_settings',
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    brand_name TEXT,
+    tagline TEXT,
+    logo_url TEXT,
+    banner_url TEXT,
+    banner_html TEXT,
+    premium_mode BOOLEAN DEFAULT TRUE,
+    membership_price NUMERIC DEFAULT 499,
+    currency TEXT DEFAULT 'INR',
+    paywall_features TEXT,
+    paywall_title TEXT,
+    paywall_subtitle TEXT,
+    paywall_button_text TEXT,
+    paywall_price_description TEXT,
+    paywall_footer_text TEXT,
+    paywall_extend_title TEXT,
+    paywall_extend_subtitle TEXT,
+    paywall_extend_button_text TEXT,
+    cashfree_app_id TEXT,
+    cashfree_secret_key TEXT,
+    post_approval_mode BOOLEAN DEFAULT TRUE,
+    supabase_url TEXT,
+    supabase_anon_key TEXT,
+    supabase_service_role_key TEXT
+);
+
+ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.admin_settings FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.admin_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.admin_settings FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.admin_settings FOR DELETE USING (true);
+
+-- 8. SAVED POSTS TABLE
+CREATE TABLE IF NOT EXISTS public.saved_posts (
+    user_id TEXT NOT NULL,
+    post_id TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (user_id, post_id)
+);
+
+ALTER TABLE public.saved_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.saved_posts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.saved_posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.saved_posts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.saved_posts FOR DELETE USING (true);
+
+-- 9. REPORTED POSTS TABLE
+CREATE TABLE IF NOT EXISTS public.reported_posts (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    user_id TEXT,
+    post_id TEXT,
+    reason TEXT,
+    reported_at TEXT
+);
+
+ALTER TABLE public.reported_posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.reported_posts FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.reported_posts FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.reported_posts FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (true);`;
+                        navigator.clipboard.writeText(sqlText);
+                        alert('All SQL Schemas copied to clipboard!');
+                      }}
+                      className="absolute top-2 right-2 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-[9px] font-bold text-white rounded transition-colors cursor-pointer animate-pulse"
+                    >
+                      Copy All Tables SQL
+                    </button>
+                  </div>
+                  
+                  <p className="text-slate-500 text-[10px] font-normal italic">
+                    Note: While the tables are being created, the application will seamlessly serve and save data through the local JSON store (db.json) as a fallback so your users face absolutely zero downtime!
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    onClick={() => setShowSqlHelper(false)}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Close Helper
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
@@ -1184,6 +1850,68 @@ export default function AdminPanel({
                 placeholder="Unlimited Applications&#10;Access Recruiter Numbers&#10;..."
                 className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-sans"
               />
+            </div>
+
+            {/* Custom Paywall Text Elements */}
+            <div className="border-t border-slate-100 pt-4 space-y-4">
+              <h4 className="font-extrabold text-xs text-slate-700 uppercase tracking-wider font-display">
+                New User Subscription Pop-up Texts
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Subscription Title</label>
+                  <input
+                    type="text" value={paywallTitle} onChange={(e) => setPaywallTitle(e.target.value)}
+                    placeholder="Activate Premium"
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                  />
+                </div>
+                
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Subscription Button Text</label>
+                  <input
+                    type="text" value={paywallButtonText} onChange={(e) => setPaywallButtonText(e.target.value)}
+                    placeholder="Activate Membership Now"
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Subscription Subtitle / Description</label>
+                <textarea
+                  rows={2} value={paywallSubtitle} onChange={(e) => setPaywallSubtitle(e.target.value)}
+                  placeholder="Unlock Premium access to continue searching & applying."
+                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-sans"
+                />
+              </div>
+            </div>
+
+
+
+            <div className="border-t border-slate-100 pt-4 space-y-4 pb-2">
+              <h4 className="font-extrabold text-xs text-slate-700 uppercase tracking-wider font-display">
+                Shared Checkout Text Fields
+              </h4>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Plan Card Description Text</label>
+                <input
+                  type="text" value={paywallPriceDescription} onChange={(e) => setPaywallPriceDescription(e.target.value)}
+                  placeholder="One-time manual purchase. Extend anytime."
+                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Footer Disclaimer / Gateway Details Text</label>
+                <textarea
+                  rows={2} value={paywallFooterText} onChange={(e) => setPaywallFooterText(e.target.value)}
+                  placeholder="Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles."
+                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-sans"
+                />
+              </div>
             </div>
 
             <button
@@ -1407,61 +2135,131 @@ export default function AdminPanel({
       {activeSubTab === 'cashfree' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Credentials Settings Card */}
-          <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-            <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
-              <CreditCard size={15} className="text-teal-600" />
-              Cashfree Credentials
-            </h3>
+          {/* Left Column Settings */}
+          <div className="lg:col-span-1 space-y-6">
+            {/* Credentials Settings Card */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+                <CreditCard size={15} className="text-teal-600" />
+                Cashfree Credentials
+              </h3>
 
-            <p className="text-[10px] text-gray-500 leading-normal font-semibold">
-              Input your Cashfree App ID and Secret Key. If left blank, Jobview runs in a beautiful built-in Cashfree Checkout Simulator for testing!
-            </p>
+              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
+                Input your Cashfree App ID and Secret Key. If left blank, Jobview runs in a beautiful built-in Cashfree Checkout Simulator for testing!
+              </p>
 
-            <form onSubmit={handleSaveSettings} className="space-y-4">
-              <div>
-                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Cashfree App ID</label>
-                <input
-                  type="text"
-                  placeholder="e.g., TEST43912a78"
-                  value={cashfreeAppId}
-                  onChange={(e) => setCashfreeAppId(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between font-display">
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Cashfree Secret Key</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="text-xs text-teal-600 font-bold hover:underline"
-                  >
-                    {showSecret ? <EyeOff size={14} className="inline mr-1" /> : <Eye size={14} className="inline mr-1" />}
-                    {showSecret ? 'Hide' : 'Show'}
-                  </button>
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Cashfree App ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., TEST43912a78"
+                    value={cashfreeAppId}
+                    onChange={(e) => setCashfreeAppId(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                  />
                 </div>
-                <input
-                  type={showSecret ? 'text' : 'password'}
-                  placeholder="e.g., cf_secret_key_89ab..."
-                  value={cashfreeSecretKey}
-                  onChange={(e) => setCashfreeSecretKey(e.target.value)}
-                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
-                />
-              </div>
 
-              <button
-                type="submit"
-                disabled={isSavingSettings}
-                className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
-                  isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                }`}
-              >
-                <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
-                <span>{isSavingSettings ? 'Saving Credentials...' : 'Save Credentials'}</span>
-              </button>
-            </form>
+                <div>
+                  <div className="flex items-center justify-between font-display">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Cashfree Secret Key</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="text-xs text-teal-600 font-bold hover:underline"
+                    >
+                      {showSecret ? <EyeOff size={14} className="inline mr-1" /> : <Eye size={14} className="inline mr-1" />}
+                      {showSecret ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    placeholder="e.g., cf_secret_key_89ab..."
+                    value={cashfreeSecretKey}
+                    onChange={(e) => setCashfreeSecretKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                  <span>{isSavingSettings ? 'Saving Credentials...' : 'Save Credentials'}</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Supabase Configuration Card */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+                <Database size={15} className="text-teal-600" />
+                Supabase Connection settings
+              </h3>
+
+              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
+                Re-submit or configure your custom Supabase Project credentials. They will update immediately on both the client and server!
+              </p>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Supabase URL</label>
+                  <input
+                    type="text"
+                    placeholder="https://your-project-id.supabase.co"
+                    value={supabaseUrl}
+                    onChange={(e) => setSupabaseUrl(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between font-display">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Supabase Anon Key</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="text-xs text-teal-600 font-bold hover:underline"
+                    >
+                      {showSecret ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    placeholder="eyJhbGciOiJIUzI1NiIs..."
+                    value={supabaseAnonKey}
+                    onChange={(e) => setSupabaseAnonKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Supabase Service Role Key (Optional)</label>
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    placeholder="For server-side admin / auth operations"
+                    value={supabaseServiceRoleKey}
+                    onChange={(e) => setSupabaseServiceRoleKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                  <span>{isSavingSettings ? 'Applying DB Settings...' : 'Apply DB Settings'}</span>
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Transactions Table Log */}
@@ -1640,18 +2438,34 @@ export default function AdminPanel({
                             <Check size={12} />
                             <span>Approve</span>
                           </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to reject and delete this post?')) {
-                                onDeletePost(post.id);
-                              }
-                            }}
-                            className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
-                            title="Reject Post"
-                          >
-                            <Trash2 size={12} />
-                            <span>Reject</span>
-                          </button>
+                          {confirmPostDeleteId === post.id ? (
+                            <div className="flex items-center gap-1 bg-rose-50 border border-rose-100 rounded-lg p-0.5 animate-fade-in">
+                              <button
+                                onClick={async () => {
+                                  await onDeletePost(post.id);
+                                  setConfirmPostDeleteId(null);
+                                }}
+                                className="px-2 py-1 text-[10px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-md transition-colors cursor-pointer"
+                              >
+                                Confirm
+                              </button>
+                              <button
+                                onClick={() => setConfirmPostDeleteId(null)}
+                                className="px-1.5 py-1 text-[10px] font-bold text-slate-500 hover:text-slate-800 rounded-md transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setConfirmPostDeleteId(post.id)}
+                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-500 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                              title="Reject Post"
+                            >
+                              <Trash2 size={12} />
+                              <span>Reject</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                       
@@ -1708,17 +2522,35 @@ export default function AdminPanel({
                         </div>
                       </div>
                       
-                      <button
-                        onClick={() => {
-                          if (confirm('Delete this live post? This is irreversible.')) {
-                            onDeletePost(post.id);
-                          }
-                        }}
-                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                        title="Delete Live Post"
-                      >
-                        <Trash2 size={13} />
-                      </button>
+                      <div className="flex items-center gap-1 shrink-0">
+                        {confirmPostDeleteId === post.id ? (
+                          <div className="flex items-center gap-1 bg-rose-50 border border-rose-100 rounded-lg p-0.5 animate-fade-in">
+                            <button
+                              onClick={async () => {
+                                await onDeletePost(post.id);
+                                setConfirmPostDeleteId(null);
+                              }}
+                              className="px-2 py-0.5 text-[9px] font-bold bg-rose-600 hover:bg-rose-700 text-white rounded-md transition-colors cursor-pointer"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              onClick={() => setConfirmPostDeleteId(null)}
+                              className="px-1.5 py-0.5 text-[9px] font-bold text-slate-500 hover:text-slate-800 rounded-md transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmPostDeleteId(post.id)}
+                            className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Delete Live Post"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ));
                 })()}
@@ -1909,6 +2741,157 @@ export default function AdminPanel({
                   </tbody>
                 </table>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeSubTab === 'contacts' && (
+        <div className="space-y-6 animate-fade-in" id="admin-contacts-subtab">
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-50 pb-4">
+              <div>
+                <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest flex items-center gap-1.5 font-display">
+                  <Mail size={15} className="text-teal-600" />
+                  Customer & User Enquiries
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  View and manage contact form submissions sent from the footer contact page.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchContacts}
+                  disabled={isLoadingContacts}
+                  className="px-4 py-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all text-slate-700 disabled:opacity-50 cursor-pointer"
+                >
+                  <RefreshCw size={12} className={isLoadingContacts ? 'animate-spin' : ''} />
+                  Refresh
+                </button>
+              </div>
+            </div>
+
+            {/* Quick Stats & Search */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+              <div className="bg-slate-50/50 border border-slate-100 p-4 rounded-xl flex items-center gap-3">
+                <div className="w-10 h-10 bg-white text-teal-600 border border-slate-200/50 rounded-xl flex items-center justify-center shadow-xs shrink-0">
+                  <Mail size={18} />
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase">Total Submissions</p>
+                  <p className="text-lg font-extrabold text-slate-900">{contacts.length}</p>
+                </div>
+              </div>
+
+              <div className="md:col-span-2 relative flex items-center">
+                <span className="absolute left-3.5 text-gray-400 pointer-events-none">
+                  <Search size={14} />
+                </span>
+                <input
+                  type="text"
+                  value={contactSearchQuery}
+                  onChange={(e) => setContactSearchQuery(e.target.value)}
+                  placeholder="Search by name, email, subject, or message..."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs text-slate-900 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:bg-white transition-all"
+                />
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="mt-6 border border-gray-100 rounded-2xl overflow-hidden">
+              {isLoadingContacts ? (
+                <div className="p-12 text-center text-xs text-slate-400 font-medium">
+                  <RefreshCw size={24} className="animate-spin text-teal-600 mx-auto mb-2" />
+                  Loading message entries...
+                </div>
+              ) : filteredContacts.length === 0 ? (
+                <div className="p-12 text-center text-xs text-slate-400 font-medium space-y-1">
+                  <p>No messages found.</p>
+                  {contactSearchQuery && <p className="text-[10px]">Try resetting your search query.</p>}
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-gray-100 text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                        <th className="py-3 px-4">Date / Status</th>
+                        <th className="py-3 px-4">Sender Details</th>
+                        <th className="py-3 px-4">Subject & Message</th>
+                        <th className="py-3 px-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50 text-slate-700 font-medium">
+                      {filteredContacts.map((c: any) => (
+                        <tr key={c.id} className="hover:bg-slate-50/40 transition-colors">
+                          <td className="py-4 px-4 whitespace-nowrap">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-mono text-gray-400 block">
+                                {new Date(c.createdAt).toLocaleString(undefined, {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </span>
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wide bg-teal-50 text-teal-700 border border-teal-100">
+                                New
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-slate-900">{c.name}</p>
+                              <a
+                                href={`mailto:${c.email}`}
+                                className="text-[10px] font-mono text-teal-600 hover:underline block"
+                              >
+                                {c.email}
+                              </a>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 max-w-md">
+                            <div className="space-y-1">
+                              <p className="font-bold text-slate-800">{c.subject}</p>
+                              <p className="text-gray-500 whitespace-pre-wrap leading-relaxed text-[11px] bg-slate-50/50 p-2.5 rounded-xl border border-slate-200/30 font-medium">
+                                {c.message}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            {contactIdToConfirmDelete === c.id ? (
+                              <div className="inline-flex items-center gap-1.5 bg-rose-50/90 p-1.5 rounded-xl border border-rose-100 animate-in fade-in zoom-in-95 duration-150">
+                                <span className="text-[10px] text-rose-700 font-bold px-1 select-none">Delete?</span>
+                                <button
+                                  onClick={() => handleDeleteContact(c.id)}
+                                  className="p-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg cursor-pointer transition-all duration-150 shadow-sm"
+                                  title="Confirm Delete"
+                                >
+                                  <Check size={11} strokeWidth={2.5} />
+                                </button>
+                                <button
+                                  onClick={() => setContactIdToConfirmDelete(null)}
+                                  className="p-1.5 bg-white hover:bg-slate-100 text-slate-500 rounded-lg cursor-pointer border border-slate-200 transition-all duration-150"
+                                  title="Cancel"
+                                >
+                                  <X size={11} strokeWidth={2.5} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setContactIdToConfirmDelete(c.id)}
+                                className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl cursor-pointer transition-colors"
+                                title="Delete Submission"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </div>
         </div>

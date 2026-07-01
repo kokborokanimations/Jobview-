@@ -17,6 +17,7 @@ import UserProfile from './components/UserProfile';
 import { X } from 'lucide-react';
 import { getUserBadge } from './lib/badgeUtils';
 import Toast from './components/Toast';
+import { ContactForm } from './components/ContactForm';
 
 export default function App() {
   // Global States
@@ -160,10 +161,16 @@ export default function App() {
         });
         if (syncRes.ok) {
           const syncedUser = await syncRes.json();
+          // Explicitly set/enforce correct user role in state
+          if (syncedUser.email.toLowerCase() === 'kokborokanimations@gmail.com') {
+            syncedUser.role = 'admin';
+          } else {
+            syncedUser.role = 'member';
+          }
           setUser(syncedUser);
           
           // If the synced user is admin, fetch user list too
-          if (syncedUser.email.toLowerCase() === 'kokborokanimations@gmail.com') {
+          if (syncedUser.role === 'admin') {
             fetchUserList();
           }
         }
@@ -188,13 +195,19 @@ export default function App() {
   };
 
   const handleLogin = (loggedInUser: User) => {
+    // Explicitly set/enforce correct user role in state
+    if (loggedInUser.email.toLowerCase() === 'kokborokanimations@gmail.com') {
+      loggedInUser.role = 'admin';
+    } else {
+      loggedInUser.role = 'member';
+    }
     setUser(loggedInUser);
     setDismissedPaywall(false); // Reset paywall state on fresh login
     localStorage.setItem('jobview_user_email', loggedInUser.email);
     setShowLoginModal(false);
 
     // If logged in as admin, instantly fetch total user accounts
-    if (loggedInUser.email.toLowerCase() === 'kokborokanimations@gmail.com') {
+    if (loggedInUser.role === 'admin') {
       fetchUserList();
     }
   };
@@ -295,6 +308,18 @@ export default function App() {
     }
   };
 
+  const handleRefreshJobs = async () => {
+    try {
+      const jobsRes = await fetch('/api/jobs');
+      if (jobsRes.ok) {
+        const jobsData = await jobsRes.json();
+        setJobs(jobsData);
+      }
+    } catch (err) {
+      console.error('Error refreshing jobs list:', err);
+    }
+  };
+
   const handleAddPost = async (postData: { imageUrl: string; caption: string }) => {
     if (!user) return;
     try {
@@ -319,13 +344,59 @@ export default function App() {
   };
 
   const handleDeletePost = async (postId: string) => {
+    if (!user) {
+      if (window.showWarningToast) {
+        window.showWarningToast('Please login first.');
+      } else {
+        alert('Please login first.');
+      }
+      return;
+    }
+
+    const postToDelete = posts.find(p => p.id === postId);
+    if (!postToDelete) return;
+
+    const isAdmin = user.email.toLowerCase() === 'kokborokanimations@gmail.com';
+    const isAuthor = postToDelete.userId === user.id || postToDelete.userName === user.name;
+
+    if (!isAdmin && !isAuthor) {
+      if (window.showWarningToast) {
+        window.showWarningToast('You do not have permission to delete this post.');
+      } else {
+        alert('You do not have permission to delete this post.');
+      }
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/posts/${postId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/posts/${postId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          userEmail: user.email
+        })
+      });
       if (res.ok) {
         setPosts(prev => prev.filter(p => p.id !== postId));
+        if (window.showSuccessToast) {
+          window.showSuccessToast('Post Deleted Successfully!');
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (window.showWarningToast) {
+          window.showWarningToast(errData.error || 'Failed to delete post.');
+        } else {
+          alert(errData.error || 'Failed to delete post.');
+        }
       }
     } catch (e) {
       console.error(e);
+      if (window.showWarningToast) {
+        window.showWarningToast('An error occurred while deleting the post.');
+      }
     }
   };
 
@@ -407,12 +478,16 @@ export default function App() {
 
   const shouldLockApp = (forceShowPaywall && !dismissedPaywall) || showPaywallPopup;
 
-  // Automatically trigger paywall popup when trying to open the community tab
+  // Automatically trigger paywall popup or login popup when trying to open the community tab
   useEffect(() => {
-    if (currentTab === 'community' && isExpiredUser) {
-      setShowPaywallPopup(true);
+    if (currentTab === 'community') {
+      if (!user) {
+        setShowLoginModal(true);
+      } else if (isExpiredUser) {
+        setShowPaywallPopup(true);
+      }
     }
-  }, [currentTab, isExpiredUser]);
+  }, [currentTab, user, isExpiredUser]);
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col font-sans text-slate-800">
@@ -428,6 +503,10 @@ export default function App() {
           setForceShowPaywall(true);
         }}
         onChangeTab={(tab) => {
+          if (tab === 'community' && !user) {
+            setShowLoginModal(true);
+            return;
+          }
           setSelectedJob(null);
           setCurrentTab(tab);
         }}
@@ -437,6 +516,10 @@ export default function App() {
       <Navigation
         currentTab={currentTab}
         onChangeTab={(tab) => {
+          if (tab === 'community' && !user) {
+            setShowLoginModal(true);
+            return;
+          }
           setSelectedJob(null);
           setCurrentTab(tab);
         }}
@@ -472,7 +555,42 @@ export default function App() {
 
             {/* 2. Community Feed */}
             {currentTab === 'community' && (
-              isExpiredUser ? (
+              !user ? (
+                <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center text-center animate-fade-in">
+                  <div className="w-16 h-16 bg-teal-50 dark:bg-teal-950/30 rounded-2xl border border-teal-100 dark:border-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm mb-6 animate-pulse">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-users"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  </div>
+                  <h3 className="text-lg font-extrabold font-display text-slate-900 dark:text-slate-100 tracking-tight">
+                    Sign In to View Community
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm leading-relaxed">
+                    Our community feed of designers, developers, and product managers is exclusive to logged-in members. Please sign in to view updates and share your milestones.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowLoginModal(true);
+                    }}
+                    className="mt-6 px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl text-xs font-bold font-sans tracking-wide hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/10 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Sign In Now
+                  </button>
+
+                  {/* Blurred mockup items representing locked posts */}
+                  <div className="w-full mt-8 opacity-40 select-none pointer-events-none blur-[4px] space-y-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 text-left shadow-sm">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800" />
+                        <div className="space-y-1 flex-1">
+                          <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
+                          <div className="h-2.5 w-16 bg-slate-100 dark:bg-slate-800 rounded" />
+                        </div>
+                      </div>
+                      <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded mb-2" />
+                      <div className="h-3 w-4/5 bg-slate-200 dark:bg-slate-800 rounded" />
+                    </div>
+                  </div>
+                </div>
+              ) : isExpiredUser ? (
                 <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center text-center">
                   <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm mb-6 animate-pulse">
                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -522,7 +640,7 @@ export default function App() {
             )}
 
             {/* 3. Secure Admin Panel */}
-            {currentTab === 'admin' && user?.email.toLowerCase() === 'kokborokanimations@gmail.com' && (
+            {currentTab === 'admin' && user?.role === 'admin' && user?.email.toLowerCase() === 'kokborokanimations@gmail.com' && (
               <AdminPanel
                 settings={settings}
                 jobs={jobs}
@@ -537,15 +655,21 @@ export default function App() {
                 onRefreshPages={fetchFooterPages}
                 onApprovePost={handleApprovePost}
                 onDeleteUser={handleDeleteUser}
+                onRefreshJobs={handleRefreshJobs}
               />
             )}
 
-            {/* 4. User Profile */}
+             {/* 4. User Profile */}
             {currentTab === 'profile' && (
               <UserProfile
                 user={user}
                 posts={posts}
                 settings={settings}
+                jobs={jobs}
+                onSelectJob={(job) => {
+                  setSelectedJob(job);
+                  setCurrentTab('jobs');
+                }}
                 onUpdateProfile={async (updatedDetails) => {
                   if (!user) return;
                   try {
@@ -573,6 +697,8 @@ export default function App() {
                 onLoginTrigger={() => setShowLoginModal(true)}
                 bookmarkedPostIds={bookmarkedPostIds}
                 onToggleBookmark={handleToggleBookmark}
+                onUpgradeClick={() => setShowPaywallPopup(true)}
+                onDeletePost={handleDeletePost}
               />
             )}
           </>
@@ -647,6 +773,10 @@ export default function App() {
                   return <p key={idx}>{line}</p>;
                 }
               })}
+
+              {(activeFooterPage.slug === 'contact-us' || activeFooterPage.id === 'page-contact') && (
+                <ContactForm />
+              )}
             </div>
             
             <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">

@@ -1,0 +1,110 @@
+{
+  "adminSettings": {
+    "brandName": "Jobview",
+    "tagline": "Your Premium Portal to Verified Careers & Networking",
+    "logoUrl": "",
+    "bannerUrl": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop",
+    "premiumMode": true,
+    "membershipPrice": 499,
+    "currency": "INR",
+    "paywallFeatures": [
+      "Unlimited Premium Job Applications",
+      "Access Live HR/Recruiter Contact Details",
+      "Post in Community Feed with Image Uploads",
+      "Direct WhatsApp Chat with Hiring Managers",
+      "Priority Technical Support & Live Resume Tips"
+    ],
+    "cashfreeAppId": "",
+    "cashfreeSecretKey": "",
+    "postApprovalMode": true
+  },
+  "jobs": [],
+  "communityPosts": [],
+  "users": [
+    {
+      "id": "user-admin",
+      "name": "Admin Developer",
+      "email": "kokborokanimations@gmail.com",
+      "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop",
+      "joinDate": "2026-06-28T14:47:52.526Z",
+      "trialExpiryDate": "2026-07-28T14:47:52.526Z",
+      "subscriptionStatus": "Active",
+      "bio": "Platform System Administrator and Developer"
+    },
+    {
+      "id": "user-demo-1",
+      "name": "Amit Kumar",
+      "email": "amit.kumar@example.com",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "joinDate": "2026-06-13T14:47:52.526Z",
+      "trialExpiryDate": "2026-07-13T14:47:52.526Z",
+      "subscriptionStatus": "Free Trial",
+      "bio": "Aspiring Full Stack Engineer. Looking for remote opportunities."
+    },
+    {
+      "id": "user-demo-2",
+      "name": "Sarah Jenkins",
+      "email": "sarah.j@example.com",
+      "avatar": "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?q=80&w=150&auto=format&fit=crop",
+      "joinDate": "2026-05-24T14:47:52.526Z",
+      "trialExpiryDate": "2026-06-23T14:47:52.526Z",
+      "subscriptionStatus": "Expired",
+      "bio": "UI/UX Lead Designer @ Google."
+    }
+  ],
+  "paymentLogs": [
+    {
+      "id": "tx_101",
+      "userId": "user-admin",
+      "userEmail": "kokborokanimations@gmail.com",
+      "amount": 499,
+      "status": "SUCCESS",
+      "txId": "CF_TX_890123748",
+      "createdAt": "2026-06-28T14:47:52.526Z"
+    },
+    {
+      "id": "tx_102",
+      "userId": "user-demo-2",
+      "userEmail": "sarah.j@example.com",
+      "amount": 499,
+      "status": "FAILED",
+      "txId": "CF_TX_FAILED_98124",
+      "createdAt": "2026-06-27T14:47:52.526Z"
+    }
+  ],
+  "pages": [
+    {
+      "id": "page-about",
+      "title": "About Us",
+      "slug": "about-us",
+      "content": "<h2>About Us</h2><p>Welcome to Jobview, the ultimate platform for premium job discovery and professional community building. We connect qualified talents directly with verified employers through modern channels like WhatsApp and direct calls.</p>",
+      "showInFooter": true,
+      "isSystem": true
+    },
+    {
+      "id": "page-contact",
+      "title": "Contact Us",
+      "slug": "contact-us",
+      "content": "",
+      "showInFooter": true,
+      "isSystem": true
+    },
+    {
+      "id": "page-privacy",
+      "title": "Privacy Policy",
+      "slug": "privacy-policy",
+      "content": "<h2>Privacy Policy</h2><p>Your privacy is important to us. We encrypt all sensitive documents and protect your personal identification details securely. We do not sell your personal data to third-party ad networks.</p>",
+      "showInFooter": true,
+      "isSystem": true
+    },
+    {
+      "id": "page-terms",
+      "title": "Terms of Use",
+      "slug": "terms-of-use",
+      "content": "<h2>Terms of Use</h2><p>By using Jobview, you agree to respect community guidelines. Spamming recruiter channels, abusing free trials, or publishing malicious comments will result in instant account termination.</p>",
+      "showInFooter": true,
+      "isSystem": true
+    }
+  ],
+  "contacts": []
+}

@@ -20,10 +20,12 @@ export interface Job {
   phone: string;
   whatsapp: string;
   createdAt: string;
+  datePosted?: string;
   whatsappEnabled?: boolean;
   callEnabled?: boolean;
   emailEnabled?: boolean;
   applyEnabled?: boolean;
+  contractType?: string;
 }
 
 export interface CommunityPost {
@@ -48,6 +50,9 @@ export interface User {
   trialExpiryDate: string;
   subscriptionStatus: 'Free Trial' | 'Active' | 'Expired';
   bio?: string;
+  plan_expiry_date?: string;
+  planExpiryDate?: string;
+  role?: 'admin' | 'member';
 }
 
 export interface CustomPage {
@@ -69,9 +74,21 @@ export interface AdminSettings {
   membershipPrice: number;
   currency: string;
   paywallFeatures: string[];
+  paywallTitle?: string;
+  paywallSubtitle?: string;
+  paywallButtonText?: string;
+  paywallPriceDescription?: string;
+  paywallFooterText?: string;
+  paywallExtendTitle?: string;
+  paywallExtendSubtitle?: string;
+  paywallExtendButtonText?: string;
   cashfreeAppId: string;
   cashfreeSecretKey: string;
   postApprovalMode?: boolean; // Master Toggle: manual approval vs automatic instant
+  supabaseUrl?: string;
+  supabaseAnonKey?: string;
+  supabaseServiceRoleKey?: string;
+  serpapiApiKey?: string;
 }
 
 export interface PaymentLog {
