@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, isCustomSupabaseConfigured } from './supabase';
 import { CommunityPost } from '../types';
 
 /**
@@ -21,7 +21,7 @@ export async function fetchSavedPostsFromSupabase(
   userId: string,
   allPosts: CommunityPost[]
 ): Promise<CommunityPost[]> {
-  if (!supabase) {
+  if (!isCustomSupabaseConfigured() || !supabase) {
     console.warn('Supabase is not configured. Falling back to local storage saved posts.');
     return getLocalSavedPosts(allPosts);
   }
@@ -63,7 +63,7 @@ export async function toggleSavedPostInSupabase(
   postId: string,
   isAlreadySaved: boolean
 ): Promise<{ success: boolean; error?: string; newState: boolean }> {
-  if (!supabase) {
+  if (!isCustomSupabaseConfigured() || !supabase) {
     console.warn('Supabase is not configured. Saved locally.');
     toggleLocalSavedPost(postId);
     return { success: true, newState: !isAlreadySaved };
@@ -112,7 +112,7 @@ export async function reportPostToSupabase(
   postId: string,
   reason: string = 'Inappropriate content'
 ): Promise<{ success: boolean; error?: string }> {
-  if (!supabase) {
+  if (!isCustomSupabaseConfigured() || !supabase) {
     console.warn('Supabase is not configured. Tracked report locally.');
     trackLocalReport(postId);
     return { success: true };
@@ -179,7 +179,7 @@ function trackLocalReport(postId: string) {
  * @param jobId The ID of the job to delete
  */
 export async function deleteJobFromSupabase(jobId: string): Promise<{ success: boolean; error?: string }> {
-  if (!supabase) {
+  if (!isCustomSupabaseConfigured() || !supabase) {
     console.warn('Supabase is not configured.');
     return { success: true };
   }

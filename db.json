@@ -3,6 +3,7 @@
     "brandName": "Jobview",
     "tagline": "Your Premium Portal to Verified Careers & Networking",
     "logoUrl": "",
+    "faviconUrl": "",
     "bannerUrl": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop",
     "premiumMode": true,
     "membershipPrice": 499,
@@ -16,30 +17,127 @@
     ],
     "cashfreeAppId": "",
     "cashfreeSecretKey": "",
-    "postApprovalMode": true
+    "postApprovalMode": true,
+    "bannerHtml": "Tripura Job Portal&nbsp;",
+    "paywallTitle": "Activate Premium",
+    "paywallSubtitle": "Unlock Premium access to continue searching & applying.",
+    "paywallButtonText": "Activate Membership Now",
+    "paywallPriceDescription": "One-time manual purchase. Extend anytime.",
+    "paywallFooterText": "Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.",
+    "paywallExtendTitle": "Extend Premium",
+    "paywallExtendSubtitle": "Extend your manual premium access for another month.",
+    "paywallExtendButtonText": "Extend Membership Now",
+    "supabaseUrl": "https://crdmccidgzknnylyggbf.supabase.co",
+    "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NDg1NjAsImV4cCI6MjA5ODAyNDU2MH0.gPwgKSe-0lSFZf4holpBctmYSGrTYsv5cwpKcgLODBs",
+    "supabaseServiceRoleKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MjQ0ODU2MCwiZXhwIjoyMDk4MDI0NTYwfQ.U7cOMjw1RqX0BfKi8X78xASTcvGS3mNic9NOXLPug8M"
   },
-  "jobs": [],
-  "communityPosts": [],
+  "jobs": [
+    {
+      "id": 9,
+      "title": "Relationship manager ",
+      "companyName": "Slice",
+      "companyLogoUrl": "",
+      "location": "Khumulwng, Tripura ",
+      "shortDescription": "What this selected component he was the recent past kardiya ",
+      "fullDescription": "What this selected component he was the recent past kardiya ",
+      "datePosted": "2026-07-01T17:46:09.669+00:00",
+      "isLive": true,
+      "createdAt": "2026-07-01T17:46:09.827327+00:00"
+    }
+  ],
+  "communityPosts": [
+    {
+      "id": "post-1783098403651",
+      "bookmarksCount": 0,
+      "sharesCount": 0,
+      "createdAt": "2026-07-03T17:06:43.651Z",
+      "status": "Live",
+      "userId": "user-admin",
+      "userName": "Admin Developer",
+      "userAvatar": "",
+      "imageUrl": "",
+      "caption": "Hello??"
+    },
+    {
+      "id": "post-1783004156617",
+      "userId": "user-demo-1",
+      "userName": "Amit Kumar",
+      "userAvatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "caption": "How  are you ??? I need a job...😁",
+      "bookmarksCount": 0,
+      "sharesCount": 0,
+      "createdAt": "2026-07-02T14:55:56.617+00:00",
+      "status": "Pending"
+    },
+    {
+      "id": "post-1782917991103",
+      "userId": "user-demo-1",
+      "userName": "Amit Kumar",
+      "userAvatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "caption": "Hyy friends...",
+      "bookmarksCount": 0,
+      "sharesCount": 0,
+      "createdAt": "2026-07-01T14:59:51.103+00:00",
+      "status": "Live"
+    }
+  ],
   "users": [
     {
-      "id": "user-admin",
-      "name": "Admin Developer",
-      "email": "kokborokanimations@gmail.com",
-      "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop",
-      "joinDate": "2026-06-28T14:47:52.526Z",
-      "trialExpiryDate": "2026-07-28T14:47:52.526Z",
-      "subscriptionStatus": "Active",
-      "bio": "Platform System Administrator and Developer"
+      "id": "user-1782918011024",
+      "name": "Suman D",
+      "email": "aniapps27@gmail.com",
+      "avatar": "",
+      "joinDate": "2026-07-01T15:00:11.024Z",
+      "trialExpiryDate": "2026-07-31T15:00:11.024Z",
+      "subscriptionStatus": "Free Trial",
+      "bio": "",
+      "role": "member"
+    },
+    {
+      "id": "user-1782840326334",
+      "name": "Amit Kumar",
+      "email": "amit.kumar@gmail.com",
+      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "joinDate": "2026-06-30T17:25:26.334Z",
+      "trialExpiryDate": "2026-07-30T17:25:26.334Z",
+      "subscriptionStatus": "Free Trial",
+      "bio": null,
+      "role": "member"
     },
     {
       "id": "user-demo-1",
       "name": "Amit Kumar",
       "email": "amit.kumar@example.com",
-      "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop",
+      "avatar": "",
       "joinDate": "2026-06-13T14:47:52.526Z",
       "trialExpiryDate": "2026-07-13T14:47:52.526Z",
+      "subscriptionStatus": "Active",
+      "bio": "Aspiring Full Stack Engineer. Looking for remote opportunities.",
+      "role": "member",
+      "plan_expiry_date": "2026-08-02T17:07:50.554Z",
+      "planExpiryDate": "2026-08-02T17:07:50.554Z"
+    },
+    {
+      "id": "user-1783101249264",
+      "name": "Chatu D",
+      "email": "sd8161515@gmail.com",
+      "avatar": "https://api.dicebear.com/7.x/adventurer/svg?seed=sd8161515%40gmail.com",
+      "joinDate": "2026-07-03T17:54:09.264Z",
+      "created_at": "2026-07-03T17:54:09.264Z",
+      "trialExpiryDate": "2026-08-02T17:54:09.264Z",
       "subscriptionStatus": "Free Trial",
-      "bio": "Aspiring Full Stack Engineer. Looking for remote opportunities."
+      "role": "member"
+    },
+    {
+      "id": "user-admin",
+      "name": "Admin Developer",
+      "email": "kokborokanimations@gmail.com",
+      "avatar": "",
+      "joinDate": "2026-06-28T14:47:52.526Z",
+      "trialExpiryDate": "2026-07-28T14:47:52.526Z",
+      "subscriptionStatus": "Active",
+      "bio": "Platform System Administrator and Developer",
+      "role": "admin"
     },
     {
       "id": "user-demo-2",
@@ -53,6 +151,33 @@
     }
   ],
   "paymentLogs": [
+    {
+      "id": "CF_SIM_TX_288555516",
+      "userId": "user-demo-1",
+      "userEmail": "amit.kumar@example.com",
+      "amount": 499,
+      "status": "SUCCESS",
+      "txId": "CF_SIM_TX_288555516",
+      "createdAt": "2026-07-03T17:07:50.554Z"
+    },
+    {
+      "id": "CF_SIM_TX_594954169",
+      "userId": "user-demo-1",
+      "userEmail": "amit.kumar@example.com",
+      "amount": 499,
+      "status": "SUCCESS",
+      "txId": "CF_SIM_TX_594954169",
+      "createdAt": "2026-07-03T17:07:40.279Z"
+    },
+    {
+      "id": "CF_SIM_TX_278453299",
+      "userId": "user-demo-1",
+      "userEmail": "amit.kumar@example.com",
+      "amount": 499,
+      "status": "SUCCESS",
+      "txId": "CF_SIM_TX_278453299",
+      "createdAt": "2026-07-02T14:36:29.252+00:00"
+    },
     {
       "id": "tx_101",
       "userId": "user-admin",

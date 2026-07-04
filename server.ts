@@ -33,6 +33,7 @@ function initDB() {
       brandName: 'Jobview',
       tagline: 'Your Premium Portal to Verified Careers & Networking',
       logoUrl: '',
+      faviconUrl: '',
       bannerUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
       premiumMode: true,
       membershipPrice: 499,
@@ -272,6 +273,11 @@ function writeDB(data: any) {
   }
 }
 
+function isCustomSupabaseConfigured(db: any) {
+  const url = db.adminSettings?.supabaseUrl || process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
+  return !!url && url !== '';
+}
+
 // Supabase Data Mapping Helpers
 function mapPostFromSupabase(p: any) {
   return {
@@ -415,6 +421,7 @@ function mapSettingsFromSupabase(s: any) {
     brandName: s.brand_name || s.brandName || 'Jobview',
     tagline: s.tagline || 'Your Premium Portal to Verified Careers & Networking',
     logoUrl: s.logo_url || s.logoUrl || '',
+    faviconUrl: s.favicon_url || s.faviconUrl || '',
     bannerUrl: s.banner_url || s.bannerUrl || '',
     bannerHtml: s.banner_html || s.bannerHtml || '',
     premiumMode: s.premium_mode !== undefined ? s.premium_mode : (s.premiumMode !== undefined ? s.premiumMode : true),
@@ -444,6 +451,7 @@ function mapSettingsToSupabase(s: any) {
     brand_name: s.brandName,
     tagline: s.tagline,
     logo_url: s.logoUrl,
+    favicon_url: s.faviconUrl || '',
     banner_url: s.bannerUrl,
     banner_html: s.bannerHtml,
     premium_mode: s.premiumMode,
@@ -515,25 +523,6 @@ app.post('/api/upload', (req, res) => {
 // 1. Admin settings
 app.get('/api/settings', async (req, res) => {
   const db = readDB();
-  try {
-    const supabase = getServerSupabase();
-    if (supabase) {
-      const { data, error } = await supabase
-        .from('admin_settings')
-        .select('*')
-        .eq('id', 'global_settings')
-        .maybeSingle();
-      
-      if (!error && data) {
-        const mappedSettings = mapSettingsFromSupabase(data);
-        db.adminSettings = { ...db.adminSettings, ...mappedSettings };
-        writeDB(db);
-        return res.json(db.adminSettings);
-      }
-    }
-  } catch (err: any) {
-    console.log('[Supabase Info] Serving settings from local JSON store. Details:', err.message || String(err));
-  }
   res.json(db.adminSettings);
 });
 
@@ -542,19 +531,21 @@ app.post('/api/settings', async (req, res) => {
   db.adminSettings = { ...db.adminSettings, ...req.body };
   writeDB(db);
 
-  try {
-    const supabase = getServerSupabase();
-    if (supabase) {
-      const dbRow = mapSettingsToSupabase(db.adminSettings);
-      const { error } = await supabase
-        .from('admin_settings')
-        .upsert(dbRow);
-      if (error) {
-        console.log('[Supabase Info] Local settings updated, but Supabase upsert skipped:', error.message);
+  if (isCustomSupabaseConfigured(db)) {
+    try {
+      const supabase = getAdminSupabase() || getServerSupabase();
+      if (supabase) {
+        const dbRow = mapSettingsToSupabase(db.adminSettings);
+        const { error } = await supabase
+          .from('admin_settings')
+          .upsert(dbRow);
+        if (error) {
+          console.log('[Supabase Info] Local settings updated, but Supabase upsert skipped:', error.message);
+        }
       }
+    } catch (err: any) {
+      console.log('[Supabase Info] Local settings updated, but Supabase upsert skipped. Details:', err.message || String(err));
     }
-  } catch (err: any) {
-    console.log('[Supabase Info] Local settings updated, but Supabase upsert skipped. Details:', err.message || String(err));
   }
 
   res.json({ success: true, settings: db.adminSettings });
@@ -1282,6 +1273,9 @@ app.delete('/api/contacts/:id', async (req, res) => {
 let serverSupabaseClient: any = null;
 function getServerSupabase() {
   const db = readDB();
+  if (!isCustomSupabaseConfigured(db)) {
+    return null;
+  }
   const url = db.adminSettings?.supabaseUrl || process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
   const anonKey = db.adminSettings?.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NDg1NjAsImV4cCI6MjA5ODAyNDU2MH0.gPwgKSe-0lSFZf4holpBctmYSGrTYsv5cwpKcgLODBs';
 
@@ -1299,6 +1293,9 @@ function getServerSupabase() {
 let adminSupabaseClient: any = null;
 function getAdminSupabase() {
   const db = readDB();
+  if (!isCustomSupabaseConfigured(db)) {
+    return null;
+  }
   const url = db.adminSettings?.supabaseUrl || process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
   const serviceRoleKey = db.adminSettings?.supabaseServiceRoleKey || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
 

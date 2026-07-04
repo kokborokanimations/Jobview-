@@ -106,6 +106,25 @@ export default function App() {
     fetchInitialData();
   }, []);
 
+  // Update browser document title and favicon dynamically when settings change
+  useEffect(() => {
+    if (settings) {
+      const brand = settings.brandName || 'Jobview';
+      const tagline = settings.tagline || '';
+      document.title = tagline ? `${brand} - ${tagline}` : brand;
+
+      if (settings.faviconUrl) {
+        let linkTag: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+        if (!linkTag) {
+          linkTag = document.createElement('link');
+          linkTag.rel = 'icon';
+          document.head.appendChild(linkTag);
+        }
+        linkTag.href = settings.faviconUrl;
+      }
+    }
+  }, [settings]);
+
   // Sync bookmarks from Supabase on login/user state change
   useEffect(() => {
     if (user && posts.length > 0) {
@@ -527,7 +546,7 @@ export default function App() {
       />
 
       {/* Main View Area */}
-      <main className="flex-1 pb-16">
+      <main className="flex-1 pb-28">
         {isLoading ? (
           <div className="flex flex-col items-center justify-center min-h-64 py-16 gap-3">
             <div className="w-8 h-8 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />

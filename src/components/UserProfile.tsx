@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { User, CommunityPost, AdminSettings, Job } from '../types';
-import { User as UserIcon, Calendar, FileText, BadgeCheck, AlertTriangle, Clock, Edit3, Save, X, Sparkles, Image as ImageIcon, Bookmark, Heart, Share2, Check, Flag, Briefcase, MapPin, Trash2 } from 'lucide-react';
+import { User as UserIcon, Calendar, FileText, BadgeCheck, AlertTriangle, Clock, Edit3, Save, X, Sparkles, Image as ImageIcon, Bookmark, Heart, Share2, Check, Flag, Briefcase, MapPin, Trash2, Camera, Upload } from 'lucide-react';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
 
 interface UserProfileProps {
@@ -42,6 +42,64 @@ export default function UserProfile({
   const [editBio, setEditBio] = useState(user?.bio || '');
   const [editAvatar, setEditAvatar] = useState(user?.avatar || '');
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+
+  const handleFileUpload = async (file: File): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        alert('Please upload a valid image file (PNG, JPG, GIF, WebP, SVG).');
+        resolve(null);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const base64Data = reader.result as string;
+          const res = await fetch('/api/upload', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              file: base64Data,
+              name: 'user_avatar'
+            })
+          });
+          
+          const data = await res.json();
+          if (data.success && data.url) {
+            resolve(data.url);
+          } else {
+            alert('Upload failed: ' + (data.error || 'Unknown error'));
+            resolve(null);
+          }
+        } catch (err) {
+          console.error('Upload fetch error:', err);
+          resolve(null);
+        }
+      };
+      reader.onerror = () => {
+        alert('Error reading file.');
+        resolve(null);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploadingAvatar(true);
+      const url = await handleFileUpload(e.target.files[0]);
+      setIsUploadingAvatar(false);
+      if (url) {
+        setEditAvatar(url);
+        if (window.showSuccessToast) {
+          window.showSuccessToast('Profile photo uploaded successfully!');
+        }
+      }
+    }
+  };
 
   if (!user) {
     return (
@@ -241,12 +299,14 @@ export default function UserProfile({
         <div className="p-5 -mt-10 space-y-4">
           <div className="flex flex-col sm:flex-row items-center sm:items-end justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
-              <img
-                src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.name}`}
-                alt={user.name}
-                className="w-20 h-20 rounded-xl object-cover bg-white border border-slate-200 p-1 shadow-xs"
-                referrerPolicy="no-referrer"
-              />
+              <div className="w-20 h-20 rounded-full bg-white border border-slate-200 p-1 shadow-xs hover:border-teal-400 transition-all shrink-0 flex items-center justify-center overflow-hidden">
+                <img
+                  src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`}
+                  alt={user.name}
+                  className="w-full h-full rounded-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
               <div className="space-y-1.5">
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                   <h3 className="text-base font-extrabold text-slate-900 font-display">
@@ -285,10 +345,60 @@ export default function UserProfile({
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="text-slate-400 hover:text-slate-600 p-1"
+                  className="text-slate-400 hover:text-slate-600 transition-colors"
                 >
                   <X size={15} />
                 </button>
+              </div>
+
+              {/* Photo Upload Option */}
+              <div className="flex flex-col sm:flex-row items-center gap-4 bg-white p-3.5 rounded-lg border border-slate-200 mb-1">
+                <div className="relative group w-16 h-16 rounded-full overflow-hidden border border-slate-200 bg-white p-1 flex items-center justify-center shrink-0 shadow-xs">
+                  <img
+                    src={editAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || editName || 'user')}`}
+                    alt="Preview"
+                    className="w-full h-full rounded-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                  {isUploadingAvatar && (
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 space-y-1.5 w-full text-center sm:text-left">
+                  <span className="block text-[10px] font-bold text-slate-500 uppercase">
+                    Profile Photo / Avatar
+                  </span>
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                      onChange={handleAvatarFileChange}
+                      className="hidden"
+                      id="profile-avatar-file-input"
+                      disabled={isUploadingAvatar}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('profile-avatar-file-input')?.click()}
+                      className="px-3 py-1.5 bg-teal-50 hover:bg-teal-100 text-teal-700 border border-teal-200/60 rounded-lg text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 font-display"
+                    >
+                      <Camera size={11} />
+                      <span>{isUploadingAvatar ? 'Uploading...' : 'Upload Photo'}</span>
+                    </button>
+                    {editAvatar && (
+                      <button
+                        type="button"
+                        onClick={() => setEditAvatar('')}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 rounded-lg text-[10px] font-bold transition-colors cursor-pointer font-display"
+                      >
+                        Reset to default
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[9px] text-slate-400">Supported: PNG, JPG, GIF, SVG or WebP. Max 5MB.</p>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -307,7 +417,7 @@ export default function UserProfile({
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                    Avatar URL / Seed
+                    Avatar URL / Seed (Optional)
                   </label>
                   <input
                     type="text"

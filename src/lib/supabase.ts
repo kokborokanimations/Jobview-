@@ -1,5 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
+export function isCustomSupabaseConfigured() {
+  const localUrl = typeof window !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_URL') : null;
+  const url = localUrl || (import.meta as any).env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
+  return !!url && url !== '';
+}
+
 export function getSupabaseCredentials() {
   const localUrl = typeof window !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_URL') : null;
   const localKey = typeof window !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_ANON_KEY') : null;
@@ -15,6 +21,7 @@ let lastUrl = '';
 let lastKey = '';
 
 export function getSupabaseClient() {
+  if (!isCustomSupabaseConfigured()) return null;
   const { supabaseUrl, supabaseAnonKey } = getSupabaseCredentials();
   if (!supabaseUrl || !supabaseAnonKey) return null;
   

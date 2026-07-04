@@ -6,7 +6,7 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { User } from '../types';
 import { LogIn, Sparkles, Mail, User as UserIcon, X } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
 interface LoginModalProps {
   onLogin: (user: User) => void;
@@ -62,8 +62,8 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
   const handleGoogleLogin = async () => {
     setError('');
     
-    if (!supabase) {
-      setError('Google Sign-In is not configured. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY first.');
+    if (!isCustomSupabaseConfigured() || !supabase) {
+      setError('Google Sign-In is not configured. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Admin settings first.');
       return;
     }
 

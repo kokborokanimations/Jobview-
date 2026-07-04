@@ -68,6 +68,7 @@ export interface AdminSettings {
   brandName: string;
   tagline: string;
   logoUrl: string; // If empty, we can render a gorgeous Lucide icon
+  faviconUrl?: string; // App Favicon Icon URL
   bannerUrl: string; // Job Feed Banner
   bannerHtml?: string; // Customizable Rich Text Banner
   premiumMode: boolean;

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
-import { supabase } from '../lib/supabase';
+import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
 interface AdminPanelProps {
   settings: AdminSettings;
@@ -53,9 +53,11 @@ export default function AdminPanel({
   const [brandName, setBrandName] = useState(settings.brandName || '');
   const [tagline, setTagline] = useState(settings.tagline || '');
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
+  const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || '');
   const [bannerUrl, setBannerUrl] = useState(settings.bannerUrl || '');
   const [bannerHtml, setBannerHtml] = useState(settings.bannerHtml || '');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [premiumMode, setPremiumMode] = useState(settings.premiumMode);
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
@@ -191,7 +193,7 @@ export default function AdminPanel({
 
   useEffect(() => {
     async function checkSupabaseConnection() {
-      if (!supabase) {
+      if (!isCustomSupabaseConfigured() || !supabase) {
         setSupabaseStatus('not-configured');
         return;
       }
@@ -227,6 +229,7 @@ export default function AdminPanel({
     setBrandName(settings.brandName || '');
     setTagline(settings.tagline || '');
     setLogoUrl(settings.logoUrl || '');
+    setFaviconUrl(settings.faviconUrl || '');
     setBannerUrl(settings.bannerUrl || '');
     setBannerHtml(settings.bannerHtml || '');
     setPremiumMode(settings.premiumMode);
@@ -386,6 +389,7 @@ export default function AdminPanel({
       brandName !== (settings.brandName || '') ||
       tagline !== (settings.tagline || '') ||
       logoUrl !== (settings.logoUrl || '') ||
+      faviconUrl !== (settings.faviconUrl || '') ||
       bannerUrl !== (settings.bannerUrl || '') ||
       bannerHtml !== (settings.bannerHtml || '') ||
       premiumMode !== settings.premiumMode ||
@@ -422,6 +426,7 @@ export default function AdminPanel({
         brandName,
         tagline,
         logoUrl,
+        faviconUrl,
         bannerUrl,
         bannerHtml,
         premiumMode,
@@ -643,6 +648,17 @@ export default function AdminPanel({
       setIsUploadingLogo(false);
       if (url) {
         setLogoUrl(url);
+      }
+    }
+  };
+
+  const handleFaviconChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploadingFavicon(true);
+      const url = await handleFileUpload(e.target.files[0], 'app_favicon');
+      setIsUploadingFavicon(false);
+      if (url) {
+        setFaviconUrl(url);
       }
     }
   };
@@ -896,6 +912,50 @@ export default function AdminPanel({
                       className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
                     >
                       {isUploadingLogo ? 'Uploading...' : 'Browse File'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* App Favicon Icon */}
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">App Favicon Icon (.ico, .png, .svg)</label>
+                <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
+                  {faviconUrl ? (
+                    <div className="relative group w-12 h-12 rounded-lg overflow-hidden border border-slate-100 shadow-sm bg-white flex items-center justify-center p-1">
+                      <img src={faviconUrl} alt="App Favicon" className="max-w-full max-h-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => setFaviconUrl('')}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[9px] font-bold transition-opacity cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center p-1">
+                      <Globe className="mx-auto h-6 w-6 text-gray-400" />
+                      <span className="text-[10px] font-bold text-teal-600 mt-1 cursor-pointer hover:underline">
+                        Upload Favicon
+                      </span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">Recommended: 32x32 PNG/ICO/SVG</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/x-icon,image/png,image/svg+xml,image/jpeg"
+                    onChange={handleFaviconChange}
+                    className="hidden"
+                    id="favicon-file-input"
+                    disabled={isUploadingFavicon}
+                  />
+                  {!faviconUrl && (
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('favicon-file-input')?.click()}
+                      className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                    >
+                      {isUploadingFavicon ? 'Uploading...' : 'Browse File'}
                     </button>
                   )}
                 </div>

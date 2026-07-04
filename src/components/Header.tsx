@@ -20,8 +20,8 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
   const isAdmin = user && user.role === 'admin' && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
-      <div className="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-xs">
+      <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
         
         {/* Brand Section */}
         <div className="flex items-center gap-3">
@@ -88,13 +88,15 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
               </div>
 
               <div className="relative group">
-                <button className="flex items-center focus:outline-none cursor-pointer">
-                  <img
-                    src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.email}`}
-                    alt={user.name}
-                    className="w-9 h-9 rounded-full object-cover border-2 border-white shadow-sm ring-1 ring-slate-200 hover:ring-teal-400 transition-all"
-                    referrerPolicy="no-referrer"
-                  />
+                <button className="flex items-center focus:outline-none cursor-pointer transition-transform hover:scale-105">
+                  <div className="w-10 h-10 rounded-full bg-white border border-slate-200 p-0.5 shadow-xs group-hover:border-teal-500 transition-all flex items-center justify-center overflow-hidden">
+                    <img
+                      src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`}
+                      alt={user.name}
+                      className="w-full h-full rounded-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  </div>
                 </button>
                 
                 {/* Micro Hover/Dropdown Card for Quick Switch & Logout */}
