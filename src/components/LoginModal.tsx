@@ -40,7 +40,7 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: name || email.split('@')[0],
+          name: name.trim() || email.split('@')[0],
           email: email.trim().toLowerCase(),
           avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(email)}`
         })
@@ -76,6 +76,9 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
           skipBrowserRedirect: true,
+          queryParams: {
+            prompt: 'select_account',
+          },
         },
       });
 
@@ -113,7 +116,7 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
   useEffect(() => {
     const handleOAuthMessage = async (event: MessageEvent) => {
       const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && origin !== window.location.origin) {
         return;
       }
 
@@ -352,7 +355,7 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
               </form>
 
               {/* Divider */}
-              <div className="relative my-6 text-center">
+              <div className="relative my-5 text-center">
                 <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
                 <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
                   Or Fast-Pass Login

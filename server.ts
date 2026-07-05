@@ -10,7 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
 app.use(express.json({ limit: '10mb' }));
@@ -1375,15 +1375,86 @@ app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
     return res.send(`
       <html>
         <body style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background-color: #f8fafc; color: #0f172a; margin: 0;">
-          <div style="background-color: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px;">
+          <div id="error-container" style="background-color: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px;">
             <h1 style="color: #ef4444; margin-top: 0;">Authentication Error</h1>
             <p>No authorization code was returned from the sign-in provider.</p>
             <button onclick="window.close()" style="margin-top: 1rem; background-color: #ef4444; color: white; border: none; padding: 0.5rem 1.5rem; border-radius: 0.5rem; cursor: pointer; font-weight: bold;">Close Window</button>
           </div>
+          <div id="success-container" style="display: none; background-color: white; padding: 2rem; border-radius: 1rem; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center; max-width: 400px;">
+            <h1 style="color: #0d9488; margin-top: 0;">Success!</h1>
+            <p>You have logged in successfully with Google.</p>
+            <p style="color: #64748b; font-size: 0.875rem;">This window will close automatically...</p>
+          </div>
           <script>
-            if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: 'No auth code found' }, '*');
-              setTimeout(() => window.close(), 3000);
+            function parseHash() {
+              const hash = window.location.hash.substring(1);
+              const params = {};
+              if (!hash) return params;
+              hash.split('&').forEach(pair => {
+                const parts = pair.split('=');
+                params[parts[0]] = decodeURIComponent(parts[1] || '');
+              });
+              return params;
+            }
+
+            function parseJwt(token) {
+              try {
+                const base64Url = token.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+              } catch (e) {
+                console.error('Error parsing JWT:', e);
+                return null;
+              }
+            }
+
+            const hashParams = parseHash();
+            if (hashParams.access_token) {
+              const payload = parseJwt(hashParams.access_token);
+              if (payload) {
+                if (window.opener) {
+                  const session = {
+                    access_token: hashParams.access_token,
+                    refresh_token: hashParams.refresh_token,
+                    expires_in: hashParams.expires_in,
+                    token_type: hashParams.token_type,
+                    user: {
+                      id: payload.sub,
+                      email: payload.email,
+                      user_metadata: payload.user_metadata || {}
+                    }
+                  };
+                  
+                  document.getElementById('error-container').style.display = 'none';
+                  document.getElementById('success-container').style.display = 'block';
+                  
+                  window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS', session: session }, '*');
+                  setTimeout(() => window.close(), 1000);
+                } else {
+                  // Direct fallback for lost openers (e.g. mobile tabs / blocked popups)
+                  document.getElementById('error-container').style.display = 'none';
+                  document.getElementById('success-container').style.display = 'block';
+                  setTimeout(() => {
+                    window.location.href = '/' + window.location.hash;
+                  }, 800);
+                }
+              } else if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: 'Invalid session tokens received' }, '*');
+                setTimeout(() => window.close(), 3000);
+              }
+            } else {
+              if (window.opener) {
+                window.opener.postMessage({ type: 'OAUTH_AUTH_FAILURE', error: hashParams.error_description || 'No auth code found' }, '*');
+                setTimeout(() => window.close(), 3000);
+              } else {
+                // If there is an error/no token and no opener, redirect back to home page
+                setTimeout(() => {
+                  window.location.href = '/';
+                }, 3000);
+              }
             }
           </script>
         </body>

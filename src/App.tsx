@@ -101,6 +101,71 @@ export default function App() {
     }
   };
 
+  // Global listener for Supabase OAuth sign-ins (especially for redirects or popups with lost opener)
+  useEffect(() => {
+    let unsubscribe: (() => void) | null = null;
+
+    async function checkSupabaseSession() {
+      try {
+        const { getSupabaseClient, isCustomSupabaseConfigured } = await import('./lib/supabase');
+        if (!isCustomSupabaseConfigured()) return;
+        const client = getSupabaseClient();
+        if (!client) return;
+
+        // Helper to sync user session back to Express database
+        const syncSupabaseUser = async (sUser: any) => {
+          try {
+            const res = await fetch('/api/users/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: sUser.user_metadata?.full_name || sUser.user_metadata?.name || sUser.email?.split('@')[0],
+                email: sUser.email,
+                avatar: sUser.user_metadata?.avatar_url || sUser.user_metadata?.picture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(sUser.email || '')}`
+              })
+            });
+            if (res.ok) {
+              const syncedUser = await res.json();
+              handleLogin(syncedUser);
+              if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('error'))) {
+                window.history.replaceState(null, '', window.location.pathname);
+              }
+            }
+          } catch (syncErr) {
+            console.error('Error syncing Supabase user to server:', syncErr);
+          }
+        };
+
+        // 1. Check current session immediately (if any)
+        const { data: { session } } = await client.auth.getSession();
+        if (session && session.user) {
+          await syncSupabaseUser(session.user);
+        }
+
+        // 2. Listen to state changes
+        const { data: { subscription } } = client.auth.onAuthStateChange(async (event: string, session: any) => {
+          if (session && session.user) {
+            await syncSupabaseUser(session.user);
+          }
+        });
+
+        unsubscribe = () => {
+          subscription?.unsubscribe();
+        };
+      } catch (err) {
+        console.error('Error setting up global Supabase listener:', err);
+      }
+    }
+
+    checkSupabaseSession();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, []);
+
   // Load Initial Data
   useEffect(() => {
     fetchInitialData();

@@ -38,6 +38,30 @@ export default function UserProfile({
   onDeletePost
 }: UserProfileProps) {
   const [isEditing, setIsEditing] = useState(false);
+  const [supabaseUser, setSupabaseUser] = useState<any>(null);
+
+  React.useEffect(() => {
+    async function fetchAuthUser() {
+      try {
+        const { getSupabaseClient } = await import('../lib/supabase');
+        const client = getSupabaseClient();
+        if (client) {
+          const { data: { user: authUser } } = await client.auth.getUser();
+          if (authUser) {
+            setSupabaseUser(authUser);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching Supabase auth user:', err);
+      }
+    }
+    if (user) {
+      fetchAuthUser();
+    } else {
+      setSupabaseUser(null);
+    }
+  }, [user]);
+
   const [editName, setEditName] = useState(user?.name || '');
   const [editBio, setEditBio] = useState(user?.bio || '');
   const [editAvatar, setEditAvatar] = useState(user?.avatar || '');
@@ -301,8 +325,13 @@ export default function UserProfile({
             <div className="flex flex-col sm:flex-row items-center gap-4 text-center sm:text-left">
               <div className="w-20 h-20 rounded-full bg-white border border-slate-200 p-1 shadow-xs hover:border-teal-400 transition-all shrink-0 flex items-center justify-center overflow-hidden">
                 <img
-                  src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`}
-                  alt={user.name}
+                  src={
+                    supabaseUser?.user_metadata?.avatar_url || 
+                    supabaseUser?.user_metadata?.picture || 
+                    user.avatar || 
+                    `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`
+                  }
+                  alt={supabaseUser?.user_metadata?.full_name || supabaseUser?.user_metadata?.name || user.name}
                   className="w-full h-full rounded-full object-cover"
                   referrerPolicy="no-referrer"
                 />
@@ -310,13 +339,19 @@ export default function UserProfile({
               <div className="space-y-1.5">
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                   <h3 className="text-base font-extrabold text-slate-900 font-display">
-                    {user.name}
+                    {supabaseUser?.user_metadata?.full_name || supabaseUser?.user_metadata?.name || user.name}
                   </h3>
                   {getSubscriptionBadge()}
                 </div>
                 <p className="text-xs text-slate-400 font-mono leading-none">
                   {user.email}
                 </p>
+                {supabaseUser && (
+                  <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md mt-1 font-display">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                    Connected with Google OAuth
+                  </span>
+                )}
               </div>
             </div>
 
@@ -998,6 +1033,37 @@ export default function UserProfile({
             referrerPolicy="no-referrer"
             onClick={(e) => e.stopPropagation()}
           />
+        </div>
+      )}
+
+      {/* Google OAuth Metadata details card */}
+      {supabaseUser && (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs p-5 space-y-4 animate-fade-in">
+          <h4 className="font-extrabold text-slate-900 text-xs font-display uppercase tracking-wider flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            Google OAuth Session Metadata (Fetched Live)
+          </h4>
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs space-y-2.5 font-mono text-slate-700">
+            <div>
+              <span className="text-slate-400">auth.getUser().id:</span>{' '}
+              <span className="text-slate-900 font-semibold">{supabaseUser.id}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">metadata.full_name:</span>{' '}
+              <span className="text-slate-900 font-semibold">{supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'N/A'}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">metadata.email:</span>{' '}
+              <span className="text-slate-900 font-semibold">{supabaseUser.email}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">metadata.avatar_url:</span>{' '}
+              <span className="text-slate-900 select-all break-all">{supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || 'N/A'}</span>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 font-sans">
+            These profile details are retrieved dynamically using Supabase Auth Client SDK from the secure token payload in real-time.
+          </p>
         </div>
       )}
 
