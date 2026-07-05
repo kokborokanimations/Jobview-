@@ -346,12 +346,7 @@ export default function UserProfile({
                 <p className="text-xs text-slate-400 font-mono leading-none">
                   {user.email}
                 </p>
-                {supabaseUser && (
-                  <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md mt-1 font-display">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
-                    Connected with Google OAuth
-                  </span>
-                )}
+
               </div>
             </div>
 
@@ -1036,36 +1031,7 @@ export default function UserProfile({
         </div>
       )}
 
-      {/* Google OAuth Metadata details card */}
-      {supabaseUser && (
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs p-5 space-y-4 animate-fade-in">
-          <h4 className="font-extrabold text-slate-900 text-xs font-display uppercase tracking-wider flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-            Google OAuth Session Metadata (Fetched Live)
-          </h4>
-          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 text-xs space-y-2.5 font-mono text-slate-700">
-            <div>
-              <span className="text-slate-400">auth.getUser().id:</span>{' '}
-              <span className="text-slate-900 font-semibold">{supabaseUser.id}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">metadata.full_name:</span>{' '}
-              <span className="text-slate-900 font-semibold">{supabaseUser.user_metadata?.full_name || supabaseUser.user_metadata?.name || 'N/A'}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">metadata.email:</span>{' '}
-              <span className="text-slate-900 font-semibold">{supabaseUser.email}</span>
-            </div>
-            <div>
-              <span className="text-slate-400">metadata.avatar_url:</span>{' '}
-              <span className="text-slate-900 select-all break-all">{supabaseUser.user_metadata?.avatar_url || supabaseUser.user_metadata?.picture || 'N/A'}</span>
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-500 font-sans">
-            These profile details are retrieved dynamically using Supabase Auth Client SDK from the secure token payload in real-time.
-          </p>
-        </div>
-      )}
+
 
     </div>
   );

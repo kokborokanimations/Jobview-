@@ -337,7 +337,7 @@ export default function CommunityFeed({
                       />
                       <div>
                         <div className="flex items-center gap-2">
-                          <h4 className="text-xs font-bold text-slate-950">{post.userName}</h4>
+                          <h4 className="text-[14px] font-bold text-slate-950">{post.userName}</h4>
                           {isPending && (
                             <span className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-700 border border-amber-100 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded-full">
                               <Clock size={8} className="text-amber-500 animate-pulse" />
