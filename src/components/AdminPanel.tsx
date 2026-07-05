@@ -8,7 +8,7 @@ import { Job, CommunityPost, User, AdminSettings, PaymentLog } from '../types';
 import { 
   Settings, Briefcase, Users, CreditCard, Shield, Plus, 
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
-  Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail
+  Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail, LogIn
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
@@ -77,6 +77,12 @@ export default function AdminPanel({
   const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || localStorage.getItem('SUPABASE_SERVICE_ROLE_KEY') || '');
+  const [googleSiteVerification, setGoogleSiteVerification] = useState(settings.googleSiteVerification || '');
+  const [communityMindPlaceholder, setCommunityMindPlaceholder] = useState(settings.communityMindPlaceholder || '');
+  const [communityReviewNotice, setCommunityReviewNotice] = useState(settings.communityReviewNotice || '');
+  const [loginTitle, setLoginTitle] = useState(settings.loginTitle || '');
+  const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || '');
+  const [googleOnly, setGoogleOnly] = useState(settings.googleOnly || false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   
   // Secret Keys visibility toggle
@@ -189,10 +195,29 @@ export default function AdminPanel({
   // Supabase Connection Status State
   const [supabaseStatus, setSupabaseStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured' | 'missing-table'>('checking');
   const [supabaseErrorDetails, setSupabaseErrorDetails] = useState<string | null>(null);
+  const [visitCount, setVisitCount] = useState<number | null>(null);
+  const [detailedStats, setDetailedStats] = useState<{ today: number; sevenDays: number; oneMonth: number; total: number } | null>(null);
+  const [visitorFilter, setVisitorFilter] = useState<'today' | '7day' | '1month' | 'total'>('total');
   const [showSqlHelper, setShowSqlHelper] = useState(false);
+
+  const refreshAnalytics = async () => {
+    try {
+      const { fetchDetailedVisitStats } = await import('../lib/supabaseQueries');
+      const stats = await fetchDetailedVisitStats();
+      if (stats) {
+        setDetailedStats(stats);
+        setVisitCount(stats.total);
+      }
+    } catch (countErr) {
+      console.warn('Failed to refresh visitor stats:', countErr);
+    }
+  };
 
   useEffect(() => {
     async function checkSupabaseConnection() {
+      // Fetch detailed analytics (with local storage fallback)
+      await refreshAnalytics();
+
       if (!isCustomSupabaseConfigured() || !supabase) {
         setSupabaseStatus('not-configured');
         return;
@@ -250,6 +275,12 @@ export default function AdminPanel({
     setSupabaseUrl(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
     setSupabaseAnonKey(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
     setSupabaseServiceRoleKey(settings.supabaseServiceRoleKey || localStorage.getItem('SUPABASE_SERVICE_ROLE_KEY') || '');
+    setGoogleSiteVerification(settings.googleSiteVerification || '');
+    setCommunityMindPlaceholder(settings.communityMindPlaceholder || '');
+    setCommunityReviewNotice(settings.communityReviewNotice || '');
+    setLoginTitle(settings.loginTitle || '');
+    setLoginSubtitle(settings.loginSubtitle || '');
+    setGoogleOnly(settings.googleOnly || false);
   }, [settings]);
 
   const handleApprovePost = async (postId: string) => {
@@ -409,6 +440,12 @@ export default function AdminPanel({
       supabaseUrl !== (settings.supabaseUrl || '') ||
       supabaseAnonKey !== (settings.supabaseAnonKey || '') ||
       supabaseServiceRoleKey !== (settings.supabaseServiceRoleKey || '') ||
+      googleSiteVerification !== (settings.googleSiteVerification || '') ||
+      communityMindPlaceholder !== (settings.communityMindPlaceholder || '') ||
+      communityReviewNotice !== (settings.communityReviewNotice || '') ||
+      loginTitle !== (settings.loginTitle || '') ||
+      loginSubtitle !== (settings.loginSubtitle || '') ||
+      googleOnly !== (settings.googleOnly || false) ||
       JSON.stringify(features) !== JSON.stringify(propFeatures);
 
     if (!hasChanges) {
@@ -446,7 +483,13 @@ export default function AdminPanel({
         postApprovalMode,
         supabaseUrl,
         supabaseAnonKey,
-        supabaseServiceRoleKey
+        supabaseServiceRoleKey,
+        googleSiteVerification,
+        communityMindPlaceholder,
+        communityReviewNotice,
+        loginTitle,
+        loginSubtitle,
+        googleOnly
       });
 
       if (success) {
@@ -705,6 +748,13 @@ export default function AdminPanel({
             <span>WORKSPACE SECURED • PERSISTED</span>
           </div>
 
+          {visitCount !== null && (
+            <div className="px-3.5 py-1.5 bg-indigo-50 border border-indigo-100 text-indigo-700 font-mono text-[10px] font-extrabold rounded-xl shadow-xs inline-flex items-center gap-1.5 animate-fade-in hover:bg-indigo-100 transition-colors">
+              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+              <span>TOTAL VISITS: {visitCount}</span>
+            </div>
+          )}
+
           {supabaseStatus === 'checking' && (
             <div className="px-3 py-1.5 bg-slate-100 text-gray-500 font-mono text-[10px] font-bold rounded-xl border border-gray-200 inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse" />
@@ -745,6 +795,202 @@ export default function AdminPanel({
               <span>SUPABASE LOCAL MODE</span>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Analytics Dashboard Overview Section */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in bg-slate-50/50 p-4 rounded-3xl border border-gray-100">
+        {/* Total Visitors Card */}
+        <div className="bg-gradient-to-br from-indigo-50/80 to-white p-4 rounded-2xl border border-indigo-100/60 shadow-xs relative overflow-hidden group transition-all hover:border-indigo-200/80 hover:shadow-sm col-span-1 sm:col-span-2 lg:col-span-1">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Eye className="text-indigo-600" size={44} />
+          </div>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] text-indigo-700/90 font-black uppercase tracking-widest font-display flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+              Visitor Analytics
+            </span>
+            <button
+              onClick={async () => {
+                await refreshAnalytics();
+              }}
+              title="Refresh visitor counts"
+              className="p-1 text-indigo-400 hover:text-indigo-700 hover:bg-indigo-100/50 rounded-lg transition-all cursor-pointer"
+            >
+              <RefreshCw size={12} className="hover:rotate-180 transition-transform duration-500" />
+            </button>
+          </div>
+
+          {/* Metric prominent display depending on selected filter */}
+          <div className="mt-2 flex items-baseline">
+            <span className="text-3xl font-black text-indigo-950 font-display tracking-tight">
+              {detailedStats ? (
+                visitorFilter === 'today' ? detailedStats.today.toLocaleString() :
+                visitorFilter === '7day' ? detailedStats.sevenDays.toLocaleString() :
+                visitorFilter === '1month' ? detailedStats.oneMonth.toLocaleString() :
+                detailedStats.total.toLocaleString()
+              ) : (visitCount !== null ? visitCount.toLocaleString() : '0')}
+            </span>
+            <span className="text-[10px] text-indigo-600 font-extrabold font-mono uppercase ml-1.5">
+              {visitorFilter === 'today' ? 'Today' :
+               visitorFilter === '7day' ? '7 Days' :
+               visitorFilter === '1month' ? '30 Days' :
+               'Total'} Hits
+            </span>
+          </div>
+
+          {/* Elegant Filter Segment Selector */}
+          <div className="mt-3 flex gap-0.5 bg-indigo-100/40 p-0.5 rounded-lg border border-indigo-100/30">
+            <button
+              onClick={() => setVisitorFilter('today')}
+              className={`flex-1 text-center py-1 text-[9px] font-black tracking-tight rounded-md transition-all cursor-pointer ${
+                visitorFilter === 'today'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-600/70 hover:text-indigo-900 hover:bg-white/40'
+              }`}
+            >
+              Today
+            </button>
+            <button
+              onClick={() => setVisitorFilter('7day')}
+              className={`flex-1 text-center py-1 text-[9px] font-black tracking-tight rounded-md transition-all cursor-pointer ${
+                visitorFilter === '7day'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-600/70 hover:text-indigo-900 hover:bg-white/40'
+              }`}
+            >
+              7 Days
+            </button>
+            <button
+              onClick={() => setVisitorFilter('1month')}
+              className={`flex-1 text-center py-1 text-[9px] font-black tracking-tight rounded-md transition-all cursor-pointer ${
+                visitorFilter === '1month'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-600/70 hover:text-indigo-900 hover:bg-white/40'
+              }`}
+            >
+              1 Month
+            </button>
+            <button
+              onClick={() => setVisitorFilter('total')}
+              className={`flex-1 text-center py-1 text-[9px] font-black tracking-tight rounded-md transition-all cursor-pointer ${
+                visitorFilter === 'total'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-indigo-600/70 hover:text-indigo-900 hover:bg-white/40'
+              }`}
+            >
+              Total
+            </button>
+          </div>
+
+          {/* Compact full breakdown progress list */}
+          {detailedStats && (
+            <div className="mt-3 pt-3 border-t border-indigo-100/50 space-y-2">
+              <div>
+                <div className="flex items-center justify-between text-[9px] text-indigo-950 font-bold mb-0.5">
+                  <span className="text-gray-500 font-semibold">Today's Visits</span>
+                  <span className="font-mono">{detailedStats.today}</span>
+                </div>
+                <div className="w-full bg-indigo-100/30 h-1 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-500 h-1 rounded-full transition-all duration-500" 
+                    style={{ width: `${detailedStats.total > 0 ? Math.min(100, (detailedStats.today / detailedStats.total) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-[9px] text-indigo-950 font-bold mb-0.5">
+                  <span className="text-gray-500 font-semibold">Last 7 Days</span>
+                  <span className="font-mono">{detailedStats.sevenDays}</span>
+                </div>
+                <div className="w-full bg-indigo-100/30 h-1 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-500 h-1 rounded-full transition-all duration-500" 
+                    style={{ width: `${detailedStats.total > 0 ? Math.min(100, (detailedStats.sevenDays / detailedStats.total) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between text-[9px] text-indigo-950 font-bold mb-0.5">
+                  <span className="text-gray-500 font-semibold">Last 30 Days</span>
+                  <span className="font-mono">{detailedStats.oneMonth}</span>
+                </div>
+                <div className="w-full bg-indigo-100/30 h-1 rounded-full overflow-hidden">
+                  <div 
+                    className="bg-indigo-500 h-1 rounded-full transition-all duration-500" 
+                    style={{ width: `${detailedStats.total > 0 ? Math.min(100, (detailedStats.oneMonth / detailedStats.total) * 100) : 0}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
+            <span className={`w-1 h-1 rounded-full ${supabaseStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{supabaseStatus === 'connected' ? 'Live Supabase Sync Active' : 'Offline Local Storage'}</span>
+          </p>
+        </div>
+
+        {/* Jobs Card */}
+        <div className="bg-gradient-to-br from-teal-50/80 to-white p-4 rounded-2xl border border-teal-100/60 shadow-xs relative overflow-hidden group transition-all hover:border-teal-200/80 hover:shadow-sm">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Briefcase className="text-teal-600" size={44} />
+          </div>
+          <span className="text-[10px] text-teal-700/90 font-black uppercase tracking-widest font-display">
+            Active Job Openings
+          </span>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-teal-950 font-display tracking-tight">
+              {jobs.length}
+            </span>
+            <span className="text-[10px] text-teal-600 font-extrabold font-mono uppercase">Live Listings</span>
+          </div>
+          <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
+            <span className="w-1 h-1 bg-teal-500 rounded-full" />
+            <span>Fully accessible on candidate view</span>
+          </p>
+        </div>
+
+        {/* Registered Users Card */}
+        <div className="bg-gradient-to-br from-emerald-50/80 to-white p-4 rounded-2xl border border-emerald-100/60 shadow-xs relative overflow-hidden group transition-all hover:border-emerald-200/80 hover:shadow-sm">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Users className="text-emerald-600" size={44} />
+          </div>
+          <span className="text-[10px] text-emerald-700/90 font-black uppercase tracking-widest font-display">
+            Registered Profiles
+          </span>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-emerald-950 font-display tracking-tight">
+              {users.length}
+            </span>
+            <span className="text-[10px] text-emerald-600 font-extrabold font-mono uppercase font-bold">Candidates</span>
+          </div>
+          <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
+            <span className="w-1 h-1 bg-emerald-500 rounded-full" />
+            <span>Job seekers & recruiter representatives</span>
+          </p>
+        </div>
+
+        {/* Community posts card */}
+        <div className="bg-gradient-to-br from-purple-50/80 to-white p-4 rounded-2xl border border-purple-100/60 shadow-xs relative overflow-hidden group transition-all hover:border-purple-200/80 hover:shadow-sm">
+          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
+            <FileText className="text-purple-600" size={44} />
+          </div>
+          <span className="text-[10px] text-purple-700/90 font-black uppercase tracking-widest font-display">
+            Shared Discussions
+          </span>
+          <div className="mt-2.5 flex items-baseline gap-1.5">
+            <span className="text-3xl font-black text-purple-950 font-display tracking-tight">
+              {posts.length}
+            </span>
+            <span className="text-[10px] text-purple-600 font-extrabold font-mono uppercase">User Posts</span>
+          </div>
+          <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
+            <span className={`w-1 h-1 rounded-full ${posts.filter(p => p.status === 'Pending').length > 0 ? 'bg-amber-500 animate-ping' : 'bg-purple-500'}`} />
+            <span>{posts.filter(p => p.status === 'Pending').length} pending moderation reviews</span>
+          </p>
         </div>
       </div>
 
@@ -841,8 +1087,9 @@ export default function AdminPanel({
       {activeSubTab === 'branding' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Form Branding */}
-          <div className="lg:col-span-1 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+          <div className="lg:col-span-1 space-y-6">
+            {/* Form Branding */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
               <Settings size={15} className="text-teal-600" />
               General Branding
@@ -1030,8 +1277,76 @@ export default function AdminPanel({
             </form>
           </div>
 
-          {/* Jobs & Community Management CRUD */}
-          <div className="lg:col-span-2 space-y-6">
+          {/* Login Popup Customisation & Google Auth Controls */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+              <LogIn size={15} className="text-teal-600" />
+              Sign In Popup Settings
+            </h3>
+
+            <p className="text-[10px] text-gray-500 leading-normal font-semibold">
+              Fully customize the sign-in modal texts and control authentication mechanisms.
+            </p>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Sign In Popup Title</label>
+                <input
+                  type="text"
+                  value={loginTitle}
+                  onChange={(e) => setLoginTitle(e.target.value)}
+                  placeholder="Welcome to Jobview"
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                />
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Sign In Popup Subtitle</label>
+                <textarea
+                  rows={3}
+                  value={loginSubtitle}
+                  onChange={(e) => setLoginSubtitle(e.target.value)}
+                  placeholder="Sign in to unlock verified hiring managers, contact details, and our community wall."
+                  className="w-full bg-slate-50 border border-slate-200 focus:bg-white rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                />
+              </div>
+
+              <div className="p-3 bg-teal-50/20 rounded-xl border border-teal-100/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-slate-850 font-display">Only Google Sign In</p>
+                    <p className="text-[9px] text-slate-400 leading-normal font-medium mt-0.5">
+                      Forces Google Auth by hiding manual email details forms and Fast-Pass demo credentials.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={googleOnly}
+                      onChange={(e) => setGoogleOnly(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-250 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-350 after:border after:rounded-full after:h-3.5 after:w-3.5 after:transition-all peer-checked:bg-teal-600"></div>
+                  </label>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSavingSettings}
+                className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                  isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
+              >
+                <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                <span>{isSavingSettings ? 'Saving Popup Config...' : 'Save Popup Settings'}</span>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        {/* Jobs & Community Management CRUD */}
+        <div className="lg:col-span-2 space-y-6">
             
            {/* CRUD Jobs Actions */}
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
@@ -1644,7 +1959,24 @@ ALTER TABLE public.reported_posts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read" ON public.reported_posts FOR SELECT TO public USING (true);
 CREATE POLICY "Allow anon insert" ON public.reported_posts FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow anon update" ON public.reported_posts FOR UPDATE USING (true);
-CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (true);`}
+CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (true);
+
+-- 10. ANALYTICS TABLE
+CREATE TABLE IF NOT EXISTS public.analytics (
+    id TEXT PRIMARY KEY,
+    visit_count INT DEFAULT 0
+);
+
+ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.analytics FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.analytics FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.analytics FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.analytics FOR DELETE USING (true);
+
+-- Insert initial row if not exists
+INSERT INTO public.analytics (id, visit_count)
+VALUES ('site-visitors', 0)
+ON CONFLICT (id) DO NOTHING;`}
                     </pre>
                     <button
                       onClick={() => {
@@ -1825,7 +2157,24 @@ ALTER TABLE public.reported_posts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read" ON public.reported_posts FOR SELECT TO public USING (true);
 CREATE POLICY "Allow anon insert" ON public.reported_posts FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow anon update" ON public.reported_posts FOR UPDATE USING (true);
-CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (true);`;
+CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (true);
+
+-- 10. ANALYTICS TABLE
+CREATE TABLE IF NOT EXISTS public.analytics (
+    id TEXT PRIMARY KEY,
+    visit_count INT DEFAULT 0
+);
+
+ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.analytics FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.analytics FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.analytics FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.analytics FOR DELETE USING (true);
+
+-- Insert initial row if not exists
+INSERT INTO public.analytics (id, visit_count)
+VALUES ('site-visitors', 0)
+ON CONFLICT (id) DO NOTHING;`;
                         navigator.clipboard.writeText(sqlText);
                         alert('All SQL Schemas copied to clipboard!');
                       }}
@@ -2320,6 +2669,42 @@ CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (tru
                 </button>
               </form>
             </div>
+
+            {/* Google Search Console Verification Card */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+                <Globe size={15} className="text-teal-600" />
+                Google Search Console
+              </h3>
+
+              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
+                Verify ownership and index your job portal. Supports HTML file hash codes (e.g. google1234567.html) and meta-tags.
+              </p>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Verification Token / Code</label>
+                  <input
+                    type="text"
+                    value={googleSiteVerification}
+                    onChange={(e) => setGoogleSiteVerification(e.target.value)}
+                    placeholder="e.g. google876543210abcdef"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                  <span>{isSavingSettings ? 'Saving...' : 'Save Verification Code'}</span>
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Transactions Table Log */}
@@ -2616,6 +3001,60 @@ CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (tru
                 })()}
               </div>
             </div>
+          </div>
+
+          {/* Community Feed Customization Section */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+              <Users size={15} className="text-teal-600" />
+              Community Feed Customization
+            </h3>
+            <p className="text-[10px] text-gray-500 font-semibold leading-normal">
+              Customize placeholder text and guidelines shown on the community feed to your users.
+            </p>
+
+            <form onSubmit={handleSaveSettings} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Post Placeholder Text</label>
+                <input
+                  type="text"
+                  value={communityMindPlaceholder}
+                  onChange={(e) => setCommunityMindPlaceholder(e.target.value)}
+                  placeholder="e.g. What's on your mind, {name}?"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                />
+                <p className="text-[9px] text-gray-400 mt-1">
+                  Default placeholder: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">What's on your mind, {"{name}"}?</code> (Leave empty to use default)
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Review Guideline / Notice Description</label>
+                <input
+                  type="text"
+                  value={communityReviewNotice}
+                  onChange={(e) => setCommunityReviewNotice(e.target.value)}
+                  placeholder="e.g. Posts are reviewed before going live."
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                />
+                <p className="text-[9px] text-gray-400 mt-1">
+                  Default notice: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">Posts are reviewed before going live.</code> (Leave empty to use default)
+                </p>
+              </div>
+
+              <div className="md:col-span-2 pt-2 border-t border-slate-50">
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className={`px-6 py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center gap-1.5 font-display ${
+                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                  <span>{isSavingSettings ? 'Saving...' : 'Save Community Settings'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

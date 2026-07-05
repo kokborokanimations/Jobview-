@@ -90,6 +90,12 @@ export interface AdminSettings {
   supabaseAnonKey?: string;
   supabaseServiceRoleKey?: string;
   serpapiApiKey?: string;
+  googleSiteVerification?: string;
+  communityMindPlaceholder?: string;
+  communityReviewNotice?: string;
+  loginTitle?: string;
+  loginSubtitle?: string;
+  googleOnly?: boolean;
 }
 
 export interface PaymentLog {

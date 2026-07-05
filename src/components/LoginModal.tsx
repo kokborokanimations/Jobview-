@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, FormEvent } from 'react';
-import { User } from '../types';
+import { User, AdminSettings } from '../types';
 import { LogIn, Sparkles, Mail, User as UserIcon, X } from 'lucide-react';
 import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
@@ -12,9 +12,10 @@ interface LoginModalProps {
   onLogin: (user: User) => void;
   onClose?: () => void;
   isClosable?: boolean;
+  settings?: AdminSettings;
 }
 
-export default function LoginModal({ onLogin, onClose, isClosable = false }: LoginModalProps) {
+export default function LoginModal({ onLogin, onClose, isClosable = false, settings }: LoginModalProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -242,9 +243,11 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
           <div className="inline-flex items-center justify-center w-12 h-12 mb-3 md:mb-4 bg-teal-50 text-teal-600 rounded-full">
             <LogIn size={24} />
           </div>
-          <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight font-display">Welcome to Jobview</h2>
+          <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight font-display">
+            {settings?.loginTitle || "Welcome to Jobview"}
+          </h2>
           <p className="mt-1.5 md:mt-2 text-xs md:text-sm text-slate-500 max-w-sm mx-auto">
-            Sign in to unlock verified hiring managers, contact details, and our community wall.
+            {settings?.loginSubtitle || "Sign in to unlock verified hiring managers, contact details, and our community wall."}
           </p>
         </div>
 
@@ -267,6 +270,7 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
                     <g transform="matrix(1, 0, 0, 1, 0, 0)">
                       <path d="M21.35,11.1H12v2.7h5.38c-0.24,1.28 -0.96,2.37 -2.04,3.1v2.56h3.3c1.93,-1.78 3.04,-4.4 3.04,-7.48c0,-0.61 -0.05,-1.2 -0.15,-1.78Z" fill="#4285F4" />
                       <path d="M12,20.6c2.56,0 4.71,-0.85 6.28,-2.3l-3.3,-2.56c-0.91,0.61 -2.08,0.98 -2.98,0.98c-2.3,0 -4.25,-1.55 -4.94,-3.64H3.63v2.64c1.55,3.08 4.75,5.18 8.37,5.18Z" fill="#34A853" />
+                      <path d="M7.06,13.08c-0.18,-0.54 -0.28,-1.11 -0.28,-1.7s0.1,-1.16 0.28,-1.7V7.04H3.63v5.36c1.55-3.08 4.75-5.18 8.37-5.18Z" fill="#FBBC05" className="hidden" />
                       <path d="M7.06,13.08c-0.18,-0.54 -0.28,-1.11 -0.28,-1.7s0.1,-1.16 0.28,-1.7V7.04H3.63c-0.6,1.2 -0.94,2.56 -0.94,4c0,1.44 0.34,2.8 0.94,4l3.43,-2.66Z" fill="#FBBC05" />
                       <path d="M12,6.12c1.39,0 2.64,0.48 3.63,1.42l2.72,-2.72C16.71,3.22 14.56,2.4 12,2.4c-3.62,0 -6.82,2.1 -8.37,5.18l3.43,2.66c0.69,-2.09 2.64,-3.64 4.94,-3.64Z" fill="#EA4335" />
                     </g>
@@ -277,99 +281,103 @@ export default function LoginModal({ onLogin, onClose, isClosable = false }: Log
             </button>
           </div>
 
-          {/* Divider */}
-          <div className="relative my-4 text-center">
-            <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
-            <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
-              Or Enter Email Details
-            </span>
-          </div>
+          {error && (
+            <p className="text-xs font-medium text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-100 mb-4">
+              {error}
+            </p>
+          )}
 
-          <form onSubmit={handleDemoLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
-                Your Name
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <UserIcon size={18} />
+          {!settings?.googleOnly && (
+            <>
+              {/* Divider */}
+              <div className="relative my-4 text-center">
+                <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
+                <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
+                  Or Enter Email Details
                 </span>
-                <input
-                  type="text"
-                  placeholder="John Doe (Optional)"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
-                />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
-                Email Address
-              </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                  <Mail size={18} />
+              <form onSubmit={handleDemoLogin} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
+                    Your Name
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <UserIcon size={18} />
+                    </span>
+                    <input
+                      type="text"
+                      placeholder="John Doe (Optional)"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
+                    Email Address
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <Mail size={18} />
+                    </span>
+                    <input
+                      type="email"
+                      required
+                      placeholder="you@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold tracking-wide shadow-md hover:shadow-lg hover:shadow-teal-600/10 transition-all text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 font-display"
+                >
+                  {isLoading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      <span>Continue with Email</span>
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Divider */}
+              <div className="relative my-6 text-center">
+                <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
+                <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
+                  Or Fast-Pass Login
                 </span>
-                <input
-                  type="email"
-                  required
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
-                />
               </div>
-            </div>
 
-            {error && (
-              <p className="text-xs font-medium text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-100">
-                {error}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl font-bold tracking-wide shadow-md hover:shadow-lg hover:shadow-teal-600/10 transition-all text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 font-display"
-            >
-              {isLoading ? (
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Sparkles size={16} />
-                  <span>Continue with Email</span>
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="relative my-6 text-center">
-            <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
-            <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
-              Or Fast-Pass Login
-            </span>
-          </div>
-
-          {/* Fast-Pass Options */}
-          <div className="grid grid-cols-2 gap-3 font-display">
-            <button
-              onClick={loginAsAdmin}
-              disabled={isLoading}
-              className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-950 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              👑 Admin Demo
-            </button>
-            <button
-              onClick={loginAsUser}
-              disabled={isLoading}
-              className="px-4 py-2.5 text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 hover:text-teal-950 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              👤 Candidate Demo
-            </button>
-          </div>
+              {/* Fast-Pass Options */}
+              <div className="grid grid-cols-2 gap-3 font-display">
+                <button
+                  onClick={loginAsAdmin}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-950 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  👑 Admin Demo
+                </button>
+                <button
+                  onClick={loginAsUser}
+                  disabled={isLoading}
+                  className="px-4 py-2.5 text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 hover:text-teal-950 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  👤 Candidate Demo
+                </button>
+              </div>
+            </>
+          )}
 
           {isClosable && onClose && (
             <button

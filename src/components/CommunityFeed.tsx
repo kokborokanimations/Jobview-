@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef, FormEvent, DragEvent, ChangeEvent } from 'react';
-import { CommunityPost, User } from '../types';
+import { CommunityPost, User, AdminSettings } from '../types';
 import { 
   Heart, Bookmark, Share2, Image as ImageIcon, Send, 
   Trash2, Plus, UploadCloud, X, Check, Clock
@@ -18,6 +18,7 @@ interface CommunityFeedProps {
   onLoginTrigger: () => void;
   bookmarkedPostIds: string[];
   onToggleBookmark: (postId: string) => void;
+  settings?: AdminSettings;
 }
 
 export default function CommunityFeed({ 
@@ -27,7 +28,8 @@ export default function CommunityFeed({
   onDeletePost,
   onLoginTrigger,
   bookmarkedPostIds,
-  onToggleBookmark
+  onToggleBookmark,
+  settings
 }: CommunityFeedProps) {
   const [caption, setCaption] = useState('');
   const [imageFile, setImageFile] = useState<string | null>(null);
@@ -35,6 +37,20 @@ export default function CommunityFeed({
   const [isDragging, setIsDragging] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getMindPlaceholder = () => {
+    const configured = settings?.communityMindPlaceholder;
+    const name = user 
+      ? (user.email.toLowerCase() === 'kokborokanimations@gmail.com' ? 'Admin' : (user.name || 'User')) 
+      : 'Admin';
+    
+    if (configured) {
+      return configured
+        .replace(/\{name\}/gi, name)
+        .replace(/\{user\}/gi, name);
+    }
+    return `What's on your mind, ${name}?`;
+  };
 
   // States for interactive feed actions
   const [likedPostIds, setLikedPostIds] = useState<string[]>(() => {
@@ -176,13 +192,7 @@ export default function CommunityFeed({
             <div className="flex-1 pt-2">
               <textarea
                 rows={2}
-                placeholder={
-                  user 
-                    ? (user.email.toLowerCase() === 'kokborokanimations@gmail.com' 
-                        ? "What's on your mind, Admin?" 
-                        : `What's on your mind, ${user.name || 'User'}?`)
-                    : "What's on your mind, Admin?"
-                }
+                placeholder={getMindPlaceholder()}
                 value={caption}
                 onChange={(e) => {
                   if (!user) {
@@ -264,7 +274,7 @@ export default function CommunityFeed({
 
           {/* Notice: Posts are reviewed before going live */}
           <div className="text-[12px] text-slate-500 font-medium font-sans pl-1 pt-1.5 leading-none">
-            Posts are reviewed before going live.
+            {settings?.communityReviewNotice || "Posts are reviewed before going live."}
           </div>
 
         </form>

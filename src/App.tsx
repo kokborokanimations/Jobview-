@@ -104,6 +104,11 @@ export default function App() {
   // Load Initial Data
   useEffect(() => {
     fetchInitialData();
+    
+    // Track site visit count in Supabase analytics
+    import('./lib/supabaseQueries')
+      .then(({ incrementVisitCount }) => incrementVisitCount())
+      .catch(err => console.error('Error auto-incrementing visitor count:', err));
   }, []);
 
   // Update browser document title and favicon dynamically when settings change
@@ -654,6 +659,7 @@ export default function App() {
                   onLoginTrigger={() => setShowLoginModal(true)}
                   bookmarkedPostIds={bookmarkedPostIds}
                   onToggleBookmark={handleToggleBookmark}
+                  settings={settings}
                 />
               )
             )}
@@ -750,6 +756,7 @@ export default function App() {
           onLogin={handleLogin}
           onClose={() => setShowLoginModal(false)}
           isClosable={true}
+          settings={settings}
         />
       )}
 

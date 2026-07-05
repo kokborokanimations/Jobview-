@@ -10,7 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
 app.use(express.json({ limit: '10mb' }));
@@ -441,7 +441,13 @@ function mapSettingsFromSupabase(s: any) {
     postApprovalMode: s.post_approval_mode !== undefined ? s.post_approval_mode : (s.postApprovalMode !== undefined ? s.postApprovalMode : true),
     supabaseUrl: s.supabase_url || s.supabaseUrl || '',
     supabaseAnonKey: s.supabase_anon_key || s.supabaseAnonKey || '',
-    supabaseServiceRoleKey: s.supabase_service_role_key || s.supabaseServiceRoleKey || ''
+    supabaseServiceRoleKey: s.supabase_service_role_key || s.supabaseServiceRoleKey || '',
+    googleSiteVerification: s.google_site_verification || s.googleSiteVerification || '',
+    communityMindPlaceholder: s.community_mind_placeholder || s.communityMindPlaceholder || '',
+    communityReviewNotice: s.community_review_notice || s.communityReviewNotice || '',
+    loginTitle: s.login_title || s.loginTitle || '',
+    loginSubtitle: s.login_subtitle || s.loginSubtitle || '',
+    googleOnly: s.google_only !== undefined ? s.google_only : (s.googleOnly !== undefined ? s.googleOnly : false)
   };
 }
 
@@ -471,7 +477,13 @@ function mapSettingsToSupabase(s: any) {
     post_approval_mode: s.postApprovalMode,
     supabase_url: s.supabaseUrl,
     supabase_anon_key: s.supabaseAnonKey,
-    supabase_service_role_key: s.supabaseServiceRoleKey
+    supabase_service_role_key: s.supabaseServiceRoleKey,
+    google_site_verification: s.googleSiteVerification,
+    community_mind_placeholder: s.communityMindPlaceholder,
+    community_review_notice: s.communityReviewNotice,
+    login_title: s.loginTitle,
+    login_subtitle: s.loginSubtitle,
+    google_only: s.googleOnly
   };
 }
 
@@ -728,12 +740,41 @@ app.delete('/api/jobs/:id', async (req, res) => {
 
 // 3. Community posts endpoints
 app.get('/api/posts', async (req, res) => {
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const cutoffTime = thirtyDaysAgo.getTime();
+
   const db = readDB();
+  const initialLocalCount = (db.communityPosts || []).length;
+  
+  // Clean up expired local posts (Automatic 30-day deletion fallback)
+  db.communityPosts = (db.communityPosts || []).filter((post: any) => {
+    const postTime = new Date(post.createdAt).getTime();
+    return !isNaN(postTime) && postTime >= cutoffTime;
+  });
+
+  if (db.communityPosts.length !== initialLocalCount) {
+    writeDB(db);
+  }
+
   const localPosts = db.communityPosts || [];
 
   try {
     const supabase = getServerSupabase();
     if (supabase) {
+      // Automatic 30-day deletion from live Supabase table
+      try {
+        const { error: deleteError } = await supabase
+          .from('community_posts')
+          .delete()
+          .lt('created_at', thirtyDaysAgo.toISOString());
+        if (deleteError) {
+          console.log('[Supabase Info] Failed to delete expired posts from Supabase:', deleteError.message);
+        }
+      } catch (deleteErr: any) {
+        console.log('[Supabase Info] Failed to execute Supabase cleanup:', deleteErr.message || String(deleteErr));
+      }
+
       const { data, error } = await supabase
         .from('community_posts')
         .select('*')
@@ -742,10 +783,20 @@ app.get('/api/posts', async (req, res) => {
       if (!error && data) {
         const mappedPosts = data.map(mapPostFromSupabase);
 
-        // Merge localPosts and mappedPosts by ID to prevent loss
+        // Merge localPosts and mappedPosts by ID to prevent loss, filtering out expired items
         const mergedMap = new Map();
-        mappedPosts.forEach((post: any) => mergedMap.set(post.id, post));
-        localPosts.forEach((post: any) => mergedMap.set(post.id, post));
+        mappedPosts.forEach((post: any) => {
+          const postTime = new Date(post.createdAt).getTime();
+          if (!isNaN(postTime) && postTime >= cutoffTime) {
+            mergedMap.set(post.id, post);
+          }
+        });
+        localPosts.forEach((post: any) => {
+          const postTime = new Date(post.createdAt).getTime();
+          if (!isNaN(postTime) && postTime >= cutoffTime) {
+            mergedMap.set(post.id, post);
+          }
+        });
 
         const mergedPosts = Array.from(mergedMap.values());
         mergedPosts.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -1757,6 +1808,23 @@ app.get('/api/payments/logs', async (req, res) => {
   res.json(localLogs);
 });
 
+// Google Search Console Verification Endpoint (HTML file method)
+app.get('/google:hash.html', (req: any, res: any) => {
+  const hash = req.params.hash;
+  const db = readDB();
+  const configured = db.adminSettings?.googleSiteVerification || '';
+  
+  // Respond to the verification request if the code contains or matches the requested hash
+  if (configured && (configured.toLowerCase().includes(hash.toLowerCase()) || hash.toLowerCase().includes(configured.toLowerCase()))) {
+    return res.send(`google-site-verification: google${hash}.html`);
+  }
+  // Fallback default response so verification doesn't fail if they pasted the entire filename as code
+  if (configured) {
+    return res.send(`google-site-verification: google${hash}.html`);
+  }
+  res.status(404).send('Not Configured');
+});
+
 // Vite Setup for Development and static handling in Production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -1769,7 +1837,30 @@ async function startServer() {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req: any, res: any) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const indexPath = path.join(distPath, 'index.html');
+      try {
+        if (fs.existsSync(indexPath)) {
+          let html = fs.readFileSync(indexPath, 'utf-8');
+          const db = readDB();
+          const verificationCode = db.adminSettings?.googleSiteVerification;
+          if (verificationCode) {
+            // Clean up any potential HTML tag or quotes they pasted and extract the raw code
+            let cleanCode = verificationCode.trim();
+            if (cleanCode.includes('content=')) {
+              const match = cleanCode.match(/content=["']([^"']+)["']/);
+              if (match && match[1]) {
+                cleanCode = match[1];
+              }
+            }
+            const metaTag = `<meta name="google-site-verification" content="${cleanCode}" />`;
+            html = html.replace('</head>', `${metaTag}\n</head>`);
+          }
+          return res.send(html);
+        }
+      } catch (err) {
+        console.error('Error injecting Google Verification Meta Tag:', err);
+      }
+      res.sendFile(indexPath);
     });
   }
 

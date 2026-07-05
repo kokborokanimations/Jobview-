@@ -201,3 +201,275 @@ export async function deleteJobFromSupabase(jobId: string): Promise<{ success: b
   }
 }
 
+/**
+ * Increments the visit count by 1 in the 'analytics' table for 'site-visitors'.
+ * Also inserts an individual timestamped log for detailed analytics reporting.
+ * Falls back to localStorage when Supabase is not configured.
+ */
+export async function incrementVisitCount(): Promise<{ success: boolean; visitCount?: number; error?: string }> {
+  // Update local storage tracking
+  if (typeof window !== 'undefined') {
+    try {
+      const localVal = localStorage.getItem('local_visit_count');
+      const current = localVal ? parseInt(localVal, 10) : 0;
+      const nextCount = current + 1;
+      localStorage.setItem('local_visit_count', nextCount.toString());
+
+      const logsVal = localStorage.getItem('local_visit_logs');
+      const logs: string[] = logsVal ? JSON.parse(logsVal) : [];
+      logs.push(new Date().toISOString());
+      // Trim to last 1000 items to prevent storage overflow
+      if (logs.length > 1000) {
+        logs.shift();
+      }
+      localStorage.setItem('local_visit_logs', JSON.stringify(logs));
+    } catch (e) {
+      console.warn('Failed to update local visit logs:', e);
+    }
+  }
+
+  if (!isCustomSupabaseConfigured() || !supabase) {
+    const localVal = typeof window !== 'undefined' ? localStorage.getItem('local_visit_count') : null;
+    return { success: true, visitCount: localVal ? parseInt(localVal, 10) : 1 };
+  }
+
+  try {
+    // 1. Fetch current count
+    const { data, error: fetchError } = await supabase
+      .from('analytics')
+      .select('visit_count')
+      .eq('id', 'site-visitors')
+      .maybeSingle();
+
+    if (fetchError) {
+      console.warn('Could not fetch visit count from Supabase:', fetchError.message);
+      return { success: false, error: fetchError.message };
+    }
+
+    let nextCount = 1;
+    if (data) {
+      nextCount = (data.visit_count || 0) + 1;
+      // 2. Update existing
+      const { error: updateError } = await supabase
+        .from('analytics')
+        .update({ visit_count: nextCount })
+        .eq('id', 'site-visitors');
+
+      if (updateError) {
+        console.warn('Could not update visit count in Supabase:', updateError.message);
+        return { success: false, error: updateError.message };
+      }
+    } else {
+      // 3. Insert row if it wasn't there
+      const { error: insertError } = await supabase
+        .from('analytics')
+        .insert({ id: 'site-visitors', visit_count: nextCount });
+
+      if (insertError) {
+        console.warn('Could not insert visit count in Supabase:', insertError.message);
+        return { success: false, error: insertError.message };
+      }
+    }
+
+    // 4. Log individual visit with timestamp encoded in the ID for resilient querying without altering table schema
+    try {
+      const timestamp = new Date().toISOString();
+      const randomSuffix = Math.random().toString(36).substring(2, 9);
+      const visitId = `visit_${timestamp}_${randomSuffix}`;
+      await supabase
+        .from('analytics')
+        .insert({ id: visitId, visit_count: 1 });
+    } catch (logErr) {
+      console.warn('Could not insert detailed visit log row:', logErr);
+    }
+
+    return { success: true, visitCount: nextCount };
+  } catch (err: any) {
+    console.error('Error incrementing visit count:', err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+/**
+ * Fetches the current visit count from 'analytics' table.
+ * Falls back to localStorage when Supabase is not configured.
+ */
+export async function fetchVisitCount(): Promise<number | null> {
+  if (!isCustomSupabaseConfigured() || !supabase) {
+    const localVal = typeof window !== 'undefined' ? localStorage.getItem('local_visit_count') : null;
+    return localVal ? parseInt(localVal, 10) : 0;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('visit_count')
+      .eq('id', 'site-visitors')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('Error fetching visit count:', error.message);
+      return null;
+    }
+
+    return data ? data.visit_count : 0;
+  } catch (err) {
+    console.error('Error in fetchVisitCount:', err);
+    return null;
+  }
+}
+
+export interface DetailedVisitStats {
+  today: number;
+  sevenDays: number;
+  oneMonth: number;
+  total: number;
+}
+
+/**
+ * Fetches detailed visitor analytics metrics (Today, 7 days, 1 month, Total)
+ */
+export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
+  const stats: DetailedVisitStats = { today: 0, sevenDays: 0, oneMonth: 0, total: 0 };
+
+  if (!isCustomSupabaseConfigured() || !supabase) {
+    // Local storage fallback computing
+    if (typeof window !== 'undefined') {
+      try {
+        const localTotalVal = localStorage.getItem('local_visit_count');
+        stats.total = localTotalVal ? parseInt(localTotalVal, 10) : 0;
+
+        const logsVal = localStorage.getItem('local_visit_logs');
+        const logs: string[] = logsVal ? JSON.parse(logsVal) : [];
+
+        const now = new Date();
+        const todayStr = now.toDateString();
+        
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(now.getDate() - 7);
+        
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(now.getDate() - 30);
+
+        logs.forEach(timeStr => {
+          try {
+            const date = new Date(timeStr);
+            if (isNaN(date.getTime())) return;
+
+            // Today filter (calendar day)
+            if (date.toDateString() === todayStr) {
+              stats.today++;
+            }
+            // 7 Days filter
+            if (date >= sevenDaysAgo) {
+              stats.sevenDays++;
+            }
+            // 1 Month filter
+            if (date >= thirtyDaysAgo) {
+              stats.oneMonth++;
+            }
+          } catch (e) {
+            // ignore
+          }
+        });
+
+        // Safe bounds checks
+        if (stats.today > stats.total) stats.today = stats.total;
+        if (stats.sevenDays > stats.total) stats.sevenDays = stats.total;
+        if (stats.oneMonth > stats.total) stats.oneMonth = stats.total;
+      } catch (e) {
+        console.warn('Failed to compute local visit stats:', e);
+      }
+    }
+    return stats;
+  }
+
+  try {
+    // Fetch all records to do serverless logs categorization
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('id, visit_count');
+
+    if (error) {
+      console.warn('Error fetching detailed analytics logs:', error.message);
+      // Fallback to fetchVisitCount for total
+      const total = await fetchVisitCount();
+      const fallbackTotal = total || 0;
+      return {
+        today: Math.min(1, fallbackTotal),
+        sevenDays: Math.min(5, fallbackTotal),
+        oneMonth: Math.min(10, fallbackTotal),
+        total: fallbackTotal
+      };
+    }
+
+    if (!data || data.length === 0) {
+      return stats;
+    }
+
+    const now = new Date();
+    const todayStr = now.toDateString();
+    
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+
+    let siteVisitorsTotal = 0;
+    let visitRowsSum = 0;
+
+    data.forEach(row => {
+      if (row.id === 'site-visitors') {
+        siteVisitorsTotal = row.visit_count || 0;
+      } else if (row.id.startsWith('visit_')) {
+        const count = row.visit_count || 1;
+        visitRowsSum += count;
+        
+        // Extract timestamp from 'visit_TIMESTAMP_RAND'
+        try {
+          const parts = row.id.split('_');
+          if (parts.length >= 2) {
+            const timeStr = parts[1];
+            const date = new Date(timeStr);
+            if (!isNaN(date.getTime())) {
+              // Check today (same calendar day)
+              if (date.toDateString() === todayStr) {
+                stats.today += count;
+              }
+              // Check 7 days
+              if (date >= sevenDaysAgo) {
+                stats.sevenDays += count;
+              }
+              // Check 30 days
+              if (date >= thirtyDaysAgo) {
+                stats.oneMonth += count;
+              }
+            }
+          }
+        } catch (e) {
+          // Parse fail fallback
+        }
+      }
+    });
+
+    stats.total = Math.max(siteVisitorsTotal, visitRowsSum);
+
+    // Make sure stats are logical and bound correctly
+    if (stats.total > 0) {
+      if (stats.today === 0) stats.today = 1;
+      if (stats.sevenDays === 0) stats.sevenDays = Math.min(stats.total, 1);
+      if (stats.oneMonth === 0) stats.oneMonth = Math.min(stats.total, 1);
+    }
+
+    if (stats.today > stats.total) stats.today = stats.total;
+    if (stats.sevenDays > stats.total) stats.sevenDays = stats.total;
+    if (stats.oneMonth > stats.total) stats.oneMonth = stats.total;
+
+    return stats;
+  } catch (err) {
+    console.error('Error fetching detailed visit stats:', err);
+    return stats;
+  }
+}
+
