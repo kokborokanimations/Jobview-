@@ -10,7 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), 'db.json');
 
 app.use(express.json({ limit: '10mb' }));
@@ -1896,6 +1896,16 @@ app.get('/google:hash.html', (req: any, res: any) => {
   res.status(404).send('Not Configured');
 });
 
+function escapeHtml(unsafe: string): string {
+  if (!unsafe) return '';
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 // Vite Setup for Development and static handling in Production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
@@ -1913,6 +1923,79 @@ async function startServer() {
         if (fs.existsSync(indexPath)) {
           let html = fs.readFileSync(indexPath, 'utf-8');
           const db = readDB();
+
+          // SEO & Sharing Preview Meta Injector
+          const settings = db.adminSettings || {};
+          const brand = settings.brandName || 'Jobview';
+          const tagline = settings.tagline || 'Your Premium Portal to Verified Careers & Networking';
+          const bannerUrl = settings.bannerUrl || '';
+          const logoUrl = settings.logoUrl || '';
+
+          let title = brand;
+          if (tagline) {
+            title = `${brand} - ${tagline}`;
+          }
+          let description = tagline;
+          let imageUrl = bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop';
+
+          // Detect specific job preview
+          if (req.query.job_id) {
+            const jobId = req.query.job_id;
+            const jobs = db.jobs || [];
+            const foundJob = jobs.find((j: any) => String(j.id) === String(jobId));
+            if (foundJob) {
+              title = `${foundJob.title} at ${foundJob.companyName} | ${brand}`;
+              description = foundJob.shortDescription || foundJob.fullDescription || description;
+              if (foundJob.companyLogoUrl) {
+                imageUrl = foundJob.companyLogoUrl;
+              }
+            }
+          } 
+          // Detect specific community post preview
+          else if (req.query.post_id) {
+            const postId = req.query.post_id;
+            const posts = db.communityPosts || [];
+            const foundPost = posts.find((p: any) => String(p.id) === String(postId));
+            if (foundPost) {
+              title = `Post by ${foundPost.userName || 'Member'} | ${brand}`;
+              description = foundPost.caption || description;
+              if (foundPost.imageUrl) {
+                imageUrl = foundPost.imageUrl;
+              } else if (foundPost.userAvatar) {
+                imageUrl = foundPost.userAvatar;
+              }
+            }
+          }
+
+          // Build dynamic URL for metadata
+          const host = req.get('host') || 'sebok.in';
+          const protocol = req.protocol || 'https';
+          const fullUrl = `${protocol}://${host}${req.originalUrl || '/'}`;
+
+          // Escape values to safely put in HTML
+          const escapedTitle = escapeHtml(title);
+          const escapedDescription = escapeHtml(description);
+          const escapedImage = escapeHtml(imageUrl);
+          const escapedUrl = escapeHtml(fullUrl);
+
+          // Meta tags block
+          const metadataHtml = `
+  <title>${escapedTitle}</title>
+  <meta name="description" content="${escapedDescription}" />
+  <meta property="og:title" content="${escapedTitle}" />
+  <meta property="og:description" content="${escapedDescription}" />
+  <meta property="og:image" content="${escapedImage}" />
+  <meta property="og:url" content="${escapedUrl}" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="${escapedTitle}" />
+  <meta name="twitter:description" content="${escapedDescription}" />
+  <meta name="twitter:image" content="${escapedImage}" />
+`;
+
+          // Replace the default static title block with dynamic meta tags
+          html = html.replace(/<title>.*?<\/title>/i, metadataHtml);
+
           const verificationCode = db.adminSettings?.googleSiteVerification;
           if (verificationCode) {
             // Clean up any potential HTML tag or quotes they pasted and extract the raw code

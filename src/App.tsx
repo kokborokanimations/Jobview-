@@ -45,6 +45,7 @@ export default function App() {
   const [users, setUsers] = useState<User[]>([]);
   const [footerPages, setFooterPages] = useState<any[]>([]);
   const [activeFooterPage, setActiveFooterPage] = useState<any | null>(null);
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   // Synchronized bookmark states
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState<string[]>(() => {
@@ -212,6 +213,46 @@ export default function App() {
         .catch(err => console.error('Error syncing bookmarks on user load:', err));
     }
   }, [user, posts]);
+
+  // URL routing for Custom dynamic pages on load
+  useEffect(() => {
+    if (footerPages.length > 0 && !initialCheckDone) {
+      const path = window.location.pathname.replace(/^\/p\//, '/').replace(/^\//, '').toLowerCase();
+      const found = footerPages.find(p => p.slug.toLowerCase() === path);
+      if (found) {
+        setActiveFooterPage(found);
+      }
+      setInitialCheckDone(true);
+    }
+  }, [footerPages, initialCheckDone]);
+
+  // Sync URL with activeFooterPage state changes
+  useEffect(() => {
+    if (!initialCheckDone) return;
+    if (activeFooterPage) {
+      if (window.location.pathname !== `/${activeFooterPage.slug}`) {
+        window.history.pushState(null, '', `/${activeFooterPage.slug}`);
+      }
+    } else {
+      const path = window.location.pathname.replace(/^\/p\//, '/').replace(/^\//, '').toLowerCase();
+      const isPagePath = footerPages.some(p => p.slug.toLowerCase() === path);
+      if (isPagePath) {
+        window.history.pushState(null, '', '/');
+      }
+    }
+  }, [activeFooterPage, footerPages, initialCheckDone]);
+
+  // Handle browser Back / Forward buttons for dynamic pages
+  useEffect(() => {
+    const handlePopState = () => {
+      if (footerPages.length === 0) return;
+      const path = window.location.pathname.replace(/^\/p\//, '/').replace(/^\//, '').toLowerCase();
+      const found = footerPages.find(p => p.slug.toLowerCase() === path);
+      setActiveFooterPage(found || null);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [footerPages]);
 
   const fetchInitialData = async () => {
     setIsLoading(true);
