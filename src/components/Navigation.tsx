@@ -8,8 +8,8 @@ import { User } from '../types';
 import { motion } from 'motion/react';
 
 interface NavigationProps {
-  currentTab: 'jobs' | 'community' | 'profile' | 'admin';
-  onChangeTab: (tab: 'jobs' | 'community' | 'profile' | 'admin') => void;
+  currentTab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings';
+  onChangeTab: (tab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings') => void;
   user: User | null;
 }
 

@@ -14,7 +14,7 @@ import Paywall from './components/Paywall';
 import AdminPanel from './components/AdminPanel';
 import LoginModal from './components/LoginModal';
 import UserProfile from './components/UserProfile';
-import { X } from 'lucide-react';
+import { X, Settings, LogOut, FileText, ChevronRight } from 'lucide-react';
 import { getUserBadge } from './lib/badgeUtils';
 import Toast from './components/Toast';
 import { ContactForm } from './components/ContactForm';
@@ -23,8 +23,8 @@ export default function App() {
   // Global States
   const [user, setUser] = useState<User | null>(null);
   const [settings, setSettings] = useState<AdminSettings>({
-    brandName: 'Jobview',
-    tagline: 'Your Premium Portal to Verified Careers & Networking',
+    brandName: '',
+    tagline: '',
     logoUrl: '',
     bannerUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
     premiumMode: true,
@@ -79,7 +79,7 @@ export default function App() {
   };
   
   // Navigation
-  const [currentTab, setCurrentTab] = useState<'jobs' | 'community' | 'admin' | 'profile'>('jobs');
+  const [currentTab, setCurrentTab] = useState<'jobs' | 'community' | 'admin' | 'profile' | 'settings'>('jobs');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -791,6 +791,85 @@ export default function App() {
                 onDeletePost={handleDeletePost}
               />
             )}
+
+            {/* 5. App Settings */}
+            {currentTab === 'settings' && (
+              <div className="max-w-md mx-auto px-4 py-8 animate-fade-in space-y-6">
+                <div className="flex items-center gap-3 border-b border-slate-100 pb-4">
+                  <div className="p-2 bg-teal-50 text-teal-600 rounded-xl">
+                    <Settings size={20} className="stroke-[2.5]" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 font-display">Account Settings</h2>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Manage your app experience & pages</p>
+                  </div>
+                </div>
+
+                {/* User Info Card */}
+                {user && (
+                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-white border border-slate-200 p-0.5 overflow-hidden flex items-center justify-center shrink-0">
+                      <img
+                        src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`}
+                        alt={user.name}
+                        className="w-full h-full rounded-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-950 truncate">{user.name}</p>
+                      <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Dynamic Pages List */}
+                <div className="space-y-2.5">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Available Pages & Docs</span>
+                  
+                  {footerPages.length > 0 ? (
+                    <div className="bg-white border border-slate-200/80 rounded-2xl divide-y divide-slate-100 overflow-hidden shadow-xs">
+                      {footerPages.map((p) => (
+                        <button
+                          key={p.id}
+                          onClick={() => setActiveFooterPage(p)}
+                          className="w-full flex items-center justify-between p-3.5 text-left hover:bg-slate-50 transition-colors group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="p-1.5 bg-slate-50 text-slate-500 rounded-lg group-hover:bg-teal-50 group-hover:text-teal-600 transition-colors shrink-0">
+                              <FileText size={14} />
+                            </div>
+                            <div className="min-w-0">
+                              <span className="block text-xs font-bold text-slate-800 truncate group-hover:text-teal-600 transition-colors">
+                                {p.title}
+                              </span>
+                              <span className="block text-[9px] text-slate-400 font-mono">
+                                /{p.slug}
+                              </span>
+                            </div>
+                          </div>
+                          <ChevronRight size={14} className="text-slate-400 group-hover:text-teal-600 transition-colors" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-center py-6 text-xs text-slate-400 bg-white border border-slate-100 rounded-2xl">No pages available</p>
+                  )}
+                </div>
+
+                {/* Logout Security Block */}
+                <div className="space-y-2.5 pt-2">
+                  <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest font-display">Session Actions</span>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center justify-center gap-2 px-5 py-3.5 bg-white border border-rose-200 hover:border-rose-500 hover:bg-rose-50/50 text-rose-600 rounded-2xl text-xs font-black tracking-wider uppercase transition-all duration-200 shadow-xs cursor-pointer"
+                  >
+                    <LogOut size={14} />
+                    Logout Account
+                  </button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </main>
@@ -882,31 +961,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Responsive Footer Links */}
-      <footer className="bg-white border-t border-slate-200 py-10 mt-auto font-sans">
-        <div className="max-w-5xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex flex-col items-center md:items-start gap-1">
-            <span className="text-xs font-black text-slate-900 tracking-tight">{settings.brandName || 'Jobview'} Portal</span>
-            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{settings.tagline}</span>
-          </div>
-          
-          <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs font-bold text-slate-600">
-            {footerPages.filter(p => p.isVisibleInFooter).map(p => (
-              <button
-                key={p.id}
-                onClick={() => setActiveFooterPage(p)}
-                className="hover:text-teal-600 transition-colors cursor-pointer"
-              >
-                {p.title}
-              </button>
-            ))}
-          </div>
-          
-          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest text-center md:text-right">
-            © {new Date().getFullYear()} {settings.brandName || 'Jobview'}. ALL RIGHTS RESERVED.
-          </p>
-        </div>
-      </footer>
+
 
       {/* Global Success/Error Toast notification center */}
       <Toast />

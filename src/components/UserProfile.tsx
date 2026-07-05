@@ -326,12 +326,10 @@ export default function UserProfile({
               <div className="w-20 h-20 rounded-full bg-white border border-slate-200 p-1 shadow-xs hover:border-teal-400 transition-all shrink-0 flex items-center justify-center overflow-hidden">
                 <img
                   src={
-                    supabaseUser?.user_metadata?.avatar_url || 
-                    supabaseUser?.user_metadata?.picture || 
                     user.avatar || 
                     `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`
                   }
-                  alt={supabaseUser?.user_metadata?.full_name || supabaseUser?.user_metadata?.name || user.name}
+                  alt={user.name}
                   className="w-full h-full rounded-full object-cover"
                   referrerPolicy="no-referrer"
                 />
@@ -339,7 +337,7 @@ export default function UserProfile({
               <div className="space-y-1.5">
                 <div className="flex flex-col sm:flex-row items-center gap-2">
                   <h3 className="text-base font-extrabold text-slate-900 font-display">
-                    {supabaseUser?.user_metadata?.full_name || supabaseUser?.user_metadata?.name || user.name}
+                    {user.name}
                   </h3>
                   {getSubscriptionBadge()}
                 </div>
@@ -428,6 +426,46 @@ export default function UserProfile({
                     )}
                   </div>
                   <p className="text-[9px] text-slate-400">Supported: PNG, JPG, GIF, SVG or WebP. Max 5MB.</p>
+                </div>
+              </div>
+
+              {/* Default Premium Avatars Selection Grid */}
+              <div className="bg-white p-3.5 rounded-lg border border-slate-200 mb-1 space-y-2">
+                <span className="block text-[10px] font-bold text-slate-500 uppercase">
+                  Or choose a premium default avatar
+                </span>
+                <div className="flex flex-wrap gap-2.5 justify-start items-center">
+                  {[
+                    { name: 'Default Email Avatar', url: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || 'user')}` },
+                    { name: 'Felix', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Felix' },
+                    { name: 'Aneka', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Aneka' },
+                    { name: 'Jack', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Jack' },
+                    { name: 'Kim', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Kim' },
+                    { name: 'Cookie', url: 'https://api.dicebear.com/7.x/adventurer/svg?seed=Cookie' },
+                    { name: 'Initials', url: 'https://api.dicebear.com/7.x/initials/svg?seed=' + encodeURIComponent(editName || user.name || 'U') }
+                  ].map((av) => {
+                    const isSelected = editAvatar === av.url || (!editAvatar && av.name === 'Default Email Avatar');
+                    return (
+                      <button
+                        key={av.name}
+                        type="button"
+                        onClick={() => setEditAvatar(av.url)}
+                        title={av.name}
+                        className={`w-10 h-10 rounded-full border p-0.5 hover:scale-105 hover:border-teal-400 transition-all overflow-hidden bg-slate-50 relative shrink-0 ${
+                          isSelected ? 'border-teal-500 ring-2 ring-teal-500/15' : 'border-slate-200'
+                        }`}
+                      >
+                        <img src={av.url} alt={av.name} className="w-full h-full rounded-full object-cover" />
+                        {isSelected && (
+                          <div className="absolute inset-0 bg-teal-500/10 flex items-center justify-center">
+                            <div className="bg-teal-600 text-white rounded-full p-0.5 shadow-xs">
+                              <Check size={8} className="stroke-[3]" />
+                            </div>
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

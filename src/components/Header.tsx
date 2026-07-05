@@ -4,7 +4,7 @@
  */
 
 import { User, AdminSettings } from '../types';
-import { Briefcase, LogOut, User as UserIcon, ShieldAlert } from 'lucide-react';
+import { Briefcase, LogOut, User as UserIcon, ShieldAlert, Settings } from 'lucide-react';
 import { getUserBadge } from '../lib/badgeUtils';
 
 interface HeaderProps {
@@ -13,7 +13,7 @@ interface HeaderProps {
   onLogout: () => void;
   onLoginClick: () => void;
   onUpgradeClick?: () => void;
-  onChangeTab?: (tab: 'jobs' | 'community' | 'profile' | 'admin') => void;
+  onChangeTab?: (tab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings') => void;
 }
 
 export default function Header({ user, settings, onLogout, onLoginClick, onUpgradeClick, onChangeTab }: HeaderProps) {
@@ -40,7 +40,7 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="text-xl font-extrabold text-slate-900 tracking-tight leading-none font-display">
-                {settings.brandName || 'Jobview'}
+                {settings.brandName}
               </h1>
               {isAdmin && (
                 <span className="px-2 py-0.5 bg-teal-50 text-teal-700 text-[10px] font-bold tracking-widest uppercase rounded">
@@ -48,9 +48,11 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
                 </span>
               )}
             </div>
-            <p className="text-xs text-slate-500 mt-1 line-clamp-1 max-w-[180px] md:max-w-md">
-              {settings.tagline || 'Premium Careers Portal'}
-            </p>
+            {settings.tagline && (
+              <p className="text-xs text-slate-500 mt-1 line-clamp-1 max-w-[180px] md:max-w-md">
+                {settings.tagline}
+              </p>
+            )}
           </div>
         </div>
 
@@ -125,6 +127,14 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
                     >
                       <UserIcon size={14} className="text-slate-500" />
                       My Profile
+                    </button>
+
+                    <button
+                      onClick={() => onChangeTab?.('settings')}
+                      className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Settings size={14} className="text-slate-500" />
+                      Settings
                     </button>
 
                     {isAdmin && (
