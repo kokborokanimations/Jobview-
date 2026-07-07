@@ -473,3 +473,154 @@ export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
   }
 }
 
+/**
+ * 5. Fetch saved resumes from Supabase for a given user
+ */
+export async function fetchResumesFromSupabase(userId: string): Promise<any[]> {
+  if (!isCustomSupabaseConfigured() || !supabase) {
+    console.warn('Supabase is not configured.');
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('resumes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      // If table 'resumes' doesn't exist, try 'user_resumes'
+      if (error.code === 'PGRST116' || error.message?.includes('does not exist')) {
+        const { data: altData, error: altError } = await supabase
+          .from('user_resumes')
+          .select('*')
+          .eq('user_id', userId);
+          
+        if (altError) {
+          console.warn('Alt table user_resumes query failed:', altError.message);
+          return [];
+        }
+        return altData || [];
+      }
+      console.warn('Supabase resumes query error:', error.message);
+      return [];
+    }
+
+    return data || [];
+  } catch (err) {
+    console.error('Error fetching resumes from Supabase:', err);
+    return [];
+  }
+}
+
+/**
+ * 6. Save or update a resume in Supabase
+ */
+export async function saveResumeToSupabase(
+  userId: string,
+  resume: any
+): Promise<{ success: boolean; error?: string }> {
+  if (!isCustomSupabaseConfigured() || !supabase) {
+    console.warn('Supabase is not configured.');
+    return { success: false, error: 'Supabase is not configured.' };
+  }
+
+  try {
+    let resumeId = resume.id;
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resumeId);
+    if (!isUUID) {
+      // Generate a new UUID for database compatibility
+      resumeId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+      resume.id = resumeId; // Sync reference back to frontend state
+    }
+
+    const payload = {
+      id: resumeId,
+      user_id: userId,
+      name: resume.name,
+      timestamp: resume.timestamp || new Date().toISOString(),
+      data: resume.data,
+      template: resume.template,
+      updated_at: new Date().toISOString()
+    };
+
+    // Try 'resumes' table first
+    const { error } = await supabase
+      .from('resumes')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) {
+      if (error.message?.includes('does not exist')) {
+        // Try 'user_resumes' table as fallback
+        const { error: altError } = await supabase
+          .from('user_resumes')
+          .upsert(payload, { onConflict: 'id' });
+          
+        if (altError) throw altError;
+        return { success: true };
+      }
+      throw error;
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error saving resume to Supabase:', err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+/**
+ * 7. Delete a resume from Supabase
+ */
+export async function deleteResumeFromSupabase(
+  userId: string,
+  resumeId: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isCustomSupabaseConfigured() || !supabase) {
+    console.warn('Supabase is not configured.');
+    return { success: false, error: 'Supabase is not configured.' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('resumes')
+      .delete()
+      .eq('id', resumeId)
+      .eq('user_id', userId);
+
+    if (error) {
+      if (error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid') || error.message?.includes('invalid UUID')) {
+        // Since the format is not a valid UUID, it cannot exist in a UUID-typed database table, so delete is a successful no-op
+        return { success: true };
+      }
+      if (error.message?.includes('does not exist')) {
+        const { error: altError } = await supabase
+          .from('user_resumes')
+          .delete()
+          .eq('id', resumeId)
+          .eq('user_id', userId);
+          
+        if (altError) {
+          if (altError.code === '22P02' || altError.message?.includes('invalid input syntax for type uuid') || altError.message?.includes('invalid UUID')) {
+            return { success: true };
+          }
+          throw altError;
+        }
+        return { success: true };
+      }
+      throw error;
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error deleting resume from Supabase:', err);
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+

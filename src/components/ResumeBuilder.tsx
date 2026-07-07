@@ -213,17 +213,65 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
   const [saveTitle, setSaveTitle] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showSavedList, setShowSavedList] = useState(false);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Sync saved resumes list with localStorage
   useEffect(() => {
     localStorage.setItem(savedListStorageKey, JSON.stringify(savedResumes));
   }, [savedResumes, savedListStorageKey]);
 
+  // Load saved resumes from Supabase if user is logged in
+  useEffect(() => {
+    if (user) {
+      import('../lib/supabaseQueries')
+        .then(({ fetchResumesFromSupabase }) => fetchResumesFromSupabase(user.id))
+        .then((dbResumes) => {
+          if (dbResumes && dbResumes.length > 0) {
+            const formatted: SavedResume[] = dbResumes.map((row: any) => ({
+              id: row.id,
+              name: row.name,
+              timestamp: row.timestamp || new Date(row.updated_at || row.created_at || Date.now()).toLocaleDateString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              }),
+              data: row.data,
+              template: row.template || 'donna-elegant'
+            }));
+            setSavedResumes(formatted);
+          }
+        })
+        .catch(err => {
+          console.warn('Failed to load resumes from Supabase:', err);
+        });
+    } else {
+      // Guest user fallback to localStorage
+      const saved = localStorage.getItem('jobview_saved_resumes_guest');
+      setSavedResumes(saved ? JSON.parse(saved) : []);
+    }
+  }, [user]);
+
+  // Generate a valid UUID for database compatibility (avoiding invalid uuid syntax errors in Postgres)
+  const generateUUID = () => {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+      try {
+        return crypto.randomUUID();
+      } catch (e) {
+        // fallback
+      }
+    }
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+  };
+
   // Handle explicit saving of current resume state
-  const handleSaveResume = (titleToSave: string) => {
+  const handleSaveResume = async (titleToSave: string) => {
     const cleanTitle = titleToSave.trim() || resume.personal.fullName || 'My Resume Draft';
     const newSave: SavedResume = {
-      id: Math.random().toString(36).substring(2, 9),
+      id: generateUUID(),
       name: cleanTitle,
       timestamp: new Date().toLocaleDateString(undefined, {
         month: 'short',
@@ -240,6 +288,19 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     setShowSaveModal(false);
     setSaveTitle('');
     
+    // Save to Supabase if logged in
+    if (user) {
+      try {
+        const { saveResumeToSupabase } = await import('../lib/supabaseQueries');
+        const res = await saveResumeToSupabase(user.id, newSave);
+        if (!res.success) {
+          console.warn('Could not sync save to Supabase:', res.error);
+        }
+      } catch (err) {
+        console.warn('Supabase save error:', err);
+      }
+    }
+
     if (window.showSuccessToast) {
       window.showSuccessToast(`"${cleanTitle}" saved to your drafts!`);
     } else {
@@ -256,13 +317,25 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     }
   };
 
-  const handleDeleteSavedResume = (id: string, name: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (confirm(`Are you sure you want to delete "${name}"?`)) {
-      setSavedResumes(prev => prev.filter(item => item.id !== id));
-      if (window.showSuccessToast) {
-        window.showSuccessToast(`Deleted "${name}"`);
+  const handlePerformDelete = async (id: string, name: string) => {
+    setSavedResumes(prev => prev.filter(item => item.id !== id));
+    setDeleteConfirmId(null);
+    
+    // Delete from Supabase if logged in
+    if (user) {
+      try {
+        const { deleteResumeFromSupabase } = await import('../lib/supabaseQueries');
+        const res = await deleteResumeFromSupabase(user.id, id);
+        if (!res.success) {
+          console.warn('Could not sync delete to Supabase:', res.error);
+        }
+      } catch (err) {
+        console.warn('Supabase delete error:', err);
       }
+    }
+
+    if (window.showSuccessToast) {
+      window.showSuccessToast(`Deleted "${name}"`);
     }
   };
   
@@ -2377,22 +2450,51 @@ ${(resume.references || []).map(ref => `
                       </div>
 
                       <div className="flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-all">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleLoadResume(draft);
-                          }}
-                          className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-teal-600 hover:text-white text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
-                        >
-                          Load
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteSavedResume(draft.id, draft.name, e)}
-                          title="Delete draft"
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {deleteConfirmId === draft.id ? (
+                          <div className="flex items-center gap-1.5 bg-rose-50 dark:bg-rose-950/20 p-1 rounded-lg border border-rose-100 dark:border-rose-900/50">
+                            <span className="text-[9px] font-bold text-rose-600 dark:text-rose-400 px-1 uppercase tracking-wider">Delete?</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePerformDelete(draft.id, draft.name);
+                              }}
+                              className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[9px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmId(null);
+                              }}
+                              className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded text-[9px] font-bold uppercase transition-all cursor-pointer"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLoadResume(draft);
+                              }}
+                              className="px-3 py-1 bg-white dark:bg-slate-800 hover:bg-teal-600 hover:text-white text-slate-700 dark:text-slate-200 border border-slate-200/70 dark:border-slate-700 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all cursor-pointer"
+                            >
+                              Load
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteConfirmId(draft.id);
+                              }}
+                              title="Delete draft"
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-all cursor-pointer animate-fade-in"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   ))
