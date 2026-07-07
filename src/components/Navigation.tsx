@@ -8,15 +8,15 @@ import { User } from '../types';
 import { motion } from 'motion/react';
 
 interface NavigationProps {
-  currentTab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings';
-  onChangeTab: (tab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings') => void;
+  currentTab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings' | 'resume';
+  onChangeTab: (tab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings' | 'resume') => void;
   user: User | null;
 }
 
 export default function Navigation({ currentTab, onChangeTab, user }: NavigationProps) {
   const isAdmin = user && user.role === 'admin' && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
 
-  const tabs: { id: 'jobs' | 'community' | 'admin'; label: string; icon: any }[] = [
+  const tabs: { id: 'jobs' | 'community' | 'resume' | 'admin'; label: string; icon: any }[] = [
     { id: 'jobs', label: 'Jobs', icon: Briefcase },
     { id: 'community', label: 'Community', icon: Users },
   ];

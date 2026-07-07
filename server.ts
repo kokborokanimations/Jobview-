@@ -8,6 +8,9 @@ import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
 
 const app = express();
 const PORT = 3000;
@@ -45,8 +48,8 @@ function initDB() {
         'Direct WhatsApp Chat with Hiring Managers',
         'Priority Technical Support & Live Resume Tips'
       ],
-      cashfreeAppId: '',
-      cashfreeSecretKey: '',
+      razorpayKeyId: '',
+      razorpayKeySecret: '',
       postApprovalMode: true // Manual post approval mode (ON) by default
     },
     jobs: [
@@ -432,12 +435,12 @@ function mapSettingsFromSupabase(s: any) {
     paywallSubtitle: s.paywall_subtitle || s.paywallSubtitle || 'Unlock Premium access to continue searching & applying.',
     paywallButtonText: s.paywall_button_text || s.paywallButtonText || 'Activate Membership Now',
     paywallPriceDescription: s.paywall_price_description || s.paywallPriceDescription || 'One-time manual purchase. Extend anytime.',
-    paywallFooterText: s.paywall_footer_text || s.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.',
+    paywallFooterText: s.paywall_footer_text || s.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.',
     paywallExtendTitle: s.paywall_extend_title || s.paywallExtendTitle || 'Extend Premium',
     paywallExtendSubtitle: s.paywall_extend_subtitle || s.paywallExtendSubtitle || 'Extend your manual premium access for another month.',
     paywallExtendButtonText: s.paywall_extend_button_text || s.paywallExtendButtonText || 'Extend Membership Now',
-    cashfreeAppId: s.cashfree_app_id || s.cashfreeAppId || '',
-    cashfreeSecretKey: s.cashfree_secret_key || s.cashfreeSecretKey || '',
+    razorpayKeyId: s.razorpay_key_id || s.razorpayKeyId || '',
+    razorpayKeySecret: s.razorpay_key_secret || s.razorpayKeySecret || '',
     postApprovalMode: s.post_approval_mode !== undefined ? s.post_approval_mode : (s.postApprovalMode !== undefined ? s.postApprovalMode : true),
     supabaseUrl: s.supabase_url || s.supabaseUrl || '',
     supabaseAnonKey: s.supabase_anon_key || s.supabaseAnonKey || '',
@@ -472,8 +475,8 @@ function mapSettingsToSupabase(s: any) {
     paywall_extend_title: s.paywallExtendTitle,
     paywall_extend_subtitle: s.paywallExtendSubtitle,
     paywall_extend_button_text: s.paywallExtendButtonText,
-    cashfree_app_id: s.cashfreeAppId,
-    cashfree_secret_key: s.cashfreeSecretKey,
+    razorpay_key_id: s.razorpayKeyId,
+    razorpay_key_secret: s.razorpayKeySecret,
     post_approval_mode: s.postApprovalMode,
     supabase_url: s.supabaseUrl,
     supabase_anon_key: s.supabaseAnonKey,
@@ -535,7 +538,33 @@ app.post('/api/upload', (req, res) => {
 // 1. Admin settings
 app.get('/api/settings', async (req, res) => {
   const db = readDB();
-  res.json(db.adminSettings);
+  const localSettings = db.adminSettings || {};
+
+  if (isCustomSupabaseConfigured(db)) {
+    try {
+      const supabase = getServerSupabase();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('admin_settings')
+          .select('*')
+          .eq('id', 'global_settings')
+          .single();
+        
+        if (!error && data) {
+          const mappedSettings = mapSettingsFromSupabase(data);
+          db.adminSettings = { ...db.adminSettings, ...mappedSettings };
+          writeDB(db);
+          return res.json(db.adminSettings);
+        } else if (error) {
+          console.log('[Supabase Info] Serving settings from local JSON store. Supabase lookup details:', error.message);
+        }
+      }
+    } catch (err: any) {
+      console.log('[Supabase Info] Serving settings from local JSON store. Details:', err.message || String(err));
+    }
+  }
+
+  res.json(localSettings);
 });
 
 app.post('/api/settings', async (req, res) => {
@@ -1514,6 +1543,53 @@ app.get(['/auth/callback', '/auth/callback/'], async (req, res) => {
   }
 });
 
+// AI Resume Content Enhancer using Gemini API
+app.post('/api/resume/enhance', async (req, res) => {
+  const { section, text, role } = req.body;
+  if (!text) {
+    return res.status(400).json({ error: 'Text is required to enhance' });
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ 
+      error: 'GEMINI_API_KEY is not configured on the server. Please add it to your secrets.' 
+    });
+  }
+
+  try {
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    let prompt = '';
+    if (section === 'summary') {
+      prompt = `Write a professional, impactful 2-3 sentence resume summary statement for a ${role || 'professional'} based on this draft/notes: "${text}". Make it high-impact and compelling. Return only the final text, no introductions or markdown styling.`;
+    } else if (section === 'experience') {
+      prompt = `Enhance this job description/achievement for a resume. Turn it into 2-3 polished, action-oriented bullet points (starting with strong action verbs) suitable for a ${role || 'professional'}. Draft: "${text}". Return only the formatted bullet points (use standard hyphen '-' or bullet '•' prefix), no other comments.`;
+    } else if (section === 'skills') {
+      prompt = `Review this draft list of skills: "${text}". Suggest a refined, comma-separated list of professional, industry-standard skill terms suitable for a ${role || 'professional'}. Return only the clean comma-separated terms, no explanations.`;
+    } else {
+      prompt = `Review and improve this professional resume text for a ${role || 'professional'}: "${text}". Enhance vocabulary, impact, and grammar. Return only the refined text.`;
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.5-flash',
+      contents: prompt,
+    });
+
+    res.json({ enhancedText: response.text?.trim() });
+  } catch (err: any) {
+    console.error('Error enhancing resume via Gemini:', err);
+    res.status(500).json({ error: 'AI processing failed: ' + (err.message || String(err)) });
+  }
+});
+
 // Sync current user (login or trigger trial evaluation)
 app.post('/api/users/sync', async (req, res) => {
   const { name, email, avatar } = req.body;
@@ -1705,105 +1781,101 @@ app.delete('/api/users/:id', async (req, res) => {
   });
 });
 
-// 5. Payments (Cashfree Order & Verification)
+// 5. Payments (Razorpay Order & Verification)
 app.post('/api/payments/create-order', async (req, res) => {
-  const { userId, userEmail, amount, phone } = req.body;
+  const { userId, userEmail, amount } = req.body;
   const db = readDB();
   const settings = db.adminSettings;
 
   const orderId = 'order_' + Date.now();
 
-  // If Cashfree secrets are missing, we simulate
-  if (!settings.cashfreeAppId || !settings.cashfreeSecretKey) {
+  // If Razorpay credentials are missing, we run in Simulator Mode
+  if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
     return res.json({
       isMock: true,
       order_id: orderId,
       order_amount: amount || settings.membershipPrice || 499,
       order_currency: settings.currency || 'INR',
-      payment_session_id: 'session_mock_' + Math.random().toString(36).substr(2, 9),
-      message: 'Cashfree Gateway is in Mock/Simulator Mode. Click Continue to proceed.'
+      message: 'Razorpay Gateway is in Mock/Simulator Mode. Click Continue to proceed.'
     });
   }
 
-  // Attempt real Cashfree Order Creation API (PostgreSQL / Cashfree backend integration)
   try {
-    const isProd = !settings.cashfreeAppId.toLowerCase().includes('test');
-    const cashfreeUrl = isProd 
-      ? 'https://api.cashfree.com/pg/orders' 
-      : 'https://sandbox.cashfree.com/pg/orders';
-
-    const response = await fetch(cashfreeUrl, {
-      method: 'POST',
-      headers: {
-        'x-client-id': settings.cashfreeAppId,
-        'x-client-secret': settings.cashfreeSecretKey,
-        'x-api-version': '2023-08-01',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        order_id: orderId,
-        order_amount: Number(amount || settings.membershipPrice || 499).toFixed(2),
-        order_currency: settings.currency || 'INR',
-        customer_details: {
-          customer_id: userId || 'cust_anonymous',
-          customer_email: userEmail || 'guest@example.com',
-          customer_phone: phone || '9999999999'
-        },
-        order_meta: {
-          // Point back to app preview URL if available, otherwise localhost
-          return_url: `${process.env.APP_URL || 'http://localhost:3000'}/?payment_status=verify&order_id=${orderId}`
-        }
-      })
+    const razorpayInstance = new Razorpay({
+      key_id: settings.razorpayKeyId,
+      key_secret: settings.razorpayKeySecret
     });
 
-    const result = await response.json();
-    if (response.ok && result.payment_session_id) {
-      res.json({
-        isMock: false,
-        order_id: result.order_id,
-        order_amount: result.order_amount,
-        order_currency: result.order_currency,
-        payment_session_id: result.payment_session_id
-      });
-    } else {
-      console.error('Cashfree API failure:', result);
-      // Fallback to beautiful simulator gracefully instead of crashing
-      res.json({
-        isMock: true,
-        order_id: orderId,
-        order_amount: amount || settings.membershipPrice || 499,
-        order_currency: settings.currency || 'INR',
-        payment_session_id: 'session_mock_' + Math.random().toString(36).substr(2, 9),
-        warning: 'Cashfree API returned an error, running in Mock Simulator Mode.',
-        errorDetail: result.message || 'Check Cashfree Keys configuration.'
-      });
-    }
+    const finalAmount = Number(amount || settings.membershipPrice || 499);
+    const options = {
+      amount: Math.round(finalAmount * 100), // amount in the smallest currency unit (paise)
+      currency: settings.currency || 'INR',
+      receipt: orderId
+    };
+
+    const order = await razorpayInstance.orders.create(options);
+    res.json({
+      isMock: false,
+      order_id: order.id,
+      order_amount: finalAmount,
+      order_currency: order.currency,
+      key_id: settings.razorpayKeyId,
+      receipt: order.receipt
+    });
   } catch (err: any) {
-    console.error('Cashfree connection error:', err);
+    console.error('Razorpay Connection or API failed, falling back to simulator:', err);
     res.json({
       isMock: true,
       order_id: orderId,
       order_amount: amount || settings.membershipPrice || 499,
       order_currency: settings.currency || 'INR',
-      payment_session_id: 'session_mock_err_' + Math.random().toString(36).substr(2, 9),
-      warning: 'Cashfree connection failed, fell back to Mock Simulator Mode.'
+      warning: 'Razorpay API returned an error, running in Mock Simulator Mode.',
+      errorDetail: err.message || 'Check Razorpay Credentials configuration.'
     });
   }
 });
 
-// Verify payment / callback webhook
+// Verify payment / callback signature
 app.post('/api/payments/verify', async (req, res) => {
-  const { orderId, status, userId, userEmail, amount, txId } = req.body;
+  const { orderId, paymentId, signature, status, userId, userEmail, amount, txId } = req.body;
   const db = readDB();
+  const settings = db.adminSettings;
+
+  let finalStatus = 'FAILED';
+  let verifiedTxId = txId || paymentId || 'rzp_tx_' + Date.now();
+
+  if (settings.razorpayKeyId && settings.razorpayKeySecret && signature && orderId && paymentId) {
+    // Real Razorpay signature verification
+    try {
+      const text = orderId + '|' + paymentId;
+      const generated_signature = crypto
+        .createHmac('sha256', settings.razorpayKeySecret)
+        .update(text)
+        .digest('hex');
+
+      if (generated_signature === signature) {
+        finalStatus = 'SUCCESS';
+      } else {
+        console.warn('Razorpay Signature verification failed');
+        finalStatus = 'FAILED';
+      }
+    } catch (err) {
+      console.error('Error verifying signature:', err);
+      finalStatus = 'FAILED';
+    }
+  } else {
+    // Simulated mock transaction
+    finalStatus = status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
+  }
 
   // Create payment log
   const newLog = {
-    id: txId || 'tx_' + Date.now(),
+    id: verifiedTxId,
     userId: userId || 'unknown_user',
     userEmail: userEmail || 'unknown@example.com',
-    amount: amount || db.adminSettings.membershipPrice || 499,
-    status: status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
-    txId: txId || 'CF_TX_' + Math.floor(Math.random() * 100000000),
+    amount: amount || settings.membershipPrice || 499,
+    status: finalStatus,
+    txId: verifiedTxId,
     createdAt: new Date().toISOString()
   };
 
@@ -1812,7 +1884,7 @@ app.post('/api/payments/verify', async (req, res) => {
   let updatedUserObj: any = null;
 
   // If success, activate user's subscription
-  if (status === 'SUCCESS') {
+  if (finalStatus === 'SUCCESS') {
     const userIndex = db.users.findIndex((u: any) => u.email.toLowerCase() === userEmail.toLowerCase() || u.id === userId);
     if (userIndex !== -1) {
       db.users[userIndex].subscriptionStatus = 'Active';
@@ -1841,7 +1913,7 @@ app.post('/api/payments/verify', async (req, res) => {
     console.log('[Supabase Info] Local payment verified successfully, but Supabase sync was skipped:', err.message || String(err));
   }
 
-  res.json({ success: true, log: newLog });
+  res.json({ success: finalStatus === 'SUCCESS', log: newLog });
 });
 
 // Get payment logs
@@ -1881,19 +1953,14 @@ app.get('/api/payments/logs', async (req, res) => {
 
 // Google Search Console Verification Endpoint (HTML file method)
 app.get('/google:hash.html', (req: any, res: any) => {
-  const hash = req.params.hash;
+  const { hash } = req.params;
   const db = readDB();
   const configured = db.adminSettings?.googleSiteVerification || '';
   
-  // Respond to the verification request if the code contains or matches the requested hash
-  if (configured && (configured.toLowerCase().includes(hash.toLowerCase()) || hash.toLowerCase().includes(configured.toLowerCase()))) {
+  if (configured && configured.includes(hash)) {
     return res.send(`google-site-verification: google${hash}.html`);
   }
-  // Fallback default response so verification doesn't fail if they pasted the entire filename as code
-  if (configured) {
-    return res.send(`google-site-verification: google${hash}.html`);
-  }
-  res.status(404).send('Not Configured');
+  res.status(404).send('Not Found');
 });
 
 function escapeHtml(unsafe: string): string {
@@ -1908,78 +1975,138 @@ function escapeHtml(unsafe: string): string {
 
 // Vite Setup for Development and static handling in Production
 async function startServer() {
+  // Pre-fetch settings from Supabase on startup if configured to hydrate local db.json cache (Cloud Run state recovery)
+  try {
+    const db = readDB();
+    if (isCustomSupabaseConfigured(db)) {
+      const url = db.adminSettings?.supabaseUrl || process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
+      const anonKey = db.adminSettings?.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NDg1NjAsImV4cCI6MjA5ODAyNDU2MH0.gPwgKSe-0lSFZf4holpBctmYSGrTYsv5cwpKcgLODBs';
+      if (url && anonKey) {
+        const tempSupabase = createClient(url, anonKey);
+        const { data, error } = await tempSupabase
+          .from('admin_settings')
+          .select('*')
+          .eq('id', 'global_settings')
+          .single();
+        if (!error && data) {
+          const mappedSettings = mapSettingsFromSupabase(data);
+          db.adminSettings = { ...db.adminSettings, ...mappedSettings };
+          writeDB(db);
+          console.log('[Startup] Successfully pre-fetched and synchronized admin settings from Supabase.');
+        } else if (error) {
+          console.log('[Startup Info] Pre-fetching settings from Supabase skipped:', error.message);
+        }
+      }
+    }
+  } catch (startupErr: any) {
+    console.warn('[Startup Warning] Error pre-fetching settings from Supabase:', startupErr.message || String(startupErr));
+  }
+
+  let vite: any = null;
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
+    vite = await createViteServer({
       server: { middlewareMode: true },
-      appType: 'spa'
+      appType: 'custom'
     });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
-    app.get('*', (req: any, res: any) => {
-      const indexPath = path.join(distPath, 'index.html');
-      try {
+  }
+
+  // Intercept all HTML document requests to inject dynamic SEO meta-tags
+  app.get('*', async (req: any, res: any, next: any) => {
+    const url = req.path;
+
+    // Check if it's an API route, static asset, or Vite internal module
+    if (
+      url.startsWith('/api/') || 
+      url.includes('.') || 
+      url.startsWith('/@') || 
+      url.includes('/node_modules/')
+    ) {
+      return next();
+    }
+
+    try {
+      let html = '';
+      if (process.env.NODE_ENV !== 'production' && vite) {
+        const indexPath = path.join(process.cwd(), 'index.html');
         if (fs.existsSync(indexPath)) {
-          let html = fs.readFileSync(indexPath, 'utf-8');
-          const db = readDB();
+          html = fs.readFileSync(indexPath, 'utf-8');
+          // Let Vite transform the HTML (inject client script, handle HMR, etc.)
+          html = await vite.transformIndexHtml(req.originalUrl, html);
+        }
+      } else {
+        const indexPath = path.join(process.cwd(), 'dist', 'index.html');
+        if (fs.existsSync(indexPath)) {
+          html = fs.readFileSync(indexPath, 'utf-8');
+        }
+      }
 
-          // SEO & Sharing Preview Meta Injector
-          const settings = db.adminSettings || {};
-          const brand = settings.brandName || 'Jobview';
-          const tagline = settings.tagline || 'Your Premium Portal to Verified Careers & Networking';
-          const bannerUrl = settings.bannerUrl || '';
-          const logoUrl = settings.logoUrl || '';
+      if (!html) {
+        return next();
+      }
 
-          let title = brand;
-          if (tagline) {
-            title = `${brand} - ${tagline}`;
+      const db = readDB();
+
+      // SEO & Sharing Preview Meta Injector
+      const settings = db.adminSettings || {};
+      const brand = settings.brandName || 'Sebok';
+      const tagline = settings.tagline || 'Tripura jobs in your finger';
+      const bannerUrl = settings.bannerUrl || '';
+      const logoUrl = settings.logoUrl || '';
+
+      // Create a sanitized settings object for instant client-side rendering
+      const clientSettings = { ...settings };
+      delete clientSettings.razorpayKeySecret;
+      delete clientSettings.supabaseServiceRoleKey;
+
+      let title = brand;
+      if (tagline) {
+        title = `${brand} - ${tagline}`;
+      }
+      let description = tagline;
+      let imageUrl = bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop';
+
+      // Detect specific job preview
+      if (req.query.job_id) {
+        const jobId = req.query.job_id;
+        const jobs = db.jobs || [];
+        const foundJob = jobs.find((j: any) => String(j.id) === String(jobId));
+        if (foundJob) {
+          title = `${foundJob.title} at ${foundJob.companyName} | ${brand}`;
+          description = foundJob.shortDescription || foundJob.fullDescription || description;
+          if (foundJob.companyLogoUrl) {
+            imageUrl = foundJob.companyLogoUrl;
           }
-          let description = tagline;
-          let imageUrl = bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop';
-
-          // Detect specific job preview
-          if (req.query.job_id) {
-            const jobId = req.query.job_id;
-            const jobs = db.jobs || [];
-            const foundJob = jobs.find((j: any) => String(j.id) === String(jobId));
-            if (foundJob) {
-              title = `${foundJob.title} at ${foundJob.companyName} | ${brand}`;
-              description = foundJob.shortDescription || foundJob.fullDescription || description;
-              if (foundJob.companyLogoUrl) {
-                imageUrl = foundJob.companyLogoUrl;
-              }
-            }
-          } 
-          // Detect specific community post preview
-          else if (req.query.post_id) {
-            const postId = req.query.post_id;
-            const posts = db.communityPosts || [];
-            const foundPost = posts.find((p: any) => String(p.id) === String(postId));
-            if (foundPost) {
-              title = `Post by ${foundPost.userName || 'Member'} | ${brand}`;
-              description = foundPost.caption || description;
-              if (foundPost.imageUrl) {
-                imageUrl = foundPost.imageUrl;
-              } else if (foundPost.userAvatar) {
-                imageUrl = foundPost.userAvatar;
-              }
-            }
+        }
+      } 
+      // Detect specific community post preview
+      else if (req.query.post_id) {
+        const postId = req.query.post_id;
+        const posts = db.communityPosts || [];
+        const foundPost = posts.find((p: any) => String(p.id) === String(postId));
+        if (foundPost) {
+          title = `Post by ${foundPost.userName || 'Member'} | ${brand}`;
+          description = foundPost.caption || description;
+          if (foundPost.imageUrl) {
+            imageUrl = foundPost.imageUrl;
+          } else if (foundPost.userAvatar) {
+            imageUrl = foundPost.userAvatar;
           }
+        }
+      }
 
-          // Build dynamic URL for metadata
-          const host = req.get('host') || 'sebok.in';
-          const protocol = req.protocol || 'https';
-          const fullUrl = `${protocol}://${host}${req.originalUrl || '/'}`;
+      // Build dynamic URL for metadata
+      const host = req.get('host') || 'sebok.in';
+      const protocol = req.protocol || 'https';
+      const fullUrl = `${protocol}://${host}${req.originalUrl || '/'}`;
 
-          // Escape values to safely put in HTML
-          const escapedTitle = escapeHtml(title);
-          const escapedDescription = escapeHtml(description);
-          const escapedImage = escapeHtml(imageUrl);
-          const escapedUrl = escapeHtml(fullUrl);
+      // Escape values to safely put in HTML
+      const escapedTitle = escapeHtml(title);
+      const escapedDescription = escapeHtml(description);
+      const escapedImage = escapeHtml(imageUrl);
+      const escapedUrl = escapeHtml(fullUrl);
 
-          // Meta tags block
-          const metadataHtml = `
+      // Meta tags block
+      const metadataHtml = `
   <title>${escapedTitle}</title>
   <meta name="description" content="${escapedDescription}" />
   <meta property="og:title" content="${escapedTitle}" />
@@ -1993,29 +2120,47 @@ async function startServer() {
   <meta name="twitter:image" content="${escapedImage}" />
 `;
 
-          // Replace the default static title block with dynamic meta tags
-          html = html.replace(/<title>.*?<\/title>/i, metadataHtml);
+      // Replace the default static title block with dynamic meta tags
+      html = html.replace(/<title>.*?<\/title>/i, metadataHtml);
 
-          const verificationCode = db.adminSettings?.googleSiteVerification;
-          if (verificationCode) {
-            // Clean up any potential HTML tag or quotes they pasted and extract the raw code
-            let cleanCode = verificationCode.trim();
-            if (cleanCode.includes('content=')) {
-              const match = cleanCode.match(/content=["']([^"']+)["']/);
-              if (match && match[1]) {
-                cleanCode = match[1];
-              }
+      // Pre-inject the settings into the window object so client-side React can load it instantly
+      const initialSettingsScript = `<script>window.__INITIAL_SETTINGS__ = ${JSON.stringify(clientSettings)};</script>`;
+      html = html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n  ${initialSettingsScript}`);
+
+      const verificationCode = db.adminSettings?.googleSiteVerification;
+      if (verificationCode) {
+        let cleanCode = verificationCode.trim();
+        let metaTag = '';
+        if (cleanCode.startsWith('<')) {
+          // It's already an HTML tag (like <meta name="..." content="..." />), inject it as-is
+          metaTag = cleanCode;
+        } else {
+          // It's just the verification code (like abc123xyz), wrap it in a meta-tag
+          if (cleanCode.includes('content=')) {
+            const match = cleanCode.match(/content=["']([^"']+)["']/i);
+            if (match && match[1]) {
+              cleanCode = match[1];
             }
-            const metaTag = `<meta name="google-site-verification" content="${cleanCode}" />`;
-            html = html.replace('</head>', `${metaTag}\n</head>`);
           }
-          return res.send(html);
+          metaTag = `<meta name="google-site-verification" content="${cleanCode}" />`;
         }
-      } catch (err) {
-        console.error('Error injecting Google Verification Meta Tag:', err);
+        // Bulletproof case-insensitive insertion at the very top of <head> tag
+        html = html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n  ${metaTag}`);
       }
-      res.sendFile(indexPath);
-    });
+
+      res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+    } catch (err) {
+      console.error('Error rendering dynamic page HTML:', err);
+      next(err);
+    }
+  });
+
+  if (process.env.NODE_ENV !== 'production') {
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    // Disable serving index.html automatically for directories, so it hits our get('*') route
+    app.use(express.static(distPath, { index: false }));
   }
 
   app.listen(PORT, '0.0.0.0', () => {

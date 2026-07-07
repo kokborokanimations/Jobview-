@@ -561,6 +561,7 @@ export default function UserProfile({
           </div>
         </div>
       </div>
+
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-slate-200">
         <button

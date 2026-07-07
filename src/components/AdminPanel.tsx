@@ -47,7 +47,7 @@ export default function AdminPanel({
   onDeleteUser,
   onRefreshJobs
 }: AdminPanelProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'cashfree' | 'posts' | 'pages' | 'contacts'>('branding');
+  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'razorpay' | 'posts' | 'pages' | 'contacts'>('branding');
   
   // Settings Form state
   const [brandName, setBrandName] = useState(settings.brandName || '');
@@ -67,12 +67,12 @@ export default function AdminPanel({
   const [paywallSubtitle, setPaywallSubtitle] = useState(settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.');
   const [paywallButtonText, setPaywallButtonText] = useState(settings.paywallButtonText || 'Activate Membership Now');
   const [paywallPriceDescription, setPaywallPriceDescription] = useState(settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.');
-  const [paywallFooterText, setPaywallFooterText] = useState(settings.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
+  const [paywallFooterText, setPaywallFooterText] = useState(settings.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
   const [paywallExtendTitle, setPaywallExtendTitle] = useState(settings.paywallExtendTitle || 'Extend Premium');
   const [paywallExtendSubtitle, setPaywallExtendSubtitle] = useState(settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.');
   const [paywallExtendButtonText, setPaywallExtendButtonText] = useState(settings.paywallExtendButtonText || 'Extend Membership Now');
-  const [cashfreeAppId, setCashfreeAppId] = useState(settings.cashfreeAppId || '');
-  const [cashfreeSecretKey, setCashfreeSecretKey] = useState(settings.cashfreeSecretKey || '');
+  const [razorpayKeyId, setRazorpayKeyId] = useState(settings.razorpayKeyId || '');
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState(settings.razorpayKeySecret || '');
   const [postApprovalMode, setPostApprovalMode] = useState(settings.postApprovalMode || false);
   const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
@@ -265,12 +265,12 @@ export default function AdminPanel({
     setPaywallSubtitle(settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.');
     setPaywallButtonText(settings.paywallButtonText || 'Activate Membership Now');
     setPaywallPriceDescription(settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.');
-    setPaywallFooterText(settings.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
+    setPaywallFooterText(settings.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
     setPaywallExtendTitle(settings.paywallExtendTitle || 'Extend Premium');
     setPaywallExtendSubtitle(settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.');
     setPaywallExtendButtonText(settings.paywallExtendButtonText || 'Extend Membership Now');
-    setCashfreeAppId(settings.cashfreeAppId || '');
-    setCashfreeSecretKey(settings.cashfreeSecretKey || '');
+    setRazorpayKeyId(settings.razorpayKeyId || '');
+    setRazorpayKeySecret(settings.razorpayKeySecret || '');
     setPostApprovalMode(settings.postApprovalMode || false);
     setSupabaseUrl(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
     setSupabaseAnonKey(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
@@ -430,12 +430,12 @@ export default function AdminPanel({
       paywallSubtitle !== (settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.') ||
       paywallButtonText !== (settings.paywallButtonText || 'Activate Membership Now') ||
       paywallPriceDescription !== (settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.') ||
-      paywallFooterText !== (settings.paywallFooterText || 'Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.') ||
+      paywallFooterText !== (settings.paywallFooterText || '') ||
       paywallExtendTitle !== (settings.paywallExtendTitle || 'Extend Premium') ||
       paywallExtendSubtitle !== (settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.') ||
       paywallExtendButtonText !== (settings.paywallExtendButtonText || 'Extend Membership Now') ||
-      cashfreeAppId !== (settings.cashfreeAppId || '') ||
-      cashfreeSecretKey !== (settings.cashfreeSecretKey || '') ||
+      razorpayKeyId !== (settings.razorpayKeyId || '') ||
+      razorpayKeySecret !== (settings.razorpayKeySecret || '') ||
       postApprovalMode !== (settings.postApprovalMode || false) ||
       supabaseUrl !== (settings.supabaseUrl || '') ||
       supabaseAnonKey !== (settings.supabaseAnonKey || '') ||
@@ -478,8 +478,8 @@ export default function AdminPanel({
         paywallExtendTitle,
         paywallExtendSubtitle,
         paywallExtendButtonText,
-        cashfreeAppId,
-        cashfreeSecretKey,
+        razorpayKeyId,
+        razorpayKeySecret,
         postApprovalMode,
         supabaseUrl,
         supabaseAnonKey,
@@ -1070,11 +1070,11 @@ export default function AdminPanel({
 
         <button
           onClick={() => {
-            setActiveSubTab('cashfree');
+            setActiveSubTab('razorpay');
             fetchPaymentLogs();
           }}
           className={`pb-3 px-4 text-xs font-bold transition-all relative ${
-            activeSubTab === 'cashfree' 
+            activeSubTab === 'razorpay' 
               ? 'text-teal-600 border-b-2 border-teal-600 font-extrabold' 
               : 'text-gray-500 hover:text-gray-900'
           }`}
@@ -1904,6 +1904,7 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     brand_name TEXT,
     tagline TEXT,
     logo_url TEXT,
+    favicon_url TEXT,
     banner_url TEXT,
     banner_html TEXT,
     premium_mode BOOLEAN DEFAULT TRUE,
@@ -1918,12 +1919,18 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     paywall_extend_title TEXT,
     paywall_extend_subtitle TEXT,
     paywall_extend_button_text TEXT,
-    cashfree_app_id TEXT,
-    cashfree_secret_key TEXT,
+    razorpay_key_id TEXT,
+    razorpay_key_secret TEXT,
     post_approval_mode BOOLEAN DEFAULT TRUE,
     supabase_url TEXT,
     supabase_anon_key TEXT,
-    supabase_service_role_key TEXT
+    supabase_service_role_key TEXT,
+    google_site_verification TEXT,
+    community_mind_placeholder TEXT,
+    community_review_notice TEXT,
+    login_title TEXT,
+    login_subtitle TEXT,
+    google_only BOOLEAN DEFAULT FALSE
 );
 
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
@@ -2102,6 +2109,7 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     brand_name TEXT,
     tagline TEXT,
     logo_url TEXT,
+    favicon_url TEXT,
     banner_url TEXT,
     banner_html TEXT,
     premium_mode BOOLEAN DEFAULT TRUE,
@@ -2116,12 +2124,18 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     paywall_extend_title TEXT,
     paywall_extend_subtitle TEXT,
     paywall_extend_button_text TEXT,
-    cashfree_app_id TEXT,
-    cashfree_secret_key TEXT,
+    razorpay_key_id TEXT,
+    razorpay_key_secret TEXT,
     post_approval_mode BOOLEAN DEFAULT TRUE,
     supabase_url TEXT,
     supabase_anon_key TEXT,
-    supabase_service_role_key TEXT
+    supabase_service_role_key TEXT,
+    google_site_verification TEXT,
+    community_mind_placeholder TEXT,
+    community_review_notice TEXT,
+    login_title TEXT,
+    login_subtitle TEXT,
+    google_only BOOLEAN DEFAULT FALSE
 );
 
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
@@ -2317,7 +2331,7 @@ ON CONFLICT (id) DO NOTHING;`;
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Footer Disclaimer / Gateway Details Text</label>
                 <textarea
                   rows={2} value={paywallFooterText} onChange={(e) => setPaywallFooterText(e.target.value)}
-                  placeholder="Secured & processed under Cashfree SDK Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles."
+                  placeholder="Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles."
                   className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-sans"
                 />
               </div>
@@ -2540,8 +2554,8 @@ ON CONFLICT (id) DO NOTHING;`;
         </div>
       )}
 
-      {/* SUBTAB CONTENT: CASHFREE GATEWAY LOGS & SETTINGS */}
-      {activeSubTab === 'cashfree' && (
+      {/* SUBTAB CONTENT: RAZORPAY GATEWAY LOGS & SETTINGS */}
+      {activeSubTab === 'razorpay' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Left Column Settings */}
@@ -2550,28 +2564,28 @@ ON CONFLICT (id) DO NOTHING;`;
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
               <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
                 <CreditCard size={15} className="text-teal-600" />
-                Cashfree Credentials
+                Razorpay Credentials
               </h3>
 
               <p className="text-[10px] text-gray-500 leading-normal font-semibold">
-                Input your Cashfree App ID and Secret Key. If left blank, Jobview runs in a beautiful built-in Cashfree Checkout Simulator for testing!
+                Input your Razorpay Key ID and Key Secret. If left blank, Jobview runs in a beautiful built-in Razorpay Checkout Simulator for testing!
               </p>
 
               <form onSubmit={handleSaveSettings} className="space-y-4">
                 <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Cashfree App ID</label>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Razorpay Key ID</label>
                   <input
                     type="text"
-                    placeholder="e.g., TEST43912a78"
-                    value={cashfreeAppId}
-                    onChange={(e) => setCashfreeAppId(e.target.value)}
+                    placeholder="e.g., rzp_test_..."
+                    value={razorpayKeyId}
+                    onChange={(e) => setRazorpayKeyId(e.target.value)}
                     className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between font-display">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Cashfree Secret Key</label>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Razorpay Key Secret</label>
                     <button
                       type="button"
                       onClick={() => setShowSecret(!showSecret)}
@@ -2583,9 +2597,9 @@ ON CONFLICT (id) DO NOTHING;`;
                   </div>
                   <input
                     type={showSecret ? 'text' : 'password'}
-                    placeholder="e.g., cf_secret_key_89ab..."
-                    value={cashfreeSecretKey}
-                    onChange={(e) => setCashfreeSecretKey(e.target.value)}
+                    placeholder="e.g., razorpay_secret_..."
+                    value={razorpayKeySecret}
+                    onChange={(e) => setRazorpayKeySecret(e.target.value)}
                     className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
                   />
                 </div>
@@ -2712,7 +2726,7 @@ ON CONFLICT (id) DO NOTHING;`;
             <div className="flex items-center justify-between border-b border-gray-50 pb-3">
               <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest flex items-center gap-1.5 font-display">
                 <CreditCard size={15} className="text-teal-600" />
-                Recent Cashfree Transactions
+                Recent Razorpay Transactions
               </h3>
               
               <button

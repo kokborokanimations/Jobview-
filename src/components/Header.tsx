@@ -4,7 +4,7 @@
  */
 
 import { User, AdminSettings } from '../types';
-import { Briefcase, LogOut, User as UserIcon, ShieldAlert, Settings } from 'lucide-react';
+import { Briefcase, LogOut, User as UserIcon, ShieldAlert, Settings, FileText } from 'lucide-react';
 import { getUserBadge } from '../lib/badgeUtils';
 
 interface HeaderProps {
@@ -13,7 +13,7 @@ interface HeaderProps {
   onLogout: () => void;
   onLoginClick: () => void;
   onUpgradeClick?: () => void;
-  onChangeTab?: (tab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings') => void;
+  onChangeTab?: (tab: 'jobs' | 'community' | 'profile' | 'admin' | 'settings' | 'resume') => void;
 }
 
 export default function Header({ user, settings, onLogout, onLoginClick, onUpgradeClick, onChangeTab }: HeaderProps) {
@@ -127,6 +127,14 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
                     >
                       <UserIcon size={14} className="text-slate-500" />
                       My Profile
+                    </button>
+
+                    <button
+                      onClick={() => onChangeTab?.('resume')}
+                      className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <FileText size={14} className="text-slate-500" />
+                      Resume
                     </button>
 
                     <button

@@ -369,7 +369,7 @@ export default function CommunityFeed({
 
                   {/* Post Caption */}
                   {post.caption && (
-                    <p className="px-4 py-4 text-xs text-slate-700 leading-relaxed">
+                    <p className="px-4 py-4 text-sm text-slate-700 leading-relaxed">
                       {post.caption}
                     </p>
                   )}

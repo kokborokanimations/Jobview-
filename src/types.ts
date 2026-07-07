@@ -83,8 +83,8 @@ export interface AdminSettings {
   paywallExtendTitle?: string;
   paywallExtendSubtitle?: string;
   paywallExtendButtonText?: string;
-  cashfreeAppId: string;
-  cashfreeSecretKey: string;
+  razorpayKeyId: string;
+  razorpayKeySecret: string;
   postApprovalMode?: boolean; // Master Toggle: manual approval vs automatic instant
   supabaseUrl?: string;
   supabaseAnonKey?: string;

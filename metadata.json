@@ -1,6 +1,6 @@
 {
-  "name": "Jobview",
-  "description": "Jobview is a mobile-responsive premium job feed and community platform with integrated paywall control, customizable branding, and Cashfree payments.",
+  "name": "Sebok",
+  "description": "Sebok is a mobile-responsive premium job feed and community platform with integrated paywall control, customizable branding, and Cashfree payments.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

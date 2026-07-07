@@ -14,6 +14,7 @@ import Paywall from './components/Paywall';
 import AdminPanel from './components/AdminPanel';
 import LoginModal from './components/LoginModal';
 import UserProfile from './components/UserProfile';
+import ResumeBuilder from './components/ResumeBuilder';
 import { X, Settings, LogOut, FileText, ChevronRight } from 'lucide-react';
 import { getUserBadge } from './lib/badgeUtils';
 import Toast from './components/Toast';
@@ -22,22 +23,28 @@ import { ContactForm } from './components/ContactForm';
 export default function App() {
   // Global States
   const [user, setUser] = useState<User | null>(null);
-  const [settings, setSettings] = useState<AdminSettings>({
-    brandName: '',
-    tagline: '',
-    logoUrl: '',
-    bannerUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
-    premiumMode: true,
-    membershipPrice: 499,
-    currency: 'INR',
-    paywallFeatures: [
-      'Unlimited Premium Job Applications',
-      'Access Live HR/Recruiter Contact Details',
-      'Post in Community Feed with Image Uploads',
-      'Direct WhatsApp Chat with Hiring Managers'
-    ],
-    cashfreeAppId: '',
-    cashfreeSecretKey: ''
+  const [settings, setSettings] = useState<AdminSettings>(() => {
+    const defaults = {
+      brandName: '',
+      tagline: '',
+      logoUrl: '',
+      bannerUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
+      premiumMode: true,
+      membershipPrice: 499,
+      currency: 'INR',
+      paywallFeatures: [
+        'Unlimited Premium Job Applications',
+        'Access Live HR/Recruiter Contact Details',
+        'Post in Community Feed with Image Uploads',
+        'Direct WhatsApp Chat with Hiring Managers'
+      ],
+      cashfreeAppId: '',
+      cashfreeSecretKey: ''
+    };
+    if (typeof window !== 'undefined' && (window as any).__INITIAL_SETTINGS__) {
+      return { ...defaults, ...(window as any).__INITIAL_SETTINGS__ };
+    }
+    return defaults;
   });
 
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -80,7 +87,7 @@ export default function App() {
   };
   
   // Navigation
-  const [currentTab, setCurrentTab] = useState<'jobs' | 'community' | 'admin' | 'profile' | 'settings'>('jobs');
+  const [currentTab, setCurrentTab] = useState<'jobs' | 'community' | 'admin' | 'profile' | 'settings' | 'resume'>('jobs');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -790,7 +797,7 @@ export default function App() {
               />
             )}
 
-             {/* 4. User Profile */}
+            {/* 4. User Profile */}
             {currentTab === 'profile' && (
               <UserProfile
                 user={user}
@@ -833,6 +840,15 @@ export default function App() {
               />
             )}
 
+            {/* Resume Builder Section */}
+            {currentTab === 'resume' && (
+              <ResumeBuilder
+                user={user}
+                settings={settings}
+                onLoginTrigger={() => setShowLoginModal(true)}
+              />
+            )}
+
             {/* 5. App Settings */}
             {currentTab === 'settings' && (
               <div className="max-w-md mx-auto px-4 py-8 animate-fade-in space-y-6">
@@ -842,27 +858,10 @@ export default function App() {
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-slate-900 font-display">Account Settings</h2>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Manage your app experience & pages</p>
                   </div>
                 </div>
 
-                {/* User Info Card */}
-                {user && (
-                  <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-white border border-slate-200 p-0.5 overflow-hidden flex items-center justify-center shrink-0">
-                      <img
-                        src={user.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || user.name || 'user')}`}
-                        alt={user.name}
-                        className="w-full h-full rounded-full object-cover"
-                        referrerPolicy="no-referrer"
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-bold text-slate-950 truncate">{user.name}</p>
-                      <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
-                    </div>
-                  </div>
-                )}
+
 
                 {/* Dynamic Pages List */}
                 <div className="space-y-2.5">
