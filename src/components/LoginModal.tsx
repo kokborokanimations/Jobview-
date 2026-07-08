@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import { User, AdminSettings } from '../types';
-import { LogIn, Sparkles, Mail, User as UserIcon, X } from 'lucide-react';
+import { LogIn, Sparkles, Mail, User as UserIcon, X, Lock, Eye, EyeOff } from 'lucide-react';
 import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
 interface LoginModalProps {
@@ -18,10 +18,13 @@ interface LoginModalProps {
 export default function LoginModal({ onLogin, onClose, isClosable = false, settings }: LoginModalProps) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleDemoLogin = async (e: FormEvent) => {
+  const handleAuthSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email) {
       setError('Please provide an email address.');
@@ -31,30 +34,48 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
       setError('Please enter a valid email address.');
       return;
     }
+    if (!password) {
+      setError('Please provide a password.');
+      return;
+    }
+    if (isSignUp && password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
 
     setIsLoading(true);
     setError('');
 
     try {
-      const response = await fetch('/api/users/sync', {
+      const endpoint = isSignUp ? '/api/users/register' : '/api/users/login';
+      const payload = isSignUp 
+        ? {
+            name: name.trim() || email.split('@')[0],
+            email: email.trim().toLowerCase(),
+            password: password,
+            avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(email)}`
+          }
+        : {
+            email: email.trim().toLowerCase(),
+            password: password
+          };
+
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim() || email.split('@')[0],
-          email: email.trim().toLowerCase(),
-          avatar: `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(email)}`
-        })
+        body: JSON.stringify(payload)
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to synchronize user session with server');
+        throw new Error(data.error || 'Authentication failed.');
       }
 
-      const syncedUser = await response.json();
-      onLogin(syncedUser);
+      onLogin(data);
     } catch (err: any) {
       console.error(err);
-      setError('Connection failed. Please try again.');
+      setError(err.message || 'Connection failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -169,60 +190,6 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
     };
   }, []);
 
-  const loginAsAdmin = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await fetch('/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Developer Admin',
-          email: 'kokborokanimations@gmail.com',
-          avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=150&auto=format&fit=crop'
-        })
-      });
-
-      if (response.ok) {
-        const syncedUser = await response.json();
-        onLogin(syncedUser);
-      } else {
-        throw new Error('Failed to login');
-      }
-    } catch (err) {
-      setError('Could not complete admin fast-login.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const loginAsUser = async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await fetch('/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: 'Amit Kumar',
-          email: 'amit.kumar@example.com',
-          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=150&auto=format&fit=crop'
-        })
-      });
-
-      if (response.ok) {
-        const syncedUser = await response.json();
-        onLogin(syncedUser);
-      } else {
-        throw new Error('Failed to login');
-      }
-    } catch (err) {
-      setError('Could not complete user fast-login.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 md:p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
       <div className="relative w-full h-full md:h-auto md:max-h-[90vh] md:max-w-md bg-white md:rounded-2xl shadow-2xl border-0 md:border border-slate-200 flex flex-col overflow-y-auto">
@@ -285,39 +252,77 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
           </div>
 
           {error && (
-            <p className="text-xs font-medium text-rose-600 bg-rose-50 p-2.5 rounded-lg border border-rose-100 mb-4">
-              {error}
-            </p>
+            <div className="text-xs font-medium text-rose-650 bg-rose-50/80 p-3 rounded-xl border border-rose-100 mb-4 flex flex-col gap-1.5 animate-pulse-subtle">
+              <span>{error}</span>
+              {error.includes('already exists') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(false);
+                    setError('');
+                  }}
+                  className="text-left text-teal-600 dark:text-teal-500 font-bold hover:underline cursor-pointer mt-1 flex items-center gap-1"
+                >
+                  <span>👉 Click here to switch to Sign In tab</span>
+                </button>
+              )}
+            </div>
           )}
 
           {!settings?.googleOnly && (
             <>
-              {/* Divider */}
-              <div className="relative my-4 text-center">
-                <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
-                <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
-                  Or Enter Email Details
-                </span>
+              {/* Sign In / Sign Up Selector Tabs */}
+              <div className="flex bg-slate-100 dark:bg-slate-900/60 p-1 rounded-xl mb-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(false);
+                    setError('');
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    !isSignUp
+                      ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSignUp(true);
+                    setError('');
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    isSignUp
+                      ? 'bg-white dark:bg-slate-800 text-teal-600 dark:text-teal-400 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-800 dark:text-slate-400'
+                  }`}
+                >
+                  Sign Up
+                </button>
               </div>
 
-              <form onSubmit={handleDemoLogin} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
-                    Your Name
-                  </label>
-                  <div className="relative">
-                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-                      <UserIcon size={18} />
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="John Doe (Optional)"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
-                    />
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {isSignUp && (
+                  <div>
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
+                      Your Name
+                    </label>
+                    <div className="relative">
+                      <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                        <UserIcon size={18} />
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="John Doe"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
@@ -338,6 +343,32 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-450 mb-1 font-display">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+                      <Lock size={18} />
+                    </span>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full pl-10 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/20 focus:border-teal-500 transition-all text-sm text-slate-900 font-sans"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   type="submit"
                   disabled={isLoading}
@@ -348,37 +379,11 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
                   ) : (
                     <>
                       <Sparkles size={16} />
-                      <span>Continue with Email</span>
+                      <span>{isSignUp ? 'Create Account' : 'Sign In'}</span>
                     </>
                   )}
                 </button>
               </form>
-
-              {/* Divider */}
-              <div className="relative my-5 text-center">
-                <span className="absolute inset-x-0 top-1/2 h-px bg-slate-100 -z-10" />
-                <span className="bg-white px-3 text-xs text-slate-400 uppercase tracking-widest font-bold font-display">
-                  Or Fast-Pass Login
-                </span>
-              </div>
-
-              {/* Fast-Pass Options */}
-              <div className="grid grid-cols-2 gap-3 font-display">
-                <button
-                  onClick={loginAsAdmin}
-                  disabled={isLoading}
-                  className="px-4 py-2.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 hover:bg-slate-100 hover:text-slate-950 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  👑 Admin Demo
-                </button>
-                <button
-                  onClick={loginAsUser}
-                  disabled={isLoading}
-                  className="px-4 py-2.5 text-xs font-bold text-teal-700 bg-teal-50 border border-teal-200 hover:bg-teal-100 hover:text-teal-950 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  👤 Candidate Demo
-                </button>
-              </div>
             </>
           )}
 

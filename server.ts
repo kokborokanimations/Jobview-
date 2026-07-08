@@ -1591,6 +1591,126 @@ app.post('/api/resume/enhance', async (req, res) => {
 });
 
 // Sync current user (login or trigger trial evaluation)
+app.post('/api/users/register', async (req, res) => {
+  const { name, email, password, avatar } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const db = readDB();
+  let existingUser = db.users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+  if (existingUser) {
+    return res.status(400).json({ error: 'Account already exists with this email address' });
+  }
+
+  const isAdmin = email.toLowerCase() === 'kokborokanimations@gmail.com';
+  const now = new Date();
+  const expiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+  const user = {
+    id: 'user-' + Date.now(),
+    name: name || email.split('@')[0],
+    email: email.toLowerCase(),
+    password: password,
+    avatar: avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(email)}`,
+    joinDate: now.toISOString(),
+    created_at: now.toISOString(),
+    trialExpiryDate: expiry.toISOString(),
+    subscriptionStatus: isAdmin ? 'Active' : 'Free Trial',
+    role: isAdmin ? 'admin' : 'member'
+  };
+
+  db.users.push(user);
+  writeDB(db);
+
+  // Sync to Supabase
+  try {
+    const supabase = getServerSupabase();
+    if (supabase) {
+      const { error } = await supabase
+        .from('users')
+        .upsert(mapUserToSupabase(user));
+      if (error) {
+        console.log('[Supabase Info] Local user synced but Supabase upsert skipped:', error.message);
+      }
+    }
+  } catch (err: any) {
+    console.log('[Supabase Info] Local user synced but Supabase upsert skipped. Details:', err.message || String(err));
+  }
+
+  const responseUser = { ...user };
+  delete responseUser.password;
+  res.json(responseUser);
+});
+
+app.post('/api/users/login', async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required' });
+  }
+
+  const db = readDB();
+  let user = db.users.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+
+  if (!user) {
+    return res.status(400).json({ error: 'No account found with this email. Please sign up.' });
+  }
+
+  if (user.password && user.password !== password) {
+    return res.status(400).json({ error: 'Incorrect password' });
+  }
+
+  if (!user.password) {
+    user.password = password;
+    writeDB(db);
+  }
+
+  const isAdmin = email.toLowerCase() === 'kokborokanimations@gmail.com';
+  user.role = isAdmin ? 'admin' : 'member';
+  if (isAdmin) {
+    user.subscriptionStatus = 'Active';
+  }
+
+  // Check trial or premium subscription expiration
+  if (user.subscriptionStatus === 'Free Trial') {
+    const now = new Date();
+    const expiry = new Date(user.trialExpiryDate);
+    if (now > expiry) {
+      user.subscriptionStatus = 'Expired';
+    }
+  } else if (user.subscriptionStatus === 'Active' && !isAdmin) {
+    const now = new Date();
+    const planExpiryStr = user.plan_expiry_date || user.planExpiryDate;
+    if (planExpiryStr) {
+      const expiry = new Date(planExpiryStr);
+      if (now > expiry) {
+        user.subscriptionStatus = 'Expired';
+      }
+    }
+  }
+  writeDB(db);
+
+  // Sync to Supabase
+  try {
+    const supabase = getServerSupabase();
+    if (supabase) {
+      const { error } = await supabase
+        .from('users')
+        .upsert(mapUserToSupabase(user));
+      if (error) {
+        console.log('[Supabase Info] Local user synced but Supabase upsert skipped:', error.message);
+      }
+    }
+  } catch (err: any) {
+    console.log('[Supabase Info] Local user synced but Supabase upsert skipped. Details:', err.message || String(err));
+  }
+
+  const responseUser = { ...user };
+  delete responseUser.password;
+  res.json(responseUser);
+});
+
+// Sync current user (login or trigger trial evaluation)
 app.post('/api/users/sync', async (req, res) => {
   const { name, email, avatar } = req.body;
   if (!email) {
