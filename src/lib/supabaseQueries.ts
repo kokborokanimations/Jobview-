@@ -143,13 +143,13 @@ export async function reportPostToSupabase(
 // --- LOCAL STORAGE FALLBACK HELPERS ---
 
 function getLocalSavedPosts(allPosts: CommunityPost[]): CommunityPost[] {
-  const saved = localStorage.getItem('jobview_bookmarked_posts');
+  const saved = localStorage.getItem('sebok_bookmarked_posts') || localStorage.getItem('jobview_bookmarked_posts');
   const savedIds: string[] = saved ? JSON.parse(saved) : [];
   return allPosts.filter(post => savedIds.includes(post.id));
 }
 
 function toggleLocalSavedPost(postId: string): boolean {
-  const saved = localStorage.getItem('jobview_bookmarked_posts');
+  const saved = localStorage.getItem('sebok_bookmarked_posts') || localStorage.getItem('jobview_bookmarked_posts');
   let savedIds: string[] = saved ? JSON.parse(saved) : [];
   let newState = false;
   
@@ -161,16 +161,16 @@ function toggleLocalSavedPost(postId: string): boolean {
     newState = true;
   }
   
-  localStorage.setItem('jobview_bookmarked_posts', JSON.stringify(savedIds));
+  localStorage.setItem('sebok_bookmarked_posts', JSON.stringify(savedIds));
   return newState;
 }
 
 function trackLocalReport(postId: string) {
-  const reported = localStorage.getItem('jobview_reported_posts');
+  const reported = localStorage.getItem('sebok_reported_posts') || localStorage.getItem('jobview_reported_posts');
   const reportedIds: string[] = reported ? JSON.parse(reported) : [];
   if (!reportedIds.includes(postId)) {
     reportedIds.push(postId);
-    localStorage.setItem('jobview_reported_posts', JSON.stringify(reportedIds));
+    localStorage.setItem('sebok_reported_posts', JSON.stringify(reportedIds));
   }
 }
 

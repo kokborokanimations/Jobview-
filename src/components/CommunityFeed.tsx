@@ -54,7 +54,7 @@ export default function CommunityFeed({
 
   // States for interactive feed actions
   const [likedPostIds, setLikedPostIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('jobview_liked_posts');
+    const saved = localStorage.getItem('sebok_liked_posts') || localStorage.getItem('jobview_liked_posts');
     return saved ? JSON.parse(saved) : [];
   });
   const [sharedPostId, setSharedPostId] = useState<string | null>(null);
@@ -135,7 +135,7 @@ export default function CommunityFeed({
       updated = [...likedPostIds, postId];
     }
     setLikedPostIds(updated);
-    localStorage.setItem('jobview_liked_posts', JSON.stringify(updated));
+    localStorage.setItem('sebok_liked_posts', JSON.stringify(updated));
   };
 
   const confirmDelete = () => {

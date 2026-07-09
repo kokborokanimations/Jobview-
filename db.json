@@ -2,8 +2,8 @@
   "adminSettings": {
     "brandName": "Sebok",
     "tagline": "Tripura jobs in your finger",
-    "logoUrl": "/uploads/app_logo_1783437376009.jpg",
-    "faviconUrl": "/uploads/app_favicon_1783437388585.jpg",
+    "logoUrl": "https://crdmccidgzknnylyggbf.supabase.co/storage/v1/object/public/branding/app_logo_1783614864312.jpg",
+    "faviconUrl": "https://crdmccidgzknnylyggbf.supabase.co/storage/v1/object/public/branding/app_favicon_1783614509229.jpg",
     "bannerUrl": "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop",
     "premiumMode": true,
     "membershipPrice": 499,
@@ -35,20 +35,22 @@
     "communityReviewNotice": "",
     "loginTitle": "",
     "loginSubtitle": "",
-    "googleOnly": false
+    "googleOnly": false,
+    "razorpayKeyId": "",
+    "razorpayKeySecret": ""
   },
   "jobs": [
     {
-      "id": 9,
-      "title": "Relationship manager ",
-      "companyName": "Slice",
+      "id": 14,
+      "title": " WE ARE HIRING (Field Sales Executive)",
+      "companyName": "FindiBankit",
       "companyLogoUrl": "",
-      "location": "Khumulwng, Tripura ",
-      "shortDescription": "What this selected component he was the recent past kardiya ",
-      "fullDescription": "What this selected component he was the recent past kardiya ",
-      "datePosted": "2026-07-01T17:46:09.669+00:00",
+      "location": "Agartala, Tripura ",
+      "shortDescription": "FindiBankit is hiring experienced professionals from the Fintech Industry to be part of our growing team.\n📌 Open Positions:\n✅ FSE (Field Sales Executive)\n📍 Locations: Agartala, Udaipur \n🏨 Regional Office-Agartala\n✅ Eligibility:\nMinimum 1 year of Fintech experience is mandatory.\nExperience in White Label ATM Machine,AEPS, DMT, BBPS, Mobile Recharge, mATM, and other Fintech services will be preferred.\nStrong communication and sales skills.\n📩 Send Your Resume -  +919856180120\n⚠️ Only candidates with Fintech,Telecom,Fmcg experience are requested to apply.",
+      "fullDescription": "FindiBankit is hiring experienced professionals from the Fintech Industry to be part of our growing team.\n📌 Open Positions:\n✅ FSE (Field Sales Executive)\n📍 Locations: Agartala, Udaipur \n🏨 Regional Office-Agartala\n✅ Eligibility:\nMinimum 1 year of Fintech experience is mandatory.\nExperience in White Label ATM Machine,AEPS, DMT, BBPS, Mobile Recharge, mATM, and other Fintech services will be preferred.\nStrong communication and sales skills.\n📩 Send Your Resume -  +919856180120\n⚠️ Only candidates with Fintech,Telecom,Fmcg experience are requested to apply.",
+      "datePosted": "2026-07-09T13:28:35.006+00:00",
       "isLive": true,
-      "createdAt": "2026-07-01T17:46:09.827327+00:00"
+      "createdAt": "2026-07-09T13:28:35.166395+00:00"
     }
   ],
   "communityPosts": [
@@ -134,6 +136,19 @@
       "role": "member"
     },
     {
+      "id": "user-demo-1",
+      "name": "Amit Kumar",
+      "email": "amit.kumar@example.com",
+      "avatar": "",
+      "joinDate": "2026-06-13T14:47:52.526Z",
+      "trialExpiryDate": "2026-07-13T14:47:52.526Z",
+      "subscriptionStatus": "Active",
+      "bio": "Aspiring Full Stack Engineer. Looking for remote opportunities.",
+      "role": "member",
+      "plan_expiry_date": "2026-08-02T17:07:50.554Z",
+      "planExpiryDate": "2026-08-02T17:07:50.554Z"
+    },
+    {
       "id": "user-1783314258011",
       "name": "Shyamchan D",
       "email": "shyamchan25@gmail.com",
@@ -167,19 +182,6 @@
       "role": "admin"
     },
     {
-      "id": "user-demo-1",
-      "name": "Amit Kumar",
-      "email": "amit.kumar@example.com",
-      "avatar": "",
-      "joinDate": "2026-06-13T14:47:52.526Z",
-      "trialExpiryDate": "2026-07-13T14:47:52.526Z",
-      "subscriptionStatus": "Active",
-      "bio": "Aspiring Full Stack Engineer. Looking for remote opportunities.",
-      "role": "member",
-      "plan_expiry_date": "2026-08-02T17:07:50.554Z",
-      "planExpiryDate": "2026-08-02T17:07:50.554Z"
-    },
-    {
       "id": "user-demo-2",
       "name": "Sarah Jenkins",
       "email": "sarah.j@example.com",
@@ -191,6 +193,15 @@
     }
   ],
   "paymentLogs": [
+    {
+      "id": "CF_SIM_TX_942630049",
+      "userId": "user-demo-2",
+      "userEmail": "sarah.j@example.com",
+      "amount": 499,
+      "status": "SUCCESS",
+      "txId": "CF_SIM_TX_942630049",
+      "createdAt": "2026-07-07T16:15:23.778+00:00"
+    },
     {
       "id": "CF_SIM_TX_288555516",
       "userId": "user-demo-1",
@@ -239,37 +250,56 @@
   ],
   "pages": [
     {
-      "id": "page-about",
-      "title": "About Us",
-      "slug": "about-us",
-      "content": "<h2>About Us</h2><p>Welcome to Jobview, the ultimate platform for premium job discovery and professional community building. We connect qualified talents directly with verified employers through modern channels like WhatsApp and direct calls.</p>",
+      "id": "page-terms",
+      "title": "Terms of Use",
+      "slug": "terms-of-use",
+      "content": "Terms and Conditions\nLast Updated: July 2026\nWelcome to Sebok! These terms and conditions outline the rules and regulations for the use of Sebok's Web Application.\nBy accessing this web application, we assume you accept these terms and conditions. Do not continue to use Sebok if you do not agree to take all of the terms and conditions stated on this page.\nAccount Registration & Security\nTo access certain features of the premium portal, you may be required to register an account. You are responsible for maintaining the confidentiality of your account details and for all activities that occur under your account.\nIntellectual Property Rights\nUnless otherwise stated, Sebok and/or its licensors own the intellectual property rights for all material on Sebok. All intellectual property rights are reserved. You may access this from Sebok for your own personal use subjected to restrictions set in these terms and conditions.\nProhibited Conduct\nYou agree not to misguide, scrape data systematically, upload malicious code, or use the platform for any unlawful activities that violate regional or national regulations.\nLimitation of Liability\nSebok provides career alerts and networking tools in good faith. However, we do not warrant the absolute completeness, accuracy, or availability of third-party job listings, and shall not be held liable for any direct or indirect losses arising from platform usage.",
       "showInFooter": true,
-      "isSystem": true
+      "isVisibleInFooter": true,
+      "isSystem": true,
+      "order": 0
     },
     {
-      "id": "page-contact",
-      "title": "Contact Us",
-      "slug": "contact-us",
-      "content": "",
+      "id": "page-1783522424900",
+      "title": "Refund Policy",
+      "slug": "refund-policy",
+      "content": "Refund and Return Policy\nLast Updated: July 2026\n​Thank you for choosing Sebok. We want to ensure our users have a clear understanding of our transaction policies regarding premium features, subscriptions, or digital services.\n​Subscription & Digital Services\nSince Sebok provides instant access to premium portal data, verified careers, and digital networking tools immediately upon successful payment confirmation, we generally operate under a No Refund Policy for active subscription periods.\n​Exceptions & Billing Discrepancies\nWe value fairness and want our users to feel safe. We will review and process refunds under the following specific conditions:\n​Double Up/Duplicate Transactions: If your bank account or card was charged twice for the same subscription due to a technical glitch, the duplicate amount will be refunded entirely.\n​Failed Activation: If money was deducted from your account but the premium features were not unlocked within 24 hours, you are entitled to a full refund or immediate manual activation.\n​How to Apply for a Refund\nIf you experience a technical billing issue, please reach out to our support team (support@sebok.in) via our official contact channel within 7 days of the transaction. Provide your registered email, transaction ID, and a payment screenshot. Verified refund requests are processed within 5-7 working days and credited back to the original payment source via our payment gateway partner.",
       "showInFooter": true,
-      "isSystem": true
+      "isVisibleInFooter": true,
+      "isSystem": false,
+      "order": 0
     },
     {
       "id": "page-privacy",
       "title": "Privacy Policy",
       "slug": "privacy-policy",
-      "content": "<h2>Privacy Policy</h2><p>Your privacy is important to us. We encrypt all sensitive documents and protect your personal identification details securely. We do not sell your personal data to third-party ad networks.</p>",
+      "content": "Privacy Policy\nLast Updated: July 2026\n​At Sebok, accessible from our web application, one of our main priorities is the privacy of our visitors. This Privacy Policy document contains types of information that is collected and recorded by Sebok and how we use it.\n​Information We Collect\nWhen you register for an account using Google OAuth or email, we collect basic profile details including your name, email address, and profile picture/avatar. If you voluntarily update your profile, we collect the updated full name and uploaded images securely.\n​How We Use Your Information\nWe use the collected information to:\n​Provide, operate, and maintain our web application.\n​Improve, personalize, and expand our platform features.\n​Understand and analyze how you use our web application.\n​Authenticate your identity securely during sign-in and protect your account from unauthorized access.\n​Data Security & Storage\nYour profile data is securely stored using encrypted cloud infrastructure (Supabase). We employ robust Row-Level Security (RLS) policies to ensure that your private profile data can only be accessed or modified by you.\n​Third-Party Services\nWe do not sell, trade, or rent your personal identification information to third-party ad networks or data brokers. Third-party services like payment gateways (Razorpay) or authentication providers (Google) handle your data strictly in accordance with their respective privacy policies for transaction processing and secure login.",
       "showInFooter": true,
-      "isSystem": true
+      "isVisibleInFooter": true,
+      "isSystem": true,
+      "order": 0
     },
     {
-      "id": "page-terms",
-      "title": "Terms of Use",
-      "slug": "terms-of-use",
-      "content": "<h2>Terms of Use</h2><p>By using Jobview, you agree to respect community guidelines. Spamming recruiter channels, abusing free trials, or publishing malicious comments will result in instant account termination.</p>",
+      "id": "page-contact",
+      "title": "Contact Us",
+      "slug": "contact-us",
+      "content": "Email : support@sebok.in",
       "showInFooter": true,
-      "isSystem": true
+      "isVisibleInFooter": true,
+      "isSystem": true,
+      "order": 0
+    },
+    {
+      "id": "page-about",
+      "title": "About Us",
+      "slug": "about-us",
+      "content": "Welcome to SEBOK\n‎\n‎SEBOK is a trusted platform dedicated to helping job seekers discover local private job opportunities across Tripura and other regions of India.\n‎\n‎Our mission is to make job searching simple, fast, and accessible by collecting and sharing genuine job information from various employers and publicly available sources.\n‎\n‎At SEBOK, users can:\n‎\n‎Browse private job vacancies.\n‎\n‎Receive the latest job alerts.\n‎\n‎Explore local employment opportunities.\n‎\n‎Stay updated with newly posted jobs.\n‎\n‎We are not a recruitment agency and do not guarantee employment. SEBOK only provides job-related information for educational and informational purposes.\n‎\n‎Our Mission\n‎\n‎To connect job seekers with genuine employment opportunities by providing timely and accurate job information.\n‎\n‎Contact\n‎\n‎Website: https://sebok.in\n‎\n‎Email: support@sebok.in",
+      "showInFooter": true,
+      "isVisibleInFooter": true,
+      "isSystem": true,
+      "order": 0
     }
   ],
-  "contacts": []
+  "contacts": [],
+  "resumes": []
 }

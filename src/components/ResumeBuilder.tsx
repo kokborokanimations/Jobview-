@@ -176,11 +176,11 @@ type TemplateType = 'donna-elegant' | 'lorna-minimalist' | 'olivia-modern';
 
 export default function ResumeBuilder({ user, settings, onLoginTrigger }: ResumeBuilderProps) {
   // Persistence key
-  const storageKey = user ? `jobview_resume_${user.id}` : 'jobview_resume_guest';
+  const storageKey = user ? `sebok_resume_${user.id}` : 'sebok_resume_guest';
 
   // Load Initial state
   const [resume, setResume] = useState<ResumeData>(() => {
-    const saved = localStorage.getItem(storageKey);
+    const saved = localStorage.getItem(storageKey) || localStorage.getItem(user ? `jobview_resume_${user.id}` : 'jobview_resume_guest');
     if (saved) {
       try {
         return JSON.parse(saved);
@@ -204,9 +204,9 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
   const [pdfDownloading, setPdfDownloading] = useState(false);
   
   // Multiple draft persistence states
-  const savedListStorageKey = user ? `jobview_saved_resumes_${user.id}` : 'jobview_saved_resumes_guest';
+  const savedListStorageKey = user ? `sebok_saved_resumes_${user.id}` : 'sebok_saved_resumes_guest';
   const [savedResumes, setSavedResumes] = useState<SavedResume[]>(() => {
-    const saved = localStorage.getItem(savedListStorageKey);
+    const saved = localStorage.getItem(savedListStorageKey) || localStorage.getItem(user ? `jobview_saved_resumes_${user.id}` : 'jobview_saved_resumes_guest');
     return saved ? JSON.parse(saved) : [];
   });
   
@@ -220,36 +220,37 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     localStorage.setItem(savedListStorageKey, JSON.stringify(savedResumes));
   }, [savedResumes, savedListStorageKey]);
 
-  // Load saved resumes from Supabase if user is logged in
+  // Load saved resumes from the full-stack API (which synchronizes with Supabase)
   useEffect(() => {
-    if (user) {
-      import('../lib/supabaseQueries')
-        .then(({ fetchResumesFromSupabase }) => fetchResumesFromSupabase(user.id))
-        .then((dbResumes) => {
-          if (dbResumes && dbResumes.length > 0) {
-            const formatted: SavedResume[] = dbResumes.map((row: any) => ({
-              id: row.id,
-              name: row.name,
-              timestamp: row.timestamp || new Date(row.updated_at || row.created_at || Date.now()).toLocaleDateString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric'
-              }),
-              data: row.data,
-              template: row.template || 'donna-elegant'
-            }));
-            setSavedResumes(formatted);
-          }
-        })
-        .catch(err => {
-          console.warn('Failed to load resumes from Supabase:', err);
-        });
-    } else {
-      // Guest user fallback to localStorage
-      const saved = localStorage.getItem('jobview_saved_resumes_guest');
-      setSavedResumes(saved ? JSON.parse(saved) : []);
-    }
-  }, [user]);
+    const userId = user ? user.id : 'guest';
+    fetch(`/api/resumes?userId=${userId}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.resumes && data.resumes.length > 0) {
+          const formatted: SavedResume[] = data.resumes.map((row: any) => ({
+            id: row.id,
+            name: row.name,
+            timestamp: row.timestamp || new Date(row.updated_at || row.created_at || Date.now()).toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
+            }),
+            data: row.data,
+            template: row.template || 'donna-elegant'
+          }));
+          setSavedResumes(formatted);
+        } else {
+          // fallback to localStorage if API has nothing
+          const saved = localStorage.getItem(savedListStorageKey);
+          setSavedResumes(saved ? JSON.parse(saved) : []);
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to load resumes from API, falling back to localStorage:', err);
+        const saved = localStorage.getItem(savedListStorageKey);
+        setSavedResumes(saved ? JSON.parse(saved) : []);
+      });
+  }, [user, savedListStorageKey]);
 
   // Generate a valid UUID for database compatibility (avoiding invalid uuid syntax errors in Postgres)
   const generateUUID = () => {
@@ -288,17 +289,25 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     setShowSaveModal(false);
     setSaveTitle('');
     
-    // Save to Supabase if logged in
-    if (user) {
-      try {
-        const { saveResumeToSupabase } = await import('../lib/supabaseQueries');
-        const res = await saveResumeToSupabase(user.id, newSave);
-        if (!res.success) {
-          console.warn('Could not sync save to Supabase:', res.error);
-        }
-      } catch (err) {
-        console.warn('Supabase save error:', err);
+    // Save to server-side Express API (which handles local db.json and Supabase sync)
+    try {
+      const response = await fetch('/api/resumes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newSave.id,
+          userId: user ? user.id : 'guest',
+          name: newSave.name,
+          timestamp: newSave.timestamp,
+          data: newSave.data,
+          template: newSave.template
+        })
+      });
+      if (!response.ok) {
+        console.warn('Could not save resume draft via express server API');
       }
+    } catch (err) {
+      console.warn('API save error:', err);
     }
 
     if (window.showSuccessToast) {
@@ -321,17 +330,16 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     setSavedResumes(prev => prev.filter(item => item.id !== id));
     setDeleteConfirmId(null);
     
-    // Delete from Supabase if logged in
-    if (user) {
-      try {
-        const { deleteResumeFromSupabase } = await import('../lib/supabaseQueries');
-        const res = await deleteResumeFromSupabase(user.id, id);
-        if (!res.success) {
-          console.warn('Could not sync delete to Supabase:', res.error);
-        }
-      } catch (err) {
-        console.warn('Supabase delete error:', err);
+    // Delete from server-side Express API
+    try {
+      const response = await fetch(`/api/resumes/${id}`, {
+        method: 'DELETE'
+      });
+      if (!response.ok) {
+        console.warn('Could not delete resume draft via express server API');
       }
+    } catch (err) {
+      console.warn('API delete error:', err);
     }
 
     if (window.showSuccessToast) {

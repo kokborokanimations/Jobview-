@@ -9,6 +9,7 @@ import {
   ArrowLeft, MapPin, DollarSign, Calendar, ExternalLink, 
   Mail, Phone, Share2, Bookmark, Check, Briefcase, Award 
 } from 'lucide-react';
+import { LOGO_GRADIENTS } from './JobFeed';
 
 interface JobDetailsProps {
   job: Job;
@@ -18,10 +19,16 @@ interface JobDetailsProps {
 export default function JobDetails({ job, onBack }: JobDetailsProps) {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isShared, setIsShared] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  const idStr = String(job.id || '');
+  const logoIndex = typeof job.companyLogoIndex === 'number' ? job.companyLogoIndex : (idStr ? idStr.charCodeAt(idStr.length - 1) % LOGO_GRADIENTS.length : 0);
+  const logoGrad = LOGO_GRADIENTS[logoIndex % LOGO_GRADIENTS.length];
+  const initials = job.companyName.substring(0, 2).toUpperCase();
 
   // Check bookmarks
   useEffect(() => {
-    const saved = localStorage.getItem('jobview_bookmarked_jobs');
+    const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
     if (saved) {
       const ids = JSON.parse(saved) as string[];
       setIsBookmarked(ids.map(String).includes(String(job.id)));
@@ -29,7 +36,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
   }, [job.id]);
 
   const handleToggleBookmark = () => {
-    const saved = localStorage.getItem('jobview_bookmarked_jobs');
+    const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
     let ids: string[] = saved ? JSON.parse(saved).map(String) : [];
     const jobIdStr = String(job.id);
     
@@ -41,12 +48,11 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
       setIsBookmarked(true);
       window.showJobSavedToast?.('Job Saved!');
     }
-    localStorage.setItem('jobview_bookmarked_jobs', JSON.stringify(ids));
+    localStorage.setItem('sebok_bookmarked_jobs', JSON.stringify(ids));
   };
 
-  const handleShare = () => {
-    // Generate simple shareable simulated link using window.location.origin
-    const shareUrl = `${window.location.origin}/?job_id=${String(job.id)}`;
+  const copyToClipboard = () => {
+    const shareUrl = `${window.location.origin}/job/${String(job.id)}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       setIsShared(true);
       setTimeout(() => setIsShared(false), 2500);
@@ -55,17 +61,39 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
     });
   };
 
+  const handleShare = async () => {
+    const shareUrl = `${window.location.origin}/job/${String(job.id)}`;
+    const shareTitle = `${job.title} - ${job.companyName}`;
+    const shareText = `Check out this job opening: ${job.title} at ${job.companyName} on Sebok!`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: shareTitle,
+          text: shareText,
+          url: shareUrl,
+        });
+      } catch (err: any) {
+        if (err.name !== 'AbortError') {
+          setShowShareModal(true);
+        }
+      }
+    } else {
+      setShowShareModal(true);
+    }
+  };
+
   // WhatsApp click generator
   const getWhatsAppLink = () => {
     const cleanPhone = job.whatsapp ? job.whatsapp.replace(/\D/g, '') : '';
     const text = encodeURIComponent(
-      `Hello! I found your opening for "${job.title}" at "${job.companyName}" on Jobview. I would love to share my portfolio and discuss the vacancy further.`
+      `Hello! I found your opening for "${job.title}" at "${job.companyName}" on Sebok. I would love to share my portfolio and discuss the vacancy further.`
     );
     return `https://wa.me/${cleanPhone || '919999999999'}?text=${text}`;
   };
 
-  const emailSubject = encodeURIComponent(`Job Application: ${job.title} - Jobview`);
-  const emailBody = encodeURIComponent(`Dear Hiring Team,\n\nI am writing to express my strong interest in the "${job.title}" position at "${job.companyName}" advertised on Jobview.\n\nPlease find attached my resume for your consideration.\n\nBest regards,\n[Your Name]`);
+  const emailSubject = encodeURIComponent(`Job Application: ${job.title} - Sebok`);
+  const emailBody = encodeURIComponent(`Dear Hiring Team,\n\nI am writing to express my strong interest in the "${job.title}" position at "${job.companyName}" advertised on Sebok.\n\nPlease find attached my resume for your consideration.\n\nBest regards,\n[Your Name]`);
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
@@ -129,21 +157,15 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
                   (e.currentTarget as HTMLImageElement).style.display = 'none';
                   const parent = e.currentTarget.parentElement;
                   if (parent) {
-                    parent.className = "w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-lg text-amber-700 tracking-wide shadow-xs shrink-0 font-display";
-                    parent.innerHTML = `
-                      <svg class="w-8 h-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
-                      </svg>
-                    `;
+                    parent.className = `w-16 h-16 rounded-2xl bg-gradient-to-br ${logoGrad} flex items-center justify-center font-bold text-base tracking-wide shadow-xs shrink-0 font-display uppercase`;
+                    parent.innerHTML = `<span>${initials}</span>`;
                   }
                 }}
               />
             </div>
           ) : (
-            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-lg text-amber-700 tracking-wide shadow-xs shrink-0 font-display">
-              <svg className="w-8 h-8 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
-              </svg>
+            <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${logoGrad} flex items-center justify-center font-bold text-base tracking-wide shadow-xs shrink-0 font-display uppercase`}>
+              <span>{initials}</span>
             </div>
           )}
 
@@ -267,6 +289,126 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
               <ExternalLink size={15} />
             </a>
           )}
+        </div>
+      )}
+
+      {/* Custom Social Share Modal Fallback */}
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop blur */}
+          <div 
+            className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+            onClick={() => setShowShareModal(false)}
+          />
+          
+          {/* Modal Card */}
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl relative z-10 border border-slate-100 transform scale-100 transition-all">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 mb-4">
+              <h3 className="text-base font-bold text-slate-800 flex items-center gap-2 font-display">
+                <Share2 size={18} className="text-teal-600" />
+                <span>Share Job Opening</span>
+              </h3>
+              <button 
+                onClick={() => setShowShareModal(false)}
+                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500 mb-4 font-medium leading-relaxed">
+              Share "<span className="text-slate-800 font-bold">{job.title}</span>" at <span className="text-slate-800 font-bold">{job.companyName}</span> via your favorite social apps:
+            </p>
+
+            {/* Social Channels Grid */}
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {/* WhatsApp */}
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out this job opening: *${job.title}* at *${job.companyName}*\n\nApply here: ${window.location.origin}/job/${job.id}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 transition-all border border-emerald-100/60 cursor-pointer text-xs font-bold"
+              >
+                <div className="p-1.5 bg-white rounded-lg shadow-2xs text-emerald-600">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L0 24l6.335-1.662c1.746.953 3.71 1.455 5.703 1.456h.008c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                  </svg>
+                </div>
+                <span>WhatsApp</span>
+              </a>
+
+              {/* Facebook */}
+              <a
+                href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-blue-50 hover:bg-blue-100/80 text-blue-700 transition-all border border-blue-100/60 cursor-pointer text-xs font-bold"
+              >
+                <div className="p-1.5 bg-white rounded-lg shadow-2xs text-blue-600">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/>
+                  </svg>
+                </div>
+                <span>Facebook</span>
+              </a>
+
+              {/* Twitter / X */}
+              <a
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out this job opening: ${job.title} at ${job.companyName}`)}&url=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all border border-slate-100 cursor-pointer text-xs font-bold"
+              >
+                <div className="p-1.5 bg-white rounded-lg shadow-2xs text-slate-900">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                  </svg>
+                </div>
+                <span>Twitter / X</span>
+              </a>
+
+              {/* Telegram */}
+              <a
+                href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}&text=${encodeURIComponent(`Check out this job opening: ${job.title} at ${job.companyName}`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2.5 p-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 transition-all border border-sky-100/60 cursor-pointer text-xs font-bold"
+              >
+                <div className="p-1.5 bg-white rounded-lg shadow-2xs text-sky-500">
+                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.37.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .24z"/>
+                  </svg>
+                </div>
+                <span>Telegram</span>
+              </a>
+            </div>
+
+            {/* Direct Link Copier Section */}
+            <div className="border-t border-slate-100 pt-4">
+              <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2 font-display">Or copy direct link</span>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  readOnly 
+                  value={`${window.location.origin}/job/${job.id}`} 
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-600 rounded-xl px-3 py-2 text-xs font-medium focus:outline-hidden"
+                />
+                <button
+                  onClick={copyToClipboard}
+                  className={`px-4 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center justify-center gap-1 shrink-0 ${
+                    isShared 
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-600' 
+                      : 'bg-teal-600 border-teal-600 text-white hover:bg-teal-700'
+                  }`}
+                >
+                  {isShared ? <Check size={14} /> : null}
+                  <span>{isShared ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

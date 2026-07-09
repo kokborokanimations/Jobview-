@@ -15,6 +15,15 @@ import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
 import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
+const ADMIN_LOGO_GRADIENTS = [
+  'from-blue-600 to-cyan-500 text-white',
+  'from-pink-500 to-teal-600 text-white',
+  'from-emerald-500 to-teal-600 text-white',
+  'from-amber-500 to-rose-500 text-white',
+  'from-violet-600 to-fuchsia-600 text-white',
+  'from-cyan-500 to-blue-600 text-white'
+];
+
 interface AdminPanelProps {
   settings: AdminSettings;
   jobs: Job[];
@@ -634,18 +643,18 @@ export default function AdminPanel({
 
   const handleEditJobClick = (job: Job) => {
     setEditingJobId(job.id);
-    setJobTitle(job.title);
-    setJobCompany(job.companyName);
-    setJobLocation(job.location);
+    setJobTitle(job.title || '');
+    setJobCompany(job.companyName || '');
+    setJobLocation(job.location || '');
     setJobSalary(job.salary || '');
-    setJobShortDesc(job.shortDescription);
-    setJobFullDesc(job.fullDescription);
-    setJobQualifications(job.qualifications);
-    setJobApplyLink(job.applyLink);
-    setJobEmail(job.email);
-    setJobPhone(job.phone);
-    setJobWhatsapp(job.whatsapp);
-    setJobLogoIndex(job.companyLogoIndex);
+    setJobShortDesc(job.shortDescription || '');
+    setJobFullDesc(job.fullDescription || '');
+    setJobQualifications(job.qualifications || '');
+    setJobApplyLink(job.applyLink || '');
+    setJobEmail(job.email || '');
+    setJobPhone(job.phone || '');
+    setJobWhatsapp(job.whatsapp || '');
+    setJobLogoIndex(job.companyLogoIndex !== undefined ? Number(job.companyLogoIndex) : 0);
     setJobContractType(job.contractType || 'Full-Time / Direct Hiring');
     setJobCompanyLogoUrl(job.companyLogoUrl || '');
     setJobWhatsappEnabled(job.whatsappEnabled !== false);
@@ -735,6 +744,11 @@ export default function AdminPanel({
       setIsUploadingLogo(false);
       if (url) {
         setLogoUrl(url);
+        // Automatically save branding settings so it persists instantly without requiring clicking Save!
+        await onUpdateSettings({
+          ...settings,
+          logoUrl: url
+        });
       }
     }
   };
@@ -746,6 +760,11 @@ export default function AdminPanel({
       setIsUploadingFavicon(false);
       if (url) {
         setFaviconUrl(url);
+        // Automatically save branding settings so it persists instantly without requiring clicking Save!
+        await onUpdateSettings({
+          ...settings,
+          faviconUrl: url
+        });
       }
     }
   };
@@ -757,6 +776,11 @@ export default function AdminPanel({
       setIsUploadingBanner(false);
       if (url) {
         setBannerUrl(url);
+        // Automatically save branding settings so it persists instantly without requiring clicking Save!
+        await onUpdateSettings({
+          ...settings,
+          bannerUrl: url
+        });
       }
     }
   };
@@ -1339,7 +1363,7 @@ export default function AdminPanel({
                   type="text"
                   value={loginTitle}
                   onChange={(e) => setLoginTitle(e.target.value)}
-                  placeholder="Welcome to Jobview"
+                  placeholder="Welcome to Sebok"
                   className="w-full bg-slate-50 border border-slate-200 focus:bg-white rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
                 />
               </div>
@@ -1620,20 +1644,37 @@ export default function AdminPanel({
                     </div>
                   </div>
 
-                  <div>
-                    <label className="text-[10px] text-gray-400 font-bold uppercase">Company Logo Color Preset (0 - 5)</label>
-                    <select
-                      value={jobLogoIndex}
-                      onChange={(e) => setJobLogoIndex(Number(e.target.value))}
-                      className="w-full bg-white border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none"
-                    >
-                      <option value={0}>Blue to Cyan Preset</option>
-                      <option value={1}>Pink to Indigo Preset</option>
-                      <option value={2}>Emerald to Teal Preset</option>
-                      <option value={3}>Amber to Rose Preset</option>
-                      <option value={4}>Violet to Fuchsia Preset</option>
-                      <option value={5}>Cyan to Blue Preset</option>
-                    </select>
+                   <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Company Logo Color Preset (0 - 5)</label>
+                    <div className="flex flex-wrap items-center gap-3 mt-2">
+                      {ADMIN_LOGO_GRADIENTS.map((grad, idx) => {
+                        const isSelected = jobLogoIndex === idx;
+                        const initials = (jobCompany ? jobCompany.substring(0, 2) : 'CO').toUpperCase();
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setJobLogoIndex(idx)}
+                            className={`relative w-12 h-12 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center font-bold text-xs tracking-wide transition-all duration-150 cursor-pointer border ${
+                              isSelected 
+                                ? 'ring-2 ring-teal-600 ring-offset-2 scale-105 shadow-md border-transparent' 
+                                : 'border-slate-200/60 hover:scale-105'
+                            }`}
+                            title={`Preset ${idx}`}
+                          >
+                            <span>{initials}</span>
+                            {isSelected && (
+                              <span className="absolute -top-1 -right-1 bg-teal-600 text-white rounded-full p-0.5 shadow-sm border border-white flex items-center justify-center">
+                                <Check size={8} strokeWidth={4} />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-1.5 leading-normal">
+                      Select a color scheme gradient for the default text-based placeholder logo.
+                    </p>
                   </div>
 
                   <div>
@@ -1689,12 +1730,31 @@ export default function AdminPanel({
                     </tr>
                   </thead>
                   <tbody>
-                    {jobs.map((job) => (
-                      <tr key={job.id} className="border-b border-gray-50 hover:bg-slate-50/50">
-                        <td className="py-3 font-medium">
-                          <span className="font-bold text-gray-900 block">{job.title}</span>
-                          <span className="text-gray-400 text-[11px] font-semibold">{job.companyName}</span>
-                        </td>
+                    {jobs.map((job) => {
+                      const idStr = String(job.id || '');
+                      const logoIndex = typeof job.companyLogoIndex === 'number' ? job.companyLogoIndex : (idStr ? idStr.charCodeAt(idStr.length - 1) % ADMIN_LOGO_GRADIENTS.length : 0);
+                      const logoGrad = ADMIN_LOGO_GRADIENTS[logoIndex % ADMIN_LOGO_GRADIENTS.length];
+                      const initials = job.companyName.substring(0, 2).toUpperCase();
+
+                      return (
+                        <tr key={job.id} className="border-b border-gray-50 hover:bg-slate-50/50">
+                          <td className="py-3 font-medium">
+                            <div className="flex items-center gap-2.5">
+                              {job.companyLogoUrl ? (
+                                <div className="w-8 h-8 rounded-lg overflow-hidden border border-slate-200/60 flex items-center justify-center bg-slate-50 shrink-0">
+                                  <img src={job.companyLogoUrl} alt="" className="w-full h-full object-contain p-0.5" />
+                                </div>
+                              ) : (
+                                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${logoGrad} flex items-center justify-center font-bold text-[9px] uppercase tracking-wider shrink-0`}>
+                                  <span>{initials}</span>
+                                </div>
+                              )}
+                              <div>
+                                <span className="font-bold text-gray-900 block">{job.title}</span>
+                                <span className="text-gray-400 text-[11px] font-semibold block">{job.companyName}</span>
+                              </div>
+                            </div>
+                          </td>
                         <td className="py-3 text-gray-500 font-semibold">{job.location}</td>
                         <td className="py-3">
                           <button
@@ -1726,7 +1786,7 @@ export default function AdminPanel({
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
@@ -2024,6 +2084,24 @@ CREATE POLICY "Allow anon insert" ON public.analytics FOR INSERT WITH CHECK (tru
 CREATE POLICY "Allow anon update" ON public.analytics FOR UPDATE USING (true);
 CREATE POLICY "Allow anon delete" ON public.analytics FOR DELETE USING (true);
 
+-- 11. RESUMES TABLE
+CREATE TABLE IF NOT EXISTS public.resumes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    name TEXT,
+    timestamp TEXT,
+    data JSONB,
+    template TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.resumes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.resumes FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.resumes FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.resumes FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.resumes FOR DELETE USING (true);
+
 -- Insert initial row if not exists
 INSERT INTO public.analytics (id, visit_count)
 VALUES ('site-visitors', 0)
@@ -2228,6 +2306,24 @@ CREATE POLICY "Allow public read" ON public.analytics FOR SELECT TO public USING
 CREATE POLICY "Allow anon insert" ON public.analytics FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow anon update" ON public.analytics FOR UPDATE USING (true);
 CREATE POLICY "Allow anon delete" ON public.analytics FOR DELETE USING (true);
+
+-- 11. RESUMES TABLE
+CREATE TABLE IF NOT EXISTS public.resumes (
+    id TEXT PRIMARY KEY,
+    user_id TEXT,
+    name TEXT,
+    timestamp TEXT,
+    data JSONB,
+    template TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.resumes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read" ON public.resumes FOR SELECT TO public USING (true);
+CREATE POLICY "Allow anon insert" ON public.resumes FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow anon update" ON public.resumes FOR UPDATE USING (true);
+CREATE POLICY "Allow anon delete" ON public.resumes FOR DELETE USING (true);
 
 -- Insert initial row if not exists
 INSERT INTO public.analytics (id, visit_count)
@@ -2498,7 +2594,7 @@ ON CONFLICT (id) DO NOTHING;`;
 
                         <td className="py-3">
                           <select
-                            value={user.subscriptionStatus}
+                            value={user.subscriptionStatus || 'Free Trial'}
                             onChange={async (e) => {
                               const val = e.target.value as 'Free Trial' | 'Active' | 'Expired';
                               await handleUserOverrideStatus(user, val);
@@ -2612,7 +2708,7 @@ ON CONFLICT (id) DO NOTHING;`;
               </h3>
 
               <p className="text-[10px] text-gray-500 leading-normal font-semibold">
-                Input your Razorpay Key ID and Key Secret. If left blank, Jobview runs in a beautiful built-in Razorpay Checkout Simulator for testing!
+                Input your Razorpay Key ID and Key Secret. If left blank, Sebok runs in a beautiful built-in Razorpay Checkout Simulator for testing!
               </p>
 
               <form onSubmit={handleSaveSettings} className="space-y-4">
@@ -3282,10 +3378,10 @@ ON CONFLICT (id) DO NOTHING;`;
                               <button
                                 onClick={() => {
                                   setEditingPageId(p.id);
-                                  setPageTitle(p.title);
-                                  setPageSlug(p.slug);
-                                  setPageContent(p.content);
-                                  setPageIsVisible(p.isVisibleInFooter);
+                                  setPageTitle(p.title || '');
+                                  setPageSlug(p.slug || '');
+                                  setPageContent(p.content || '');
+                                  setPageIsVisible(p.isVisibleInFooter !== false);
                                 }}
                                 className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-lg cursor-pointer transition-colors"
                                 title="Edit Content"

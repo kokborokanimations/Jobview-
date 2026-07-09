@@ -18,6 +18,100 @@ const DB_FILE = path.join(process.cwd(), 'db.json');
 
 app.use(express.json({ limit: '10mb' }));
 
+// Middleware to handle dynamic client-side Supabase credentials sync (Self-healing restore mechanism)
+app.use(async (req, res, next) => {
+  const xSupabaseUrl = req.headers['x-supabase-url'] as string;
+  const xSupabaseAnonKey = req.headers['x-supabase-anon-key'] as string;
+  const xSupabaseServiceRoleKey = req.headers['x-supabase-service-role-key'] as string;
+
+  if (xSupabaseUrl && xSupabaseAnonKey) {
+    const db = readDB();
+    const currentUrl = db.adminSettings?.supabaseUrl;
+    const currentAnon = db.adminSettings?.supabaseAnonKey;
+    const currentServiceRole = db.adminSettings?.supabaseServiceRoleKey;
+
+    // If credentials are changed or currently blank on server side, hydrate immediately
+    if (xSupabaseUrl !== currentUrl || xSupabaseAnonKey !== currentAnon || (xSupabaseServiceRoleKey && xSupabaseServiceRoleKey !== currentServiceRole)) {
+      if (!db.adminSettings) db.adminSettings = {};
+      db.adminSettings.supabaseUrl = xSupabaseUrl;
+      db.adminSettings.supabaseAnonKey = xSupabaseAnonKey;
+      if (xSupabaseServiceRoleKey) {
+        db.adminSettings.supabaseServiceRoleKey = xSupabaseServiceRoleKey;
+      }
+      writeDB(db);
+      console.log('[Middleware Sync] Hydrated server-side Supabase config from client headers!');
+
+      try {
+        const tempSupabase = createClient(xSupabaseUrl, xSupabaseAnonKey);
+        
+        // Settings Sync (Synchronous to make sure API returns correct branding on first call)
+        const { data: sData, error: sErr } = await tempSupabase
+          .from('admin_settings')
+          .select('*')
+          .eq('id', 'global_settings')
+          .single();
+        if (!sErr && sData) {
+          const mapped = mapSettingsFromSupabase(sData);
+          db.adminSettings = { ...db.adminSettings, ...mapped };
+          writeDB(db);
+          console.log('[Middleware Sync] Loaded admin settings from Supabase successfully.');
+        }
+
+        // Other tables can sync in the background so we don't block the request
+        tempSupabase
+          .from('jobs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .then(({ data: jData, error: jErr }) => {
+            if (!jErr && jData) {
+              const freshDb = readDB();
+              freshDb.jobs = jData.map(mapJobFromSupabase);
+              writeDB(freshDb);
+            }
+          });
+
+        tempSupabase
+          .from('pages')
+          .select('*')
+          .then(({ data: pData, error: pErr }) => {
+            if (!pErr && pData) {
+              const freshDb = readDB();
+              const mappedPages = pData.map(mapPageFromSupabase);
+              mappedPages.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+              freshDb.pages = mappedPages;
+              writeDB(freshDb);
+            }
+          });
+
+        tempSupabase
+          .from('resumes')
+          .select('*')
+          .then(({ data: rData, error: rErr }) => {
+            if (!rErr && rData) {
+              const freshDb = readDB();
+              freshDb.resumes = rData.map(mapResumeFromSupabase);
+              writeDB(freshDb);
+            } else {
+              tempSupabase
+                .from('user_resumes')
+                .select('*')
+                .then(({ data: altR, error: altRErr }) => {
+                  if (!altRErr && altR) {
+                    const freshDb = readDB();
+                    freshDb.resumes = altR.map(mapResumeFromSupabase);
+                    writeDB(freshDb);
+                  }
+                });
+            }
+          });
+      } catch (syncErr: any) {
+        console.warn('[Middleware Sync Warn] Background sync failed:', syncErr.message);
+      }
+    }
+  }
+  next();
+});
+
 // Ensure DB exists with default realistic data
 function initDB() {
   if (fs.existsSync(DB_FILE)) {
@@ -33,7 +127,7 @@ function initDB() {
 
   const initialData = {
     adminSettings: {
-      brandName: 'Jobview',
+      brandName: 'Sebok',
       tagline: 'Your Premium Portal to Verified Careers & Networking',
       logoUrl: '',
       faviconUrl: '',
@@ -145,7 +239,7 @@ function initDB() {
         userName: 'Rohan Sharma',
         userAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?q=80&w=150&auto=format&fit=crop',
         imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?q=80&w=800&auto=format&fit=crop',
-        caption: 'Just landed my dream job as a Frontend dev at a cool startup! Thanks to Jobview for the active HR WhatsApp links, literally scheduled my interview in 5 minutes! 🚀🔥',
+        caption: 'Just landed my dream job as a Frontend dev at a cool startup! Thanks to Sebok for the active HR WhatsApp links, literally scheduled my interview in 5 minutes! 🚀🔥',
         bookmarksCount: 18,
         sharesCount: 4,
         createdAt: new Date().toISOString(),
@@ -221,7 +315,7 @@ function initDB() {
         id: 'page-about',
         title: 'About Us',
         slug: 'about-us',
-        content: '<h2>About Us</h2><p>Welcome to Jobview, the ultimate platform for premium job discovery and professional community building. We connect qualified talents directly with verified employers through modern channels like WhatsApp and direct calls.</p>',
+        content: '<h2>About Us</h2><p>Welcome to Sebok, the ultimate platform for premium job discovery and professional community building. We connect qualified talents directly with verified employers through modern channels like WhatsApp and direct calls.</p>',
         showInFooter: true,
         isSystem: true
       },
@@ -245,7 +339,7 @@ function initDB() {
         id: 'page-terms',
         title: 'Terms of Use',
         slug: 'terms-of-use',
-        content: '<h2>Terms of Use</h2><p>By using Jobview, you agree to respect community guidelines. Spamming recruiter channels, abusing free trials, or publishing malicious comments will result in instant account termination.</p>',
+        content: '<h2>Terms of Use</h2><p>By using Sebok, you agree to respect community guidelines. Spamming recruiter channels, abusing free trials, or publishing malicious comments will result in instant account termination.</p>',
         showInFooter: true,
         isSystem: true
       }
@@ -391,6 +485,64 @@ function mapPageToSupabase(p: any) {
   };
 }
 
+function mapJobFromSupabase(job: any) {
+  return {
+    id: job.id,
+    title: job.title,
+    companyName: job.company_name || job.companyName,
+    companyLogoUrl: job.company_logo_url || job.companyLogoUrl || '',
+    companyLogoIndex: typeof job.company_logo_index === 'number' ? job.company_logo_index : (typeof job.companyLogoIndex === 'number' ? job.companyLogoIndex : 0),
+    location: job.location,
+    salary: job.salary,
+    shortDescription: job.short_description || job.shortDescription || job.description || '',
+    fullDescription: job.full_description || job.fullDescription || job.description || '',
+    applyLink: job.apply_link || job.applyLink || '',
+    datePosted: job.date_posted || job.datePosted,
+    isLive: job.is_live !== undefined ? job.is_live : (job.isLive !== undefined ? job.isLive : true),
+    createdAt: job.created_at || job.createdAt || new Date().toISOString(),
+    category: job.category,
+    experience: job.experience,
+    contractType: job.contract_type || job.contractType,
+    email: job.email || '',
+    phone: job.phone || '',
+    whatsapp: job.whatsapp || '',
+    whatsappEnabled: job.whatsapp_enabled !== undefined ? job.whatsapp_enabled : (job.whatsappEnabled !== undefined ? job.whatsappEnabled : true),
+    callEnabled: job.call_enabled !== undefined ? job.call_enabled : (job.callEnabled !== undefined ? job.callEnabled : true),
+    emailEnabled: job.email_enabled !== undefined ? job.email_enabled : (job.emailEnabled !== undefined ? job.emailEnabled : true),
+    applyEnabled: job.apply_enabled !== undefined ? job.apply_enabled : (job.applyEnabled !== undefined ? job.applyEnabled : true),
+    qualifications: job.qualifications || '',
+  };
+}
+
+function mapJobToSupabase(job: any) {
+  return {
+    id: job.id,
+    title: job.title,
+    company_name: job.companyName,
+    company_logo_url: job.companyLogoUrl || '',
+    company_logo_index: typeof job.companyLogoIndex === 'number' ? job.companyLogoIndex : 0,
+    location: job.location,
+    salary: job.salary || '',
+    short_description: job.shortDescription || job.description || '',
+    full_description: job.fullDescription || job.description || '',
+    description: job.fullDescription || job.shortDescription || job.description || '',
+    apply_link: job.applyLink || '',
+    date_posted: job.datePosted || job.createdAt,
+    is_live: job.isLive !== undefined ? job.isLive : true,
+    category: job.category || '',
+    experience: job.experience || '',
+    contract_type: job.contractType || '',
+    email: job.email || '',
+    phone: job.phone || '',
+    whatsapp: job.whatsapp || '',
+    whatsapp_enabled: job.whatsappEnabled !== undefined ? job.whatsappEnabled : true,
+    call_enabled: job.callEnabled !== undefined ? job.callEnabled : true,
+    email_enabled: job.emailEnabled !== undefined ? job.emailEnabled : true,
+    apply_enabled: job.applyEnabled !== undefined ? job.apply_enabled : true,
+    qualifications: job.qualifications || ''
+  };
+}
+
 function mapContactFromSupabase(c: any) {
   return {
     id: c.id,
@@ -423,7 +575,7 @@ function mapSettingsFromSupabase(s: any) {
     }
   }
   return {
-    brandName: s.brand_name || s.brandName || 'Jobview',
+    brandName: s.brand_name || s.brandName || 'Sebok',
     tagline: s.tagline || 'Your Premium Portal to Verified Careers & Networking',
     logoUrl: s.logo_url || s.logoUrl || '',
     faviconUrl: s.favicon_url || s.faviconUrl || '',
@@ -441,8 +593,8 @@ function mapSettingsFromSupabase(s: any) {
     paywallExtendTitle: s.paywall_extend_title || s.paywallExtendTitle || 'Extend Premium',
     paywallExtendSubtitle: s.paywall_extend_subtitle || s.paywallExtendSubtitle || 'Extend your manual premium access for another month.',
     paywallExtendButtonText: s.paywall_extend_button_text || s.paywallExtendButtonText || 'Extend Membership Now',
-    razorpayKeyId: s.razorpay_key_id || s.razorpayKeyId || '',
-    razorpayKeySecret: s.razorpay_key_secret || s.razorpayKeySecret || '',
+    razorpayKeyId: s.razorpay_key_id || s.cashfree_app_id || s.razorpayKeyId || '',
+    razorpayKeySecret: s.razorpay_key_secret || s.cashfree_secret_key || s.razorpayKeySecret || '',
     postApprovalMode: s.post_approval_mode !== undefined ? s.post_approval_mode : (s.postApprovalMode !== undefined ? s.postApprovalMode : true),
     supabaseUrl: s.supabase_url || s.supabaseUrl || '',
     supabaseAnonKey: s.supabase_anon_key || s.supabaseAnonKey || '',
@@ -477,8 +629,8 @@ function mapSettingsToSupabase(s: any) {
     paywall_extend_title: s.paywallExtendTitle,
     paywall_extend_subtitle: s.paywallExtendSubtitle,
     paywall_extend_button_text: s.paywallExtendButtonText,
-    razorpay_key_id: s.razorpayKeyId,
-    razorpay_key_secret: s.razorpayKeySecret,
+    cashfree_app_id: s.razorpayKeyId || '',
+    cashfree_secret_key: s.razorpayKeySecret || '',
     post_approval_mode: s.postApprovalMode,
     supabase_url: s.supabaseUrl,
     supabase_anon_key: s.supabaseAnonKey,
@@ -492,11 +644,49 @@ function mapSettingsToSupabase(s: any) {
   };
 }
 
+function mapResumeFromSupabase(r: any) {
+  return {
+    id: r.id,
+    user_id: r.user_id || r.userId || 'guest',
+    name: r.name,
+    timestamp: r.timestamp || new Date(r.updated_at || r.created_at || Date.now()).toISOString(),
+    data: typeof r.data === 'string' ? JSON.parse(r.data) : r.data,
+    template: r.template || 'donna-elegant'
+  };
+}
+
+function mapResumeToSupabase(r: any) {
+  return {
+    id: r.id,
+    user_id: r.user_id || r.userId || 'guest',
+    name: r.name,
+    timestamp: r.timestamp || new Date().toISOString(),
+    data: typeof r.data === 'object' ? JSON.stringify(r.data) : r.data,
+    template: r.template || 'donna-elegant',
+    updated_at: new Date().toISOString()
+  };
+}
+
+function deleteLocalFileByUrl(url: string) {
+  if (url && url.startsWith('/uploads/')) {
+    try {
+      const fileName = url.substring('/uploads/'.length);
+      const filePath = path.join(process.cwd(), 'uploads', fileName);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+        console.log(`[File Cleanup] Successfully deleted old file: ${fileName}`);
+      }
+    } catch (e: any) {
+      console.warn(`[File Cleanup] Failed to delete file at ${url}:`, e.message);
+    }
+  }
+}
+
 // Serve uploaded media statically
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Media Upload endpoint
-app.post('/api/upload', (req, res) => {
+app.post('/api/upload', async (req, res) => {
   try {
     const { file, name } = req.body;
     if (!file) {
@@ -523,13 +713,83 @@ app.post('/api/upload', (req, res) => {
     else if (mimeType.includes('webp')) ext = 'webp';
 
     const cleanName = name ? name.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'uploaded';
-    const fileName = `${cleanName}_${Date.now()}.${ext}`;
+    const timestamp = Date.now();
+    const fileName = `${cleanName}_${timestamp}.${ext}`;
     const filePath = path.join(uploadDir, fileName);
     
     fs.writeFileSync(filePath, buffer);
     
-    const fileUrl = `/uploads/${fileName}`;
-    res.json({ success: true, url: fileUrl });
+    let finalUrl = `/uploads/${fileName}`;
+    
+    // For branding and core data assets, if custom Supabase is configured, save directly to Supabase Storage.
+    const db = readDB();
+    if (isCustomSupabaseConfigured(db) && (
+      name === 'app_logo' || 
+      name === 'app_favicon' || 
+      name === 'jobs_banner' || 
+      name === 'company_logo' || 
+      name === 'user_avatar'
+    )) {
+      try {
+        const supabase = getAdminSupabase() || getServerSupabase();
+        if (supabase) {
+          const bucketName = 'branding';
+          
+          // Create bucket if it doesn't exist
+          try {
+            await supabase.storage.createBucket(bucketName, { public: true });
+          } catch (bucketErr) {
+            // Bucket likely already exists, ignore
+          }
+
+          // Fetch old asset URL to delete from bucket
+          let oldUrl = '';
+          if (name === 'app_logo') oldUrl = db.adminSettings?.logoUrl || '';
+          else if (name === 'app_favicon') oldUrl = db.adminSettings?.faviconUrl || '';
+          else if (name === 'jobs_banner') oldUrl = db.adminSettings?.bannerUrl || '';
+
+          // If the old URL is a Supabase public Storage URL, delete it from the bucket to save space
+          if (oldUrl && oldUrl.includes('/storage/v1/object/public/')) {
+            try {
+              const urlParts = oldUrl.split('/');
+              const oldFileName = urlParts[urlParts.length - 1];
+              if (oldFileName) {
+                await supabase.storage.from(bucketName).remove([oldFileName]);
+                console.log(`[Supabase Storage] Deleted old file from bucket: ${oldFileName}`);
+              }
+            } catch (delErr: any) {
+              console.warn('[Supabase Storage Warning] Could not delete old file:', delErr.message);
+            }
+          }
+
+          // Upload new asset to storage bucket
+          const { data, error } = await supabase.storage
+            .from(bucketName)
+            .upload(fileName, buffer, {
+              contentType: mimeType,
+              upsert: true
+            });
+
+          if (!error) {
+            const { data: urlData } = supabase.storage
+              .from(bucketName)
+              .getPublicUrl(fileName);
+            if (urlData && urlData.publicUrl) {
+              finalUrl = urlData.publicUrl;
+              console.log(`[Supabase Storage] Successfully uploaded to bucket: ${finalUrl}`);
+            }
+          } else {
+            console.warn('[Supabase Storage Warning] Upload failed, falling back to base64 encoding:', error.message);
+            finalUrl = file; // Fallback to storing full base64 data URL
+          }
+        }
+      } catch (storageErr: any) {
+        console.warn('[Supabase Storage Warning] Connection/configuration issue, falling back to base64:', storageErr.message || String(storageErr));
+        finalUrl = file; // Fallback to storing full base64 data URL
+      }
+    }
+    
+    res.json({ success: true, url: finalUrl });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload image' });
@@ -571,6 +831,26 @@ app.get('/api/settings', async (req, res) => {
 
 app.post('/api/settings', async (req, res) => {
   const db = readDB();
+  
+  // Clean up old local files if they are replaced
+  const oldLogo = db.adminSettings?.logoUrl;
+  const oldFavicon = db.adminSettings?.faviconUrl;
+  const oldBanner = db.adminSettings?.bannerUrl;
+
+  const newLogo = req.body.logoUrl;
+  const newFavicon = req.body.faviconUrl;
+  const newBanner = req.body.bannerUrl;
+
+  if (oldLogo && oldLogo !== newLogo) {
+    deleteLocalFileByUrl(oldLogo);
+  }
+  if (oldFavicon && oldFavicon !== newFavicon) {
+    deleteLocalFileByUrl(oldFavicon);
+  }
+  if (oldBanner && oldBanner !== newBanner) {
+    deleteLocalFileByUrl(oldBanner);
+  }
+
   db.adminSettings = { ...db.adminSettings, ...req.body };
   writeDB(db);
 
@@ -608,23 +888,7 @@ app.get('/api/jobs', async (req, res) => {
         .order('created_at', { ascending: false });
       
       if (!error && data) {
-        const mappedJobs = data.map((job: any) => ({
-          id: job.id,
-          title: job.title,
-          companyName: job.company_name || job.companyName,
-          companyLogoUrl: job.company_logo_url || job.companyLogoUrl || '',
-          location: job.location,
-          salary: job.salary,
-          shortDescription: job.short_description || job.shortDescription || job.description,
-          fullDescription: job.full_description || job.fullDescription || job.description,
-          applyLink: job.apply_link || job.applyLink,
-          datePosted: job.date_posted || job.datePosted,
-          isLive: job.is_live !== undefined ? job.is_live : (job.isLive !== undefined ? job.isLive : true),
-          createdAt: job.created_at || job.createdAt || new Date().toISOString(),
-          category: job.category,
-          experience: job.experience,
-          contractType: job.contract_type || job.contractType,
-        }));
+        const mappedJobs = data.map(mapJobFromSupabase);
 
         // Merge localJobs and mappedJobs by ID to prevent any job from being lost
         const mergedJobsMap = new Map();
@@ -673,18 +937,9 @@ app.post('/api/jobs', async (req, res) => {
   try {
     const supabase = getServerSupabase();
     if (supabase) {
-      // Map only the columns supported by the user's Supabase jobs table
-      const { error } = await supabase.from('jobs').insert([{
-        job_id: newJob.id,
-        title: newJob.title,
-        company_name: newJob.companyName,
-        location: newJob.location,
-        description: newJob.fullDescription || newJob.shortDescription,
-        apply_link: newJob.applyLink,
-        company_logo_url: newJob.companyLogoUrl,
-        date_posted: newJob.createdAt,
-        status: newJob.isLive ? 'Live' : 'Inactive'
-      }]);
+      // Use helper to map exactly to the Supabase columns
+      const dbRow = mapJobToSupabase(newJob);
+      const { error } = await supabase.from('jobs').insert([dbRow]);
       if (error) {
         console.log('[Supabase Info] Local job created successfully, but Supabase insert was skipped:', error.message);
       }
@@ -706,19 +961,12 @@ app.put('/api/jobs/:id', async (req, res) => {
     try {
       const supabase = getServerSupabase();
       if (supabase) {
-        // Map only the columns supported by the user's Supabase jobs table
+        // Use helper to map exactly to the Supabase columns
+        const dbRow = mapJobToSupabase(db.jobs[index]);
         const { error } = await supabase
           .from('jobs')
-          .update({
-            title: req.body.title,
-            company_name: req.body.companyName,
-            location: req.body.location,
-            description: req.body.fullDescription || req.body.shortDescription,
-            apply_link: req.body.applyLink,
-            company_logo_url: req.body.companyLogoUrl,
-            status: req.body.isLive ? 'Live' : 'Inactive'
-          })
-          .eq('job_id', req.params.id);
+          .update(dbRow)
+          .eq('id', req.params.id);
         if (error) {
           console.log('[Supabase Info] Local job updated successfully, but Supabase sync was skipped:', error.message);
         }
@@ -753,7 +1001,7 @@ app.delete('/api/jobs/:id', async (req, res) => {
         const { error } = await supabase
           .from('jobs')
           .delete()
-          .eq('job_id', req.params.id);
+          .eq('id', req.params.id);
         if (error) {
           console.log('[Supabase Info] Local job deleted, but Supabase sync was skipped:', error.message);
         }
@@ -1651,6 +1899,137 @@ app.post('/api/resume/enhance', async (req, res) => {
   }
 });
 
+// GET resumes (list all saved resumes or filter by userId)
+app.get('/api/resumes', async (req, res) => {
+  try {
+    const db = readDB();
+    if (!db.resumes) db.resumes = [];
+    
+    const userId = req.query.userId;
+    if (userId) {
+      const filtered = db.resumes.filter((r: any) => r.user_id === userId);
+      return res.json({ success: true, resumes: filtered });
+    }
+    
+    res.json({ success: true, resumes: db.resumes });
+  } catch (error: any) {
+    console.error('Error fetching resumes:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+// POST save / update a resume draft
+app.post('/api/resumes', async (req, res) => {
+  try {
+    const db = readDB();
+    if (!db.resumes) db.resumes = [];
+    
+    const { id, userId, name, timestamp, data, template } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'Resume id is required' });
+    }
+    
+    const cleanId = id.trim();
+    const cleanUserId = userId ? userId.trim() : 'guest';
+    const cleanName = name ? name.trim() : 'My Resume Draft';
+    
+    const newResume = {
+      id: cleanId,
+      user_id: cleanUserId,
+      name: cleanName,
+      timestamp: timestamp || new Date().toISOString(),
+      data: data,
+      template: template || 'donna-elegant'
+    };
+    
+    const existingIndex = db.resumes.findIndex((r: any) => r.id === cleanId);
+    if (existingIndex !== -1) {
+      db.resumes[existingIndex] = newResume;
+    } else {
+      db.resumes.push(newResume);
+    }
+    
+    writeDB(db);
+    
+    // Sync to Supabase if custom Supabase is configured
+    try {
+      const supabase = getServerSupabase();
+      if (supabase) {
+        const payload = mapResumeToSupabase(newResume);
+        const { error } = await supabase
+          .from('resumes')
+          .upsert(payload, { onConflict: 'id' });
+          
+        if (error) {
+          if (error.message?.includes('does not exist')) {
+            // Try fallback 'user_resumes' table
+            const { error: altError } = await supabase
+              .from('user_resumes')
+              .upsert(payload, { onConflict: 'id' });
+            if (altError) {
+              console.log('[Supabase Info] Local resume saved, but user_resumes sync was skipped:', altError.message);
+            }
+          } else {
+            console.log('[Supabase Info] Local resume saved, but resumes sync was skipped:', error.message);
+          }
+        }
+      }
+    } catch (dbErr: any) {
+      console.warn('[Supabase Warn] Failed to sync resume save to Supabase:', dbErr.message);
+    }
+    
+    res.json({ success: true, resume: newResume });
+  } catch (error: any) {
+    console.error('Error saving resume:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
+// DELETE a resume
+app.delete('/api/resumes/:id', async (req, res) => {
+  try {
+    const db = readDB();
+    if (!db.resumes) db.resumes = [];
+    
+    const resumeId = req.params.id;
+    db.resumes = db.resumes.filter((r: any) => r.id !== resumeId);
+    writeDB(db);
+    
+    // Sync deletion to Supabase if custom Supabase is configured
+    try {
+      const supabase = getServerSupabase();
+      if (supabase) {
+        const { error } = await supabase
+          .from('resumes')
+          .delete()
+          .eq('id', resumeId);
+          
+        if (error) {
+          if (error.message?.includes('does not exist')) {
+            // Try fallback 'user_resumes' table
+            const { error: altError } = await supabase
+              .from('user_resumes')
+              .delete()
+              .eq('id', resumeId);
+            if (altError) {
+              console.log('[Supabase Info] Local resume deleted, but user_resumes deletion skipped:', altError.message);
+            }
+          } else {
+            console.log('[Supabase Info] Local resume deleted, but resumes deletion skipped:', error.message);
+          }
+        }
+      }
+    } catch (dbErr: any) {
+      console.warn('[Supabase Warn] Failed to sync resume deletion to Supabase:', dbErr.message);
+    }
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('Error deleting resume:', error);
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
 // Sync current user (login or trigger trial evaluation)
 app.post('/api/users/register', async (req, res) => {
   const { name, email, password, avatar } = req.body;
@@ -2156,7 +2535,7 @@ function escapeHtml(unsafe: string): string {
 
 // Vite Setup for Development and static handling in Production
 async function startServer() {
-  // Pre-fetch settings from Supabase on startup if configured to hydrate local db.json cache (Cloud Run state recovery)
+  // Pre-fetch settings, jobs, and pages from Supabase on startup if configured to hydrate local db.json cache (Cloud Run/Hostinger state recovery)
   try {
     const db = readDB();
     if (isCustomSupabaseConfigured(db)) {
@@ -2164,23 +2543,75 @@ async function startServer() {
       const anonKey = db.adminSettings?.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NDg1NjAsImV4cCI6MjA5ODAyNDU2MH0.gPwgKSe-0lSFZf4holpBctmYSGrTYsv5cwpKcgLODBs';
       if (url && anonKey) {
         const tempSupabase = createClient(url, anonKey);
-        const { data, error } = await tempSupabase
+        
+        // 1. Fetch settings
+        const { data: settingsData, error: settingsError } = await tempSupabase
           .from('admin_settings')
           .select('*')
           .eq('id', 'global_settings')
           .single();
-        if (!error && data) {
-          const mappedSettings = mapSettingsFromSupabase(data);
+        if (!settingsError && settingsData) {
+          const mappedSettings = mapSettingsFromSupabase(settingsData);
           db.adminSettings = { ...db.adminSettings, ...mappedSettings };
           writeDB(db);
           console.log('[Startup] Successfully pre-fetched and synchronized admin settings from Supabase.');
-        } else if (error) {
-          console.log('[Startup Info] Pre-fetching settings from Supabase skipped:', error.message);
+        } else if (settingsError) {
+          console.log('[Startup Info] Pre-fetching settings from Supabase skipped:', settingsError.message);
+        }
+
+        // 2. Fetch jobs
+        const { data: jobsData, error: jobsError } = await tempSupabase
+          .from('jobs')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (!jobsError && jobsData) {
+          const mappedJobs = jobsData.map(mapJobFromSupabase);
+          db.jobs = mappedJobs;
+          writeDB(db);
+          console.log(`[Startup] Successfully pre-fetched and synchronized ${mappedJobs.length} jobs from Supabase.`);
+        } else if (jobsError) {
+          console.log('[Startup Info] Pre-fetching jobs from Supabase skipped:', jobsError.message);
+        }
+
+        // 3. Fetch pages
+        const { data: pagesData, error: pagesError } = await tempSupabase
+          .from('pages')
+          .select('*');
+        if (!pagesError && pagesData) {
+          const mappedPages = pagesData.map(mapPageFromSupabase);
+          mappedPages.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+          db.pages = mappedPages;
+          writeDB(db);
+          console.log(`[Startup] Successfully pre-fetched and synchronized ${mappedPages.length} pages from Supabase.`);
+        } else if (pagesError) {
+          console.log('[Startup Info] Pre-fetching pages from Supabase skipped:', pagesError.message);
+        }
+
+        // 4. Fetch resumes
+        const { data: resumesData, error: resumesError } = await tempSupabase
+          .from('resumes')
+          .select('*');
+        if (!resumesError && resumesData) {
+          db.resumes = resumesData.map(mapResumeFromSupabase);
+          writeDB(db);
+          console.log(`[Startup] Successfully pre-fetched and synchronized ${resumesData.length} resumes from Supabase.`);
+        } else if (resumesError) {
+          // Fallback to user_resumes
+          const { data: altResumes, error: altResumesError } = await tempSupabase
+            .from('user_resumes')
+            .select('*');
+          if (!altResumesError && altResumes) {
+            db.resumes = altResumes.map(mapResumeFromSupabase);
+            writeDB(db);
+            console.log(`[Startup] Successfully pre-fetched and synchronized ${altResumes.length} resumes from user_resumes table in Supabase.`);
+          } else {
+            console.log('[Startup Info] Pre-fetching resumes from Supabase skipped:', resumesError.message);
+          }
         }
       }
     }
   } catch (startupErr: any) {
-    console.warn('[Startup Warning] Error pre-fetching settings from Supabase:', startupErr.message || String(startupErr));
+    console.warn('[Startup Warning] Error pre-fetching settings/jobs/pages/resumes from Supabase:', startupErr.message || String(startupErr));
   }
 
   let vite: any = null;
@@ -2247,8 +2678,11 @@ async function startServer() {
       let imageUrl = bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop';
 
       // Detect specific job preview
-      if (req.query.job_id) {
-        const jobId = req.query.job_id;
+      let jobId = req.query.job_id;
+      if (!jobId && url.startsWith('/job/')) {
+        jobId = url.substring(5); // removes '/job/'
+      }
+      if (jobId) {
         const jobs = db.jobs || [];
         const foundJob = jobs.find((j: any) => String(j.id) === String(jobId));
         if (foundJob) {
@@ -2287,8 +2721,10 @@ async function startServer() {
       const escapedUrl = escapeHtml(fullUrl);
 
       // Meta tags block
+      const faviconLink = settings.faviconUrl ? `<link rel="icon" href="${escapeHtml(settings.faviconUrl)}" />` : '';
       const metadataHtml = `
   <title>${escapedTitle}</title>
+  ${faviconLink}
   <meta name="description" content="${escapedDescription}" />
   <meta property="og:title" content="${escapedTitle}" />
   <meta property="og:description" content="${escapedDescription}" />

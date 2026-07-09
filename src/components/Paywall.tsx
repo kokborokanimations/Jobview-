@@ -92,7 +92,7 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
             key: orderData.key_id,
             amount: Math.round((settings.membershipPrice || 499) * 100),
             currency: settings.currency || 'INR',
-            name: settings.brandName || 'Jobview',
+            name: settings.brandName || 'Sebok',
             description: settings.tagline || 'Premium Membership Subscription',
             order_id: orderData.order_id,
             handler: async function (resVal: any) {

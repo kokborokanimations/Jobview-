@@ -169,7 +169,7 @@ export default function UserProfile({
   // Sync saved jobs from localStorage
   React.useEffect(() => {
     if (activeSubTab === 'saved') {
-      const saved = localStorage.getItem('jobview_bookmarked_jobs');
+      const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
       const savedIds: string[] = saved ? JSON.parse(saved).map(String) : [];
       const filtered = (jobs || []).filter(job => savedIds.includes(String(job.id)));
       setSavedJobs(filtered);
@@ -177,11 +177,11 @@ export default function UserProfile({
   }, [activeSubTab, jobs]);
 
   const handleUnsaveJob = (jobId: string) => {
-    const saved = localStorage.getItem('jobview_bookmarked_jobs');
+    const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
     let savedIds: string[] = saved ? JSON.parse(saved).map(String) : [];
     const jobIdStr = String(jobId);
     savedIds = savedIds.filter(id => id !== jobIdStr);
-    localStorage.setItem('jobview_bookmarked_jobs', JSON.stringify(savedIds));
+    localStorage.setItem('sebok_bookmarked_jobs', JSON.stringify(savedIds));
     setSavedJobs(prev => prev.filter(j => String(j.id) !== jobIdStr));
     if (window.showSuccessToast) {
       window.showSuccessToast('Job removed from Saved!');
@@ -960,19 +960,19 @@ export default function UserProfile({
                 {/* Like Button */}
                 <button
                   onClick={() => {
-                    const liked = localStorage.getItem('jobview_liked_posts');
+                    const liked = localStorage.getItem('sebok_liked_posts') || localStorage.getItem('jobview_liked_posts');
                     let likedIds: string[] = liked ? JSON.parse(liked) : [];
                     if (likedIds.includes(selectedPostForView.id)) {
                       likedIds = likedIds.filter(id => id !== selectedPostForView.id);
                     } else {
                       likedIds.push(selectedPostForView.id);
                     }
-                    localStorage.setItem('jobview_liked_posts', JSON.stringify(likedIds));
+                    localStorage.setItem('sebok_liked_posts', JSON.stringify(likedIds));
                     setSelectedPostForView({ ...selectedPostForView });
                   }}
                   className={`p-2 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 text-xs font-bold ${
                     (() => {
-                      const liked = localStorage.getItem('jobview_liked_posts');
+                      const liked = localStorage.getItem('sebok_liked_posts') || localStorage.getItem('jobview_liked_posts');
                       const likedIds: string[] = liked ? JSON.parse(liked) : [];
                       return likedIds.includes(selectedPostForView.id);
                     })()
@@ -983,7 +983,7 @@ export default function UserProfile({
                   <Heart 
                     size={14} 
                     fill={(() => {
-                      const liked = localStorage.getItem('jobview_liked_posts');
+                      const liked = localStorage.getItem('sebok_liked_posts') || localStorage.getItem('jobview_liked_posts');
                       const likedIds: string[] = liked ? JSON.parse(liked) : [];
                       return likedIds.includes(selectedPostForView.id);
                     })() ? 'currentColor' : 'none'} 
@@ -991,7 +991,7 @@ export default function UserProfile({
                   <span className="text-[11px] font-mono">
                     {((selectedPostForView.bookmarksCount || 0) % 7) + (
                       (() => {
-                        const liked = localStorage.getItem('jobview_liked_posts');
+                        const liked = localStorage.getItem('sebok_liked_posts') || localStorage.getItem('jobview_liked_posts');
                         const likedIds: string[] = liked ? JSON.parse(liked) : [];
                         return likedIds.includes(selectedPostForView.id) ? 1 : 0;
                       })()

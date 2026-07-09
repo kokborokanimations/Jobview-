@@ -214,7 +214,7 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
             <LogIn size={24} />
           </div>
           <h2 className="text-xl md:text-2xl font-extrabold text-slate-900 tracking-tight font-display">
-            {settings?.loginTitle || "Welcome to Jobview"}
+            {settings?.loginTitle || "Welcome to Sebok"}
           </h2>
           <p className="mt-1.5 md:mt-2 text-xs md:text-sm text-slate-500 max-w-sm mx-auto">
             {settings?.loginSubtitle || "Sign in to unlock verified hiring managers, contact details, and our community wall."}

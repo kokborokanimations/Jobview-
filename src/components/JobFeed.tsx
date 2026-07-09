@@ -88,7 +88,7 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
   const [location, setLocation] = useState('');
 
   const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('jobview_bookmarked_jobs');
+    const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
     return saved ? JSON.parse(saved) : [];
   });
   const [sharedJobId, setSharedJobId] = useState<string | null>(null);
@@ -101,7 +101,7 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
       updated = [...bookmarkedJobIds, jobId];
     }
     setBookmarkedJobIds(updated);
-    localStorage.setItem('jobview_bookmarked_jobs', JSON.stringify(updated));
+    localStorage.setItem('sebok_bookmarked_jobs', JSON.stringify(updated));
   };
 
   const handleShare = (jobId: string) => {
@@ -227,7 +227,7 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
 
                 {/* Job Logo & Basic details */}
                 <div className="flex items-start gap-4 min-w-0 w-full">
-                  {/* Styled logo container: display image if available, else show the fallback government building emblem */}
+                  {/* Styled logo container: display image if available, else show the selected color preset gradient */}
                   {job.companyLogoUrl ? (
                     <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200/60 flex items-center justify-center shrink-0 bg-slate-50 shadow-xs">
                       <img
@@ -239,21 +239,15 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                           (e.currentTarget as HTMLImageElement).style.display = 'none';
                           const parent = e.currentTarget.parentElement;
                           if (parent) {
-                            parent.className = "w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-[13px] text-amber-700 tracking-wide shadow-xs shrink-0 font-display";
-                            parent.innerHTML = `
-                              <svg class="w-6 h-6 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
-                              </svg>
-                            `;
+                            parent.className = `w-12 h-12 rounded-xl bg-gradient-to-br ${logoGrad} flex items-center justify-center font-bold text-[13px] tracking-wide shadow-xs shrink-0 font-display uppercase`;
+                            parent.innerHTML = `<span>${initials}</span>`;
                           }
                         }}
                       />
                     </div>
                   ) : (
-                    <div className="w-12 h-12 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center font-bold text-[13px] text-amber-700 tracking-wide shadow-xs shrink-0 font-display">
-                      <svg className="w-6 h-6 text-amber-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M3 21h18M3 10h18M5 10v11M19 10v11M9 10v11M15 10v11M4 5l8-3 8 3M12 10v11" />
-                      </svg>
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${logoGrad} flex items-center justify-center font-bold text-[13px] tracking-wide shadow-xs shrink-0 font-display uppercase`}>
+                      <span>{initials}</span>
                     </div>
                   )}
 

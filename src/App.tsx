@@ -56,7 +56,7 @@ export default function App() {
 
   // Synchronized bookmark states
   const [bookmarkedPostIds, setBookmarkedPostIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem('jobview_bookmarked_posts');
+    const saved = localStorage.getItem('sebok_bookmarked_posts') || localStorage.getItem('jobview_bookmarked_posts');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -70,7 +70,7 @@ export default function App() {
       window.showJobSavedToast?.('Post Saved!');
     }
     setBookmarkedPostIds(updated);
-    localStorage.setItem('jobview_bookmarked_posts', JSON.stringify(updated));
+    localStorage.setItem('sebok_bookmarked_posts', JSON.stringify(updated));
 
     // Async update to Supabase (if user is logged in)
     if (user) {
@@ -187,7 +187,7 @@ export default function App() {
   // Update browser document title and favicon dynamically when settings change
   useEffect(() => {
     if (settings) {
-      const brand = settings.brandName || 'Jobview';
+      const brand = settings.brandName || 'Sebok';
       const tagline = settings.tagline || '';
       document.title = tagline ? `${brand} - ${tagline}` : brand;
 
@@ -214,7 +214,7 @@ export default function App() {
           if (savedPosts && savedPosts.length > 0) {
             const savedIds = savedPosts.map(p => p.id);
             setBookmarkedPostIds(savedIds);
-            localStorage.setItem('jobview_bookmarked_posts', JSON.stringify(savedIds));
+            localStorage.setItem('sebok_bookmarked_posts', JSON.stringify(savedIds));
           }
         })
         .catch(err => console.error('Error syncing bookmarks on user load:', err));
@@ -249,17 +249,69 @@ export default function App() {
     }
   }, [activeFooterPage, footerPages, initialCheckDone]);
 
-  // Handle browser Back / Forward buttons for dynamic pages
+  // URL routing for Job posts on load
+  useEffect(() => {
+    if (jobs.length > 0) {
+      const path = window.location.pathname;
+      const match = path.match(/^\/job\/([^/]+)/i);
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryJobId = urlParams.get('job_id');
+      const jobIdFromUrl = (match ? match[1] : null) || queryJobId;
+
+      if (jobIdFromUrl) {
+        const found = jobs.find(j => String(j.id).toLowerCase() === String(jobIdFromUrl).toLowerCase());
+        if (found) {
+          setSelectedJob(found);
+          setCurrentTab('jobs');
+        }
+      }
+    }
+  }, [jobs]);
+
+  // Sync URL with selectedJob state changes
+  useEffect(() => {
+    if (jobs.length === 0) return;
+    if (selectedJob) {
+      const targetPath = `/job/${selectedJob.id}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({ jobId: selectedJob.id }, '', targetPath);
+      }
+    } else {
+      // If we were on a job details page, go back to the root '/'
+      if (window.location.pathname.startsWith('/job/')) {
+        window.history.pushState(null, '', '/');
+      }
+    }
+  }, [selectedJob, jobs]);
+
+  // Handle browser Back / Forward buttons for dynamic pages and job posts
   useEffect(() => {
     const handlePopState = () => {
-      if (footerPages.length === 0) return;
-      const path = window.location.pathname.replace(/^\/p\//, '/').replace(/^\//, '').toLowerCase();
-      const found = footerPages.find(p => p.slug.toLowerCase() === path);
-      setActiveFooterPage(found || null);
+      // Handle dynamic page pop
+      if (footerPages.length > 0) {
+        const path = window.location.pathname.replace(/^\/p\//, '/').replace(/^\//, '').toLowerCase();
+        const found = footerPages.find(p => p.slug.toLowerCase() === path);
+        setActiveFooterPage(found || null);
+      }
+
+      // Handle job detail pop
+      const path = window.location.pathname;
+      const match = path.match(/^\/job\/([^/]+)/i);
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryJobId = urlParams.get('job_id');
+      const jobIdFromUrl = (match ? match[1] : null) || queryJobId;
+
+      if (jobIdFromUrl && jobs.length > 0) {
+        const found = jobs.find(j => String(j.id).toLowerCase() === String(jobIdFromUrl).toLowerCase());
+        setSelectedJob(found || null);
+        setCurrentTab('jobs');
+      } else {
+        setSelectedJob(null);
+      }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [footerPages]);
+  }, [footerPages, jobs]);
 
   const fetchInitialData = async () => {
     setIsLoading(true);
@@ -289,7 +341,7 @@ export default function App() {
       await fetchFooterPages();
 
       // 4. Check if we have a persisted session
-      const savedEmail = localStorage.getItem('jobview_user_email');
+      const savedEmail = localStorage.getItem('sebok_user_email') || localStorage.getItem('jobview_user_email');
       if (savedEmail) {
         const syncRes = await fetch('/api/users/sync', {
           method: 'POST',
@@ -340,7 +392,7 @@ export default function App() {
     }
     setUser(loggedInUser);
     setDismissedPaywall(false); // Reset paywall state on fresh login
-    localStorage.setItem('jobview_user_email', loggedInUser.email);
+    localStorage.setItem('sebok_user_email', loggedInUser.email);
     setShowLoginModal(false);
 
     // If logged in as admin, instantly fetch total user accounts
@@ -352,6 +404,7 @@ export default function App() {
   const handleLogout = () => {
     setUser(null);
     setDismissedPaywall(false);
+    localStorage.removeItem('sebok_user_email');
     localStorage.removeItem('jobview_user_email');
     setSelectedJob(null);
     setCurrentTab('jobs');
@@ -929,7 +982,7 @@ export default function App() {
           }}
           onPaymentSuccess={(updatedUser) => {
             setUser(updatedUser);
-            alert('Membership subscription processed successfully! Thank you for choosing Jobview Premium.');
+            alert('Membership subscription processed successfully! Thank you for choosing Sebok Premium.');
           }}
         />
       )}
