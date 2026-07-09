@@ -374,7 +374,8 @@ function mapPageFromSupabase(p: any) {
     content: p.content,
     showInFooter: visibility,
     isVisibleInFooter: visibility,
-    isSystem: p.is_system !== undefined ? p.is_system : (p.isSystem !== undefined ? p.isSystem : false)
+    isSystem: p.is_system !== undefined ? p.is_system : (p.isSystem !== undefined ? p.isSystem : false),
+    order: p.sort_order !== undefined ? p.sort_order : (p.order !== undefined ? p.order : 0)
   };
 }
 
@@ -385,7 +386,8 @@ function mapPageToSupabase(p: any) {
     slug: p.slug,
     content: p.content,
     show_in_footer: p.showInFooter !== undefined ? p.showInFooter : p.isVisibleInFooter,
-    is_system: p.isSystem
+    is_system: p.isSystem,
+    sort_order: p.order !== undefined ? p.order : 0
   };
 }
 
@@ -1093,14 +1095,18 @@ app.get('/api/pages', async (req, res) => {
         db.pages = mergedPages;
         writeDB(db);
         
-        return res.json(mergedPages.map((p: any) => {
+        const sorted = mergedPages.map((p: any) => {
           const visibility = p.isVisibleInFooter !== undefined ? p.isVisibleInFooter : (p.showInFooter !== undefined ? p.showInFooter : true);
           return {
             ...p,
             isVisibleInFooter: visibility,
-            showInFooter: visibility
+            showInFooter: visibility,
+            order: p.order !== undefined ? p.order : 0
           };
-        }));
+        });
+
+        sorted.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+        return res.json(sorted);
       }
     }
   } catch (err: any) {
@@ -1112,10 +1118,65 @@ app.get('/api/pages', async (req, res) => {
     return {
       ...p,
       isVisibleInFooter: visibility,
-      showInFooter: visibility
+      showInFooter: visibility,
+      order: p.order !== undefined ? p.order : 0
     };
   });
+
+  pages.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
   res.json(pages);
+});
+
+app.post('/api/pages/reorder', async (req, res) => {
+  const db = readDB();
+  if (!db.pages) db.pages = [];
+  const { orders } = req.body; // Array of { id: string, order: number }
+  if (!orders || !Array.isArray(orders)) {
+    return res.status(400).json({ error: 'Orders array is required' });
+  }
+
+  orders.forEach((o: any) => {
+    const idx = db.pages.findIndex((p: any) => p.id === o.id);
+    if (idx !== -1) {
+      db.pages[idx].order = o.order;
+    }
+  });
+
+  writeDB(db);
+
+  // Sync to Supabase
+  try {
+    const supabase = getServerSupabase();
+    if (supabase) {
+      // Upsert all modified pages
+      for (const o of orders) {
+        const page = db.pages.find((p: any) => p.id === o.id);
+        if (page) {
+          const { error } = await supabase
+            .from('pages')
+            .upsert(mapPageToSupabase(page));
+          if (error) {
+            console.log('[Supabase Error] Reordering page failed to sync to Supabase:', error.message);
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    console.log('[Supabase Info] Local pages reordered, but Supabase sync was skipped. Details:', err.message || String(err));
+  }
+
+  const sortedPages = db.pages.map((p: any) => {
+    const visibility = p.isVisibleInFooter !== undefined ? p.isVisibleInFooter : (p.showInFooter !== undefined ? p.showInFooter : true);
+    return {
+      ...p,
+      isVisibleInFooter: visibility,
+      showInFooter: visibility,
+      order: p.order !== undefined ? p.order : 0
+    };
+  });
+  sortedPages.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+
+  res.json({ success: true, pages: sortedPages });
 });
 
 app.post('/api/pages', async (req, res) => {

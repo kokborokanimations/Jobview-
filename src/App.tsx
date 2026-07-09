@@ -969,20 +969,8 @@ export default function App() {
               </button>
             </div>
             
-            <div className="p-6 overflow-y-auto text-xs text-slate-700 leading-relaxed font-medium space-y-4 prose max-w-none">
-              {activeFooterPage.content.split('\n').map((line: string, idx: number) => {
-                if (line.startsWith('# ')) {
-                  return <h1 key={idx} className="text-base font-black text-slate-900 border-b pb-1.5 mt-4 first:mt-0">{line.replace('# ', '')}</h1>;
-                } else if (line.startsWith('## ')) {
-                  return <h2 key={idx} className="text-sm font-bold text-slate-900 mt-3">{line.replace('## ', '')}</h2>;
-                } else if (line.startsWith('- ') || line.startsWith('* ')) {
-                  return <li key={idx} className="ml-4 list-disc">{line.substring(2)}</li>;
-                } else if (line.trim().length === 0) {
-                  return <div key={idx} className="h-2" />;
-                } else {
-                  return <p key={idx}>{line}</p>;
-                }
-              })}
+            <div className="p-6 overflow-y-auto text-xs text-slate-700 leading-relaxed font-medium space-y-4 prose max-w-none wysiwyg-content">
+              <div dangerouslySetInnerHTML={{ __html: activeFooterPage.content }} />
 
               {(activeFooterPage.slug === 'contact-us' || activeFooterPage.id === 'page-contact') && (
                 <ContactForm />

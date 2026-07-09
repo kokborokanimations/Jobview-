@@ -8,7 +8,8 @@ import { Job, CommunityPost, User, AdminSettings, PaymentLog } from '../types';
 import { 
   Settings, Briefcase, Users, CreditCard, Shield, Plus, 
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
-  Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail, LogIn
+  Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail, LogIn,
+  ArrowUp, ArrowDown
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
@@ -375,6 +376,49 @@ export default function AdminPanel({
       }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const handleMovePage = async (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === pages.length - 1) return;
+
+    const newPages = [...pages];
+    const swapWithIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    // Swap items
+    const temp = newPages[index];
+    newPages[index] = newPages[swapWithIndex];
+    newPages[swapWithIndex] = temp;
+
+    // Assign sequential order starting from 1
+    const orders = newPages.map((page, idx) => ({
+      id: page.id,
+      order: idx + 1
+    }));
+
+    // Optimistically update UI
+    setPages(newPages);
+
+    try {
+      const res = await fetch('/api/pages/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orders })
+      });
+      if (!res.ok) {
+        console.error('Failed to save pages order to backend');
+        fetchPages(); // roll back on failure
+      } else {
+        const data = await res.json();
+        if (data.pages) {
+          setPages(data.pages);
+        }
+        onRefreshPages?.();
+      }
+    } catch (e) {
+      console.error('Error reordering pages:', e);
+      fetchPages(); // roll back on failure
     }
   };
 
@@ -3103,14 +3147,14 @@ ON CONFLICT (id) DO NOTHING;`;
               </div>
 
               <div>
-                <div className="flex items-center justify-between font-display">
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Page Content (Markdown/HTML)</label>
-                  <span className="text-[8px] font-extrabold text-teal-600 bg-teal-50 px-1.5 rounded">Markdown Enabled</span>
+                <div className="flex items-center justify-between font-display mb-1">
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Page Content</label>
+                  <span className="text-[8px] font-extrabold text-teal-600 bg-teal-50 px-1.5 rounded">Classic Editor</span>
                 </div>
-                <textarea
-                  rows={8} required value={pageContent} onChange={(e) => setPageContent(e.target.value)}
-                  placeholder="# Refund & Cancellation Policy&#10;&#10;Our refund policy outlines..."
-                  className="w-full bg-slate-50 border border-gray-200 focus:bg-white rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                <WysiwygEditor
+                  value={pageContent}
+                  onChange={(val) => setPageContent(val)}
+                  placeholder="<p>Our refund policy outlines...</p>"
                 />
               </div>
 
@@ -3162,23 +3206,9 @@ ON CONFLICT (id) DO NOTHING;`;
               <span className="text-[10px] text-slate-800 font-extrabold uppercase tracking-widest font-display block">👁️ Real-time Styled Content Preview</span>
               <div className="bg-slate-50/50 p-4 rounded-xl border border-slate-100 max-h-[180px] overflow-y-auto text-xs font-semibold prose prose-sm text-slate-700 leading-relaxed">
                 {pageContent ? (
-                  <div className="space-y-2">
-                    {pageContent.split('\n').map((line, idx) => {
-                      if (line.startsWith('# ')) {
-                        return <h1 key={idx} className="text-sm font-black text-slate-900 border-b pb-1">{line.replace('# ', '')}</h1>;
-                      } else if (line.startsWith('## ')) {
-                        return <h2 key={idx} className="text-xs font-bold text-slate-900">{line.replace('## ', '')}</h2>;
-                      } else if (line.startsWith('- ') || line.startsWith('* ')) {
-                        return <li key={idx} className="ml-3 list-disc">{line.substring(2)}</li>;
-                      } else if (line.trim().length === 0) {
-                        return <div key={idx} className="h-2" />;
-                      } else {
-                        return <p key={idx}>{line}</p>;
-                      }
-                    })}
-                  </div>
+                  <div dangerouslySetInnerHTML={{ __html: pageContent }} className="wysiwyg-content space-y-2" />
                 ) : (
-                  <span className="text-gray-400 italic font-medium">Type inside the content textarea to simulate rich formatted preview...</span>
+                  <span className="text-gray-400 italic font-medium">Type inside the content editor to simulate rich formatted preview...</span>
                 )}
               </div>
             </div>
@@ -3197,11 +3227,12 @@ ON CONFLICT (id) DO NOTHING;`;
                       <th className="py-2">Page Title</th>
                       <th className="py-2">Slug Link</th>
                       <th className="py-2">Footer Visibility</th>
+                      <th className="py-2 text-center">Arrange</th>
                       <th className="py-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {pages.map((p) => {
+                    {pages.map((p, index) => {
                       const isDefaultPage = ['about-us', 'contact-us', 'privacy-policy', 'terms-of-use'].includes(p.slug);
                       return (
                         <tr key={p.id} className="border-b border-gray-50 hover:bg-slate-50/50">
@@ -3220,6 +3251,31 @@ ON CONFLICT (id) DO NOTHING;`;
                             }`}>
                               {p.isVisibleInFooter ? 'Visible' : 'Hidden'}
                             </span>
+                          </td>
+                          <td className="py-3 text-center">
+                            <div className="inline-flex items-center gap-1 bg-slate-50 p-0.5 rounded-lg border border-slate-200/60">
+                              <button
+                                type="button"
+                                onClick={() => handleMovePage(index, 'up')}
+                                disabled={index === 0}
+                                className="p-1 text-slate-500 hover:text-teal-600 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-all"
+                                title="Move Up"
+                              >
+                                <ArrowUp size={12} />
+                              </button>
+                              <span className="text-[10px] px-1 text-slate-400 font-bold min-w-[14px]">
+                                {index + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleMovePage(index, 'down')}
+                                disabled={index === pages.length - 1}
+                                className="p-1 text-slate-500 hover:text-teal-600 hover:bg-white rounded-md disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed transition-all"
+                                title="Move Down"
+                              >
+                                <ArrowDown size={12} />
+                              </button>
+                            </div>
                           </td>
                           <td className="py-3 text-right">
                             <div className="inline-flex items-center gap-1.5">
