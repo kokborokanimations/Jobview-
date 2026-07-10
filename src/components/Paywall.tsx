@@ -18,10 +18,10 @@ interface PaywallProps {
   onClose?: () => void;
 }
 
-// Ensure TypeScript declaration for global Razorpay SDK
+// Ensure TypeScript declaration for global Cashfree SDK
 declare global {
   interface Window {
-    Razorpay: any;
+    Cashfree: any;
   }
 }
 
@@ -35,6 +35,11 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
   const [cardCvv, setCardCvv] = useState('123');
   const [errorMsg, setErrorMsg] = useState('');
 
+  // Cashfree integration states
+  const [isPolling, setIsPolling] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState('');
+  const [paymentLink, setPaymentLink] = useState('');
+
   // Prevent background scrolling when active premium/upgrade modal is active
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
@@ -44,17 +49,49 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
     };
   }, []);
 
-  const loadRazorpayScript = () => {
+  // Polling effect for Cashfree order payments
+  useEffect(() => {
+    let interval: any;
+    if (isPolling && currentOrderId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await fetch(`/api/payments/status/${currentOrderId}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.status === 'SUCCESS') {
+              setIsPolling(false);
+              const syncRes = await fetch('/api/users/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: user.email })
+              });
+              if (syncRes.ok) {
+                const updatedUser = await syncRes.json();
+                onPaymentSuccess(updatedUser);
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Polling payment status error:', e);
+        }
+      }, 3000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isPolling, currentOrderId, user.email, onPaymentSuccess]);
+
+  const loadCashfreeScript = () => {
     return new Promise((resolve, reject) => {
-      if (window.Razorpay) {
+      if (window.Cashfree) {
         resolve(true);
         return;
       }
       const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
       script.async = true;
       script.onload = () => resolve(true);
-      script.onerror = () => reject(new Error('Failed to load Razorpay SDK'));
+      script.onerror = () => reject(new Error('Failed to load Cashfree SDK'));
       document.body.appendChild(script);
     });
   };
@@ -84,76 +121,33 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
         setMockOrderData(orderData);
         setShowSimulator(true);
       } else {
-        // Run Real Razorpay SDK Checkout Flow
+        // Run Real Cashfree SDK Flow
         try {
-          await loadRazorpayScript();
+          await loadCashfreeScript();
           
-          const options = {
-            key: orderData.key_id,
-            amount: Math.round((settings.membershipPrice || 499) * 100),
-            currency: settings.currency || 'INR',
-            name: settings.brandName || 'Sebok',
-            description: settings.tagline || 'Premium Membership Subscription',
-            order_id: orderData.order_id,
-            handler: async function (resVal: any) {
-              setIsLoading(true);
-              try {
-                const verifyRes = await fetch('/api/payments/verify', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    orderId: orderData.order_id,
-                    paymentId: resVal.razorpay_payment_id,
-                    signature: resVal.razorpay_signature,
-                    userId: user.id,
-                    userEmail: user.email,
-                    amount: settings.membershipPrice || 499
-                  })
-                });
-
-                if (verifyRes.ok) {
-                  const syncRes = await fetch('/api/users/sync', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: user.email })
-                  });
-                  if (syncRes.ok) {
-                    const updatedUser = await syncRes.json();
-                    onPaymentSuccess(updatedUser);
-                  }
-                } else {
-                  setErrorMsg('Payment verification failed. Please contact support.');
-                }
-              } catch (e) {
-                console.error('Verification error:', e);
-                setErrorMsg('Error verifying payment.');
-              } finally {
-                setIsLoading(false);
-              }
-            },
-            prefill: {
-              name: user.name || '',
-              email: user.email || ''
-            },
-            theme: {
-              color: '#0d9488'
-            },
-            modal: {
-              ondismiss: function () {
-                setIsLoading(false);
-              }
-            }
-          };
-
-          const rzpInstance = new window.Razorpay(options);
-          rzpInstance.open();
-        } catch (sdkErr: any) {
-          console.warn('Could not launch Razorpay SDK, falling back to simulator', sdkErr);
-          setMockOrderData({
-            ...orderData,
-            warning: 'Razorpay checkout script blocked by iframe boundaries or network policy, simulated fallback enabled.'
+          const cashfree = window.Cashfree({
+            mode: orderData.isSandbox ? 'sandbox' : 'production'
           });
-          setShowSimulator(true);
+
+          // Open Cashfree standard checkout
+          try {
+            cashfree.checkout({
+              paymentSessionId: orderData.payment_session_id,
+              redirectTarget: '_modal'
+            });
+          } catch (inlineErr) {
+            console.warn('Modal checkout launch failed, fallback to iframe/redirect mode', inlineErr);
+          }
+
+          // Show polling screen and payment link button in parallel for bulletproof usability
+          setPaymentLink(orderData.payment_link);
+          setCurrentOrderId(orderData.order_id);
+          setIsPolling(true);
+        } catch (sdkErr: any) {
+          console.warn('Could not launch inline Cashfree script, falling back to secure payment tab', sdkErr);
+          setPaymentLink(orderData.payment_link);
+          setCurrentOrderId(orderData.order_id);
+          setIsPolling(true);
         }
       }
     } catch (err: any) {
@@ -322,23 +316,67 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
             </button>
 
             <p className="text-[9px] text-gray-400 text-center font-medium leading-normal">
-              {settings.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.'}
+              {settings.paywallFooterText || 'Secured & processed under Cashfree Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.'}
             </p>
           </div>
 
         </div>
+      ) : isPolling && paymentLink ? (
+        /* BEAUTIFUL SECURE CASHFREE REDIRECT & POLLING GATEWAY */
+        <div className="w-full h-full md:h-auto md:max-h-[90vh] md:max-w-[390px] bg-slate-900 md:rounded-2xl overflow-y-auto shadow-2xl border-0 md:border border-slate-800 text-white animate-scale-up flex flex-col p-6 items-center justify-center text-center space-y-6">
+          <div className="w-14 h-14 rounded-full bg-teal-500/15 flex items-center justify-center text-teal-400 border border-teal-500/30 animate-pulse">
+            <CreditCard size={28} className="animate-bounce" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="font-extrabold text-sm text-gray-100 font-display">Cashfree Secure Checkout</h3>
+            <p className="text-[10px] text-teal-400 font-semibold tracking-wide uppercase">Waiting for payment...</p>
+          </div>
+
+          <p className="text-[11px] text-slate-300 leading-relaxed max-w-xs">
+            We have created a secure transaction request with Cashfree. Please click the button below to complete your payment in a secure tab.
+          </p>
+
+          <div className="space-y-3 w-full">
+            <a
+              href={paymentLink}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="w-full inline-flex items-center justify-center gap-2 py-3 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-extrabold transition-all shadow-lg shadow-teal-600/20 font-display"
+            >
+              <span>Open Secure Payment Tab</span>
+              <ArrowRight size={14} />
+            </a>
+
+            <button
+              onClick={() => {
+                setIsPolling(false);
+                setPaymentLink('');
+                setCurrentOrderId('');
+              }}
+              className="text-slate-400 hover:text-white text-[10px] font-semibold underline underline-offset-4 cursor-pointer"
+            >
+              Cancel & Return
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 justify-center pt-2 border-t border-slate-800 w-full text-[9px] text-slate-400">
+            <ShieldCheck size={12} className="text-teal-500" />
+            <span>Secured & encrypted by Cashfree Payments</span>
+          </div>
+        </div>
       ) : (
-        /* GORGEOUS RAZORPAY PAYMENT GATEWAY SIMULATOR */
+        /* GORGEOUS CASHFREE PAYMENT GATEWAY SIMULATOR */
         <div className="w-full h-full md:h-auto md:max-h-[90vh] md:max-w-[390px] bg-slate-900 md:rounded-2xl overflow-y-auto shadow-2xl border-0 md:border border-slate-800 text-white animate-scale-up flex flex-col">
           
           {/* Header */}
           <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-5 h-5 rounded bg-teal-600 flex items-center justify-center font-black text-[10px]">
-                RZP
+                CF
               </div>
               <div>
-                <h3 className="font-extrabold text-xs text-gray-100 font-display">Razorpay Checkout</h3>
+                <h3 className="font-extrabold text-xs text-gray-100 font-display">Cashfree Checkout</h3>
                 <p className="text-[8px] text-teal-400 font-semibold tracking-widest uppercase">Simulator Mode</p>
               </div>
             </div>
@@ -492,7 +530,7 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
             </div>
 
             <p className="text-[8px] text-slate-500 text-center leading-normal">
-              This simulator mimics the Razorpay Checkout SDK panel to enable quick testing of the paywall lock state. No real money will be charged.
+              This simulator mimics the Cashfree Checkout SDK panel to enable quick testing of the paywall lock state. No real money will be charged.
             </p>
           </div>
 

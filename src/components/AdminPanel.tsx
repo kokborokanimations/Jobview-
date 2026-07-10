@@ -2694,7 +2694,7 @@ ON CONFLICT (id) DO NOTHING;`;
         </div>
       )}
 
-      {/* SUBTAB CONTENT: RAZORPAY GATEWAY LOGS & SETTINGS */}
+      {/* SUBTAB CONTENT: CASHFREE GATEWAY LOGS & SETTINGS */}
       {activeSubTab === 'razorpay' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
@@ -2704,19 +2704,19 @@ ON CONFLICT (id) DO NOTHING;`;
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
               <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
                 <CreditCard size={15} className="text-teal-600" />
-                Razorpay Credentials
+                Cashfree Credentials
               </h3>
 
               <p className="text-[10px] text-gray-500 leading-normal font-semibold">
-                Input your Razorpay Key ID and Key Secret. If left blank, Sebok runs in a beautiful built-in Razorpay Checkout Simulator for testing!
+                Input your Cashfree Client/App ID and Secret Key. If left blank, Sebok runs in a beautiful built-in Cashfree Checkout Simulator for testing!
               </p>
 
               <form onSubmit={handleSaveSettings} className="space-y-4">
                 <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Razorpay Key ID</label>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Cashfree Client/App ID</label>
                   <input
                     type="text"
-                    placeholder="e.g., rzp_test_..."
+                    placeholder="e.g., TEST..."
                     value={razorpayKeyId}
                     onChange={(e) => setRazorpayKeyId(e.target.value)}
                     className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
@@ -2725,7 +2725,7 @@ ON CONFLICT (id) DO NOTHING;`;
 
                 <div>
                   <div className="flex items-center justify-between font-display">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Razorpay Key Secret</label>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Cashfree Secret Key</label>
                     <button
                       type="button"
                       onClick={() => setShowSecret(!showSecret)}
@@ -2737,7 +2737,7 @@ ON CONFLICT (id) DO NOTHING;`;
                   </div>
                   <input
                     type={showSecret ? 'text' : 'password'}
-                    placeholder="e.g., razorpay_secret_..."
+                    placeholder="e.g., cf_secret_key_..."
                     value={razorpayKeySecret}
                     onChange={(e) => setRazorpayKeySecret(e.target.value)}
                     className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"

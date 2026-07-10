@@ -668,9 +668,9 @@ export default function App() {
 
   const shouldLockApp = (forceShowPaywall && !dismissedPaywall) || showPaywallPopup;
 
-  // Automatically trigger paywall popup or login popup when trying to open the community tab
+  // Automatically trigger paywall popup or login popup when trying to open community or resume tab
   useEffect(() => {
-    if (currentTab === 'community') {
+    if (currentTab === 'community' || currentTab === 'resume') {
       if (!user) {
         setShowLoginModal(true);
       } else if (isExpiredUser) {
@@ -895,11 +895,90 @@ export default function App() {
 
             {/* Resume Builder Section */}
             {currentTab === 'resume' && (
-              <ResumeBuilder
-                user={user}
-                settings={settings}
-                onLoginTrigger={() => setShowLoginModal(true)}
-              />
+              !user ? (
+                <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center text-center animate-fade-in">
+                  <div className="w-16 h-16 bg-teal-50 dark:bg-teal-950/30 rounded-2xl border border-teal-100 dark:border-teal-900/30 flex items-center justify-center text-teal-600 dark:text-teal-400 shadow-sm mb-6 animate-pulse">
+                    <FileText size={28} className="stroke-[2.5]" />
+                  </div>
+                  <h3 className="text-lg font-extrabold font-display text-slate-900 dark:text-slate-100 tracking-tight">
+                    Sign In to Access Resume Builder
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm leading-relaxed">
+                    Our professional resume builder and templates are exclusive to members. Please sign in to build, edit, and export your professional resume.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setShowLoginModal(true);
+                    }}
+                    className="mt-6 px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl text-xs font-bold font-sans tracking-wide hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/10 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Sign In Now
+                  </button>
+
+                  {/* Blurred mockup representing locked resume */}
+                  <div className="w-full mt-8 opacity-40 select-none pointer-events-none blur-[5px] space-y-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 text-left shadow-sm space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
+                          <div className="h-3 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                        </div>
+                      </div>
+                      <div className="space-y-2 pt-2">
+                        <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded" />
+                        <div className="h-3 w-5/6 bg-slate-200 dark:bg-slate-800 rounded" />
+                        <div className="h-3 w-2/3 bg-slate-200 dark:bg-slate-800 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : isExpiredUser ? (
+                <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center text-center">
+                  <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm mb-6 animate-pulse">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  </div>
+                  <h3 className="text-lg font-extrabold font-display text-slate-900 dark:text-slate-100 tracking-tight">
+                    Resume Builder Locked
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm leading-relaxed">
+                    Access to our premium Resume Builder, templates, and AI assistant is exclusive to active Trial and Premium members. Upgrade your plan now to unlock unlimited access.
+                  </p>
+                  <button
+                    onClick={() => {
+                      setDismissedPaywall(false);
+                      setShowPaywallPopup(true);
+                    }}
+                    className="mt-6 px-6 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-xl text-xs font-bold font-sans tracking-wide hover:from-teal-700 hover:to-emerald-700 shadow-md shadow-teal-500/10 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    Unlock Resume Builder
+                  </button>
+
+                  {/* Blurred mockup representing locked resume */}
+                  <div className="w-full mt-8 opacity-40 select-none pointer-events-none blur-[5px] space-y-4">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 text-left shadow-sm space-y-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800" />
+                        <div className="space-y-1.5 flex-1">
+                          <div className="h-4 w-32 bg-slate-200 dark:bg-slate-800 rounded" />
+                          <div className="h-3 w-20 bg-slate-100 dark:bg-slate-800 rounded" />
+                        </div>
+                      </div>
+                      <div className="space-y-2 pt-2">
+                        <div className="h-3 w-full bg-slate-200 dark:bg-slate-800 rounded" />
+                        <div className="h-3 w-5/6 bg-slate-200 dark:bg-slate-800 rounded" />
+                        <div className="h-3 w-2/3 bg-slate-200 dark:bg-slate-800 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <ResumeBuilder
+                  user={user}
+                  settings={settings}
+                  onLoginTrigger={() => setShowLoginModal(true)}
+                />
+              )
             )}
 
             {/* 5. App Settings */}

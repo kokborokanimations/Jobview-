@@ -9,7 +9,6 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
-import Razorpay from 'razorpay';
 import crypto from 'crypto';
 
 const app = express();
@@ -2341,7 +2340,7 @@ app.delete('/api/users/:id', async (req, res) => {
   });
 });
 
-// 5. Payments (Razorpay Order & Verification)
+// 5. Payments (Cashfree Order & Verification & Polling Status)
 app.post('/api/payments/create-order', async (req, res) => {
   const { userId, userEmail, amount } = req.body;
   const db = readDB();
@@ -2349,128 +2348,246 @@ app.post('/api/payments/create-order', async (req, res) => {
 
   const orderId = 'order_' + Date.now();
 
-  // If Razorpay credentials are missing, we run in Simulator Mode
+  // If Cashfree credentials are missing, we run in Simulator Mode
   if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
     return res.json({
       isMock: true,
       order_id: orderId,
       order_amount: amount || settings.membershipPrice || 499,
       order_currency: settings.currency || 'INR',
-      message: 'Razorpay Gateway is in Mock/Simulator Mode. Click Continue to proceed.'
+      message: 'Cashfree Gateway is in Simulator Mode. Click Continue to proceed.'
     });
   }
 
   try {
-    const razorpayInstance = new Razorpay({
-      key_id: settings.razorpayKeyId,
-      key_secret: settings.razorpayKeySecret
-    });
+    const isSandbox = !settings.razorpayKeyId || settings.razorpayKeyId.startsWith('TEST') || settings.cashfreeSandbox === true;
+    const cashfreeUrl = isSandbox 
+      ? 'https://sandbox.cashfree.com/pg/orders' 
+      : 'https://api.cashfree.com/pg/orders';
 
     const finalAmount = Number(amount || settings.membershipPrice || 499);
-    const options = {
-      amount: Math.round(finalAmount * 100), // amount in the smallest currency unit (paise)
-      currency: settings.currency || 'INR',
-      receipt: orderId
+    const payload = {
+      order_amount: finalAmount,
+      order_currency: settings.currency || 'INR',
+      order_id: orderId,
+      customer_details: {
+        customer_id: userId || 'cust_' + Date.now(),
+        customer_phone: '9999999999', // cashfree requires phone number, so provide a fallback if missing
+        customer_email: userEmail || 'guest@sebok.in'
+      },
+      order_meta: {
+        return_url: `https://sebok.in/payments/success?order_id=${orderId}`
+      }
     };
 
-    const order = await razorpayInstance.orders.create(options);
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-client-id': settings.razorpayKeyId,
+      'x-client-secret': settings.razorpayKeySecret,
+      'x-api-version': '2023-08-01'
+    };
+
+    const cfResponse = await fetch(cashfreeUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+
+    if (!cfResponse.ok) {
+      const errorText = await cfResponse.text();
+      throw new Error(`Cashfree error: ${cfResponse.status} - ${errorText}`);
+    }
+
+    const cfOrder = await cfResponse.json();
+
     res.json({
       isMock: false,
-      order_id: order.id,
-      order_amount: finalAmount,
-      order_currency: order.currency,
-      key_id: settings.razorpayKeyId,
-      receipt: order.receipt
+      order_id: cfOrder.order_id,
+      order_amount: cfOrder.order_amount,
+      order_currency: cfOrder.order_currency,
+      payment_session_id: cfOrder.payment_session_id,
+      payment_link: cfOrder.payment_link,
+      isSandbox: isSandbox
     });
   } catch (err: any) {
-    console.error('Razorpay Connection or API failed, falling back to simulator:', err);
+    console.error('Cashfree Connection or API failed, falling back to simulator:', err);
     res.json({
       isMock: true,
       order_id: orderId,
       order_amount: amount || settings.membershipPrice || 499,
       order_currency: settings.currency || 'INR',
-      warning: 'Razorpay API returned an error, running in Mock Simulator Mode.',
-      errorDetail: err.message || 'Check Razorpay Credentials configuration.'
+      warning: 'Cashfree API returned an error, running in Mock Simulator Mode.',
+      errorDetail: err.message || 'Check Cashfree Credentials configuration.'
     });
   }
 });
 
-// Verify payment / callback signature
+// Polling status for Cashfree orders
+app.get('/api/payments/status/:orderId', async (req, res) => {
+  const { orderId } = req.params;
+  const db = readDB();
+  const settings = db.adminSettings;
+
+  // Find if there is already a successful payment log locally
+  const existingSuccessLog = db.paymentLogs.find((l: any) => l.id === orderId && l.status === 'SUCCESS');
+  if (existingSuccessLog) {
+    return res.json({ status: 'SUCCESS' });
+  }
+
+  // If credentials are empty, we don't query Cashfree, it's simulated
+  if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
+    return res.json({ status: 'MOCK' });
+  }
+
+  try {
+    const isSandbox = !settings.razorpayKeyId || settings.razorpayKeyId.startsWith('TEST') || settings.cashfreeSandbox === true;
+    const cashfreeUrl = isSandbox 
+      ? `https://sandbox.cashfree.com/pg/orders/${orderId}` 
+      : `https://api.cashfree.com/pg/orders/${orderId}`;
+
+    const cfResponse = await fetch(cashfreeUrl, {
+      method: 'GET',
+      headers: {
+        'x-client-id': settings.razorpayKeyId,
+        'x-client-secret': settings.razorpayKeySecret,
+        'x-api-version': '2023-08-01'
+      }
+    });
+
+    if (cfResponse.ok) {
+      const orderInfo = await cfResponse.json();
+      if (orderInfo.order_status === 'PAID') {
+        const userEmail = orderInfo.customer_details?.customer_email;
+        let updatedUserObj: any = null;
+
+        const alreadyLogged = db.paymentLogs.some((l: any) => l.id === orderId && l.status === 'SUCCESS');
+        if (!alreadyLogged) {
+          const newLog = {
+            id: orderId,
+            userId: orderInfo.customer_details?.customer_id || 'unknown_user',
+            userEmail: userEmail || 'unknown@example.com',
+            amount: orderInfo.order_amount,
+            status: 'SUCCESS' as const,
+            txId: orderId,
+            createdAt: new Date().toISOString()
+          };
+          db.paymentLogs.unshift(newLog);
+
+          if (userEmail) {
+            const userIndex = db.users.findIndex((u: any) => u.email.toLowerCase() === userEmail.toLowerCase());
+            if (userIndex !== -1) {
+              db.users[userIndex].subscriptionStatus = 'Active';
+              const now = new Date();
+              const planExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+              db.users[userIndex].plan_expiry_date = planExpiry.toISOString();
+              db.users[userIndex].planExpiryDate = planExpiry.toISOString();
+              updatedUserObj = db.users[userIndex];
+            }
+          }
+          writeDB(db);
+
+          try {
+            const supabase = getServerSupabase();
+            if (supabase) {
+              await supabase.from('payment_logs').insert([mapPaymentLogToSupabase(newLog)]);
+              if (updatedUserObj) {
+                await supabase.from('users').upsert(mapUserToSupabase(updatedUserObj));
+              }
+            }
+          } catch (supErr: any) {
+            console.log('[Supabase Info] Syncing Cashfree payment failed:', supErr.message);
+          }
+        }
+
+        return res.json({ status: 'SUCCESS' });
+      } else {
+        return res.json({ status: orderInfo.order_status });
+      }
+    } else {
+      return res.json({ status: 'ERROR', message: `Cashfree status response code: ${cfResponse.status}` });
+    }
+  } catch (err: any) {
+    console.error('Error in cashfree status check:', err);
+    return res.json({ status: 'ERROR', message: err.message });
+  }
+});
+
+// Verify payment / callback simulation
 app.post('/api/payments/verify', async (req, res) => {
   const { orderId, paymentId, signature, status, userId, userEmail, amount, txId } = req.body;
   const db = readDB();
   const settings = db.adminSettings;
 
   let finalStatus = 'FAILED';
-  let verifiedTxId = txId || paymentId || 'rzp_tx_' + Date.now();
+  let verifiedTxId = txId || paymentId || 'cf_tx_' + Date.now();
 
-  if (settings.razorpayKeyId && settings.razorpayKeySecret && signature && orderId && paymentId) {
-    // Real Razorpay signature verification
+  if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
+    finalStatus = status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
+  } else {
     try {
-      const text = orderId + '|' + paymentId;
-      const generated_signature = crypto
-        .createHmac('sha256', settings.razorpayKeySecret)
-        .update(text)
-        .digest('hex');
+      const isSandbox = !settings.razorpayKeyId || settings.razorpayKeyId.startsWith('TEST') || settings.cashfreeSandbox === true;
+      const cashfreeUrl = isSandbox 
+        ? `https://sandbox.cashfree.com/pg/orders/${orderId}` 
+        : `https://api.cashfree.com/pg/orders/${orderId}`;
 
-      if (generated_signature === signature) {
-        finalStatus = 'SUCCESS';
-      } else {
-        console.warn('Razorpay Signature verification failed');
-        finalStatus = 'FAILED';
+      const cfResponse = await fetch(cashfreeUrl, {
+        method: 'GET',
+        headers: {
+          'x-client-id': settings.razorpayKeyId,
+          'x-client-secret': settings.razorpayKeySecret,
+          'x-api-version': '2023-08-01'
+        }
+      });
+
+      if (cfResponse.ok) {
+        const orderInfo = await cfResponse.json();
+        if (orderInfo.order_status === 'PAID') {
+          finalStatus = 'SUCCESS';
+          verifiedTxId = orderId;
+        }
       }
     } catch (err) {
-      console.error('Error verifying signature:', err);
-      finalStatus = 'FAILED';
+      console.error('Error verifying Cashfree order:', err);
     }
-  } else {
-    // Simulated mock transaction
-    finalStatus = status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
   }
 
-  // Create payment log
   const newLog = {
     id: verifiedTxId,
     userId: userId || 'unknown_user',
     userEmail: userEmail || 'unknown@example.com',
     amount: amount || settings.membershipPrice || 499,
-    status: finalStatus,
+    status: finalStatus as any,
     txId: verifiedTxId,
     createdAt: new Date().toISOString()
   };
 
-  db.paymentLogs.unshift(newLog);
-
+  const alreadyLogged = db.paymentLogs.some((l: any) => l.id === verifiedTxId && l.status === 'SUCCESS');
   let updatedUserObj: any = null;
 
-  // If success, activate user's subscription
-  if (finalStatus === 'SUCCESS') {
+  if (finalStatus === 'SUCCESS' && !alreadyLogged) {
+    db.paymentLogs.unshift(newLog);
     const userIndex = db.users.findIndex((u: any) => u.email.toLowerCase() === userEmail.toLowerCase() || u.id === userId);
     if (userIndex !== -1) {
       db.users[userIndex].subscriptionStatus = 'Active';
-      // Calculate 30 days from current timestamp
       const now = new Date();
       const planExpiry = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
       db.users[userIndex].plan_expiry_date = planExpiry.toISOString();
       db.users[userIndex].planExpiryDate = planExpiry.toISOString();
       updatedUserObj = db.users[userIndex];
     }
-  }
+    writeDB(db);
 
-  writeDB(db);
-
-  try {
-    const supabase = getServerSupabase();
-    if (supabase) {
-      // 1. Sync payment log
-      await supabase.from('payment_logs').insert([mapPaymentLogToSupabase(newLog)]);
-      // 2. Sync user profile with active status if updated
-      if (updatedUserObj) {
-        await supabase.from('users').upsert(mapUserToSupabase(updatedUserObj));
+    try {
+      const supabase = getServerSupabase();
+      if (supabase) {
+        await supabase.from('payment_logs').insert([mapPaymentLogToSupabase(newLog)]);
+        if (updatedUserObj) {
+          await supabase.from('users').upsert(mapUserToSupabase(updatedUserObj));
+        }
       }
+    } catch (err: any) {
+      console.log('[Supabase Info] Local payment verified, Supabase sync skipped:', err.message);
     }
-  } catch (err: any) {
-    console.log('[Supabase Info] Local payment verified successfully, but Supabase sync was skipped:', err.message || String(err));
   }
 
   res.json({ success: finalStatus === 'SUCCESS', log: newLog });
