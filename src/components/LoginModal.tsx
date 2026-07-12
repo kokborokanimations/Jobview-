@@ -85,39 +85,46 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
     setIsLoading(true);
 
     try {
-      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-      const { auth } = await import('../lib/firebase');
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
+      const { getClientSupabase } = await import('../lib/firebaseQueries');
+      const supabase = getClientSupabase();
+      if (!supabase) {
+        throw new Error('Supabase configuration is missing or incomplete. Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set.');
+      }
 
-      const response = await fetch('/api/users/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: user.displayName || user.email?.split('@')[0] || 'User',
-          email: user.email,
-          avatar: user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || 'user')}`
-        })
+      const redirectTo = `${window.location.origin}/auth/callback`;
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true
+        }
       });
 
-      if (response.ok) {
-        const syncedUser = await response.json();
-        localStorage.setItem('sb-access-token', 'firebase-auth-token');
-        onLogin(syncedUser);
+      if (oauthError) throw oauthError;
+
+      if (data?.url) {
+        // Open the Supabase OAuth URL in a popup
+        const width = 500;
+        const height = 600;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+        const popup = window.open(
+          data.url,
+          'supabase-google-login',
+          `width=${width},height=${height},left=${left},top=${top},status=no,resizable=yes,scrollbars=yes`
+        );
+        if (!popup) {
+          throw new Error('साइन-इन पॉपअप अवरुद्ध (blocked) हो गया है। कृपया अपने ब्राउज़र में पॉपअप की अनुमति दें। (Popup was blocked. Please allow popups for this site in your browser.)');
+        }
       } else {
-        setError('Failed to sync authenticated profile with server.');
+        throw new Error('No authentication URL returned from Supabase.');
       }
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/cancelled-popup-request' || err.message?.includes('cancelled-popup-request')) {
-        setError('गूगल साइन-इन पॉपअप रद्द हो गया था। यदि आप आईफ़्रेम (iframe) प्रीव्यू में हैं, तो कृपया ऐप को नई टैब (New Tab) में खोलकर साइन-इन करें। (Google Sign-In popup was cancelled. If you are inside the preview iframe, please open the app in a new tab to sign in successfully.)');
-      } else if (err.code === 'auth/popup-closed-by-user' || err.message?.includes('popup-closed-by-user')) {
-        setError('साइन-इन पॉपअप को बंद कर दिया गया था। कृपया फिर से प्रयास करें या नई टैब में खोलें। (Sign-in popup was closed. Please try again or open in a new tab.)');
-      } else if (err.code === 'auth/popup-blocked' || err.message?.includes('popup-blocked')) {
+      if (err.message?.includes('popup-blocked')) {
         setError('पॉपअप अवरुद्ध (blocked) हो गया है। कृपया अपने ब्राउज़र में पॉपअप की अनुमति दें। (Popup was blocked. Please allow popups for this site in your browser.)');
       } else {
-        setError(err.message || 'Failed to complete Google Sign-In.');
+        setError(err.message || 'Failed to complete Google Sign-In with Supabase.');
       }
     } finally {
       setIsLoading(false);

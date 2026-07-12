@@ -68,6 +68,8 @@ export default function AdminPanel({
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+  const [bannerError, setBannerError] = useState(false);
   const [premiumMode, setPremiumMode] = useState(settings.premiumMode);
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
   const [currency, setCurrency] = useState(settings.currency || 'INR');
@@ -206,9 +208,9 @@ export default function AdminPanel({
     );
   });
 
-  // Firebase Connection Status State
-  const [firebaseStatus, setFirebaseStatus] = useState<'checking' | 'connected' | 'error'>('checking');
-  const [firebaseErrorDetails, setFirebaseErrorDetails] = useState<string | null>(null);
+  // Supabase Connection Status State
+  const [supabaseStatus, setSupabaseStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [supabaseErrorDetails, setSupabaseErrorDetails] = useState<string | null>(null);
   const [visitCount, setVisitCount] = useState<number | null>(null);
   const [detailedStats, setDetailedStats] = useState<{ today: number; sevenDays: number; oneMonth: number; total: number } | null>(null);
   const [visitorFilter, setVisitorFilter] = useState<'today' | '7day' | '1month' | 'total'>('total');
@@ -227,47 +229,31 @@ export default function AdminPanel({
   };
 
   useEffect(() => {
-    async function checkFirebaseConnection() {
+    async function checkSupabaseConnection() {
       // Fetch detailed analytics (with local storage fallback)
       await refreshAnalytics();
 
       try {
-        const { getFirestoreQuotaExceeded, setFirestoreQuotaExceeded } = await import('../lib/firebaseQueries');
-        if (getFirestoreQuotaExceeded()) {
-          setFirebaseStatus('quota_exceeded');
-          setFirebaseErrorDetails('Firebase daily free write/read quota reached. Safely using local storage fallback mode with zero service degradation.');
+        const { getClientSupabase } = await import('../lib/firebaseQueries');
+        const supabase = getClientSupabase();
+        if (!supabase) {
+          setSupabaseStatus('error');
+          setSupabaseErrorDetails('Supabase configuration is missing. Please configure it in your Settings.');
           return;
         }
 
-        const { collection, getDocs, limit, query } = await import('firebase/firestore');
-        const { db } = await import('../lib/firebase');
-        const q = query(collection(db, 'jobs'), limit(1));
-        await getDocs(q);
-        setFirebaseStatus('connected');
-        setFirebaseErrorDetails('Connected successfully to Firebase Database API');
+        const { error } = await supabase.from('jobs').select('id').limit(1);
+        if (error) throw error;
+
+        setSupabaseStatus('connected');
+        setSupabaseErrorDetails('Connected successfully to live Supabase Database API');
       } catch (err: any) {
         const errMsg = err.message || String(err);
-        if (
-          errMsg.includes('RESOURCE_EXHAUSTED') || 
-          errMsg.includes('Quota limit exceeded') || 
-          err.code === 'resource-exhausted' || 
-          err.code === 8
-        ) {
-          try {
-            const { setFirestoreQuotaExceeded } = await import('../lib/firebaseQueries');
-            setFirestoreQuotaExceeded(true);
-          } catch (e) {
-            // ignore
-          }
-          setFirebaseStatus('quota_exceeded');
-          setFirebaseErrorDetails('Firebase daily free write/read quota reached. Safely using local storage fallback mode with zero service degradation.');
-        } else {
-          setFirebaseStatus('error');
-          setFirebaseErrorDetails(errMsg);
-        }
+        setSupabaseStatus('error');
+        setSupabaseErrorDetails(errMsg);
       }
     }
-    checkFirebaseConnection();
+    checkSupabaseConnection();
   }, []);
 
   useEffect(() => {
@@ -775,6 +761,7 @@ export default function AdminPanel({
       const url = await handleFileUpload(e.target.files[0], 'app_logo');
       setIsUploadingLogo(false);
       if (url) {
+        setLogoError(false);
         setLogoUrl(url);
         // Automatically save branding settings so it persists instantly without requiring clicking Save!
         await onUpdateSettings({
@@ -807,6 +794,7 @@ export default function AdminPanel({
       const url = await handleFileUpload(e.target.files[0], 'jobs_banner');
       setIsUploadingBanner(false);
       if (url) {
+        setBannerError(false);
         setBannerUrl(url);
         // Automatically save branding settings so it persists instantly without requiring clicking Save!
         await onUpdateSettings({
@@ -855,37 +843,28 @@ export default function AdminPanel({
             </div>
           )}
 
-          {firebaseStatus === 'checking' && (
+          {supabaseStatus === 'checking' && (
             <div className="px-3 py-1.5 bg-slate-100 text-gray-500 font-mono text-[10px] font-bold rounded-xl border border-gray-200 inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse" />
-              <span>CHECKING FIREBASE...</span>
+              <span>CHECKING SUPABASE...</span>
             </div>
           )}
-          {firebaseStatus === 'connected' && (
+          {supabaseStatus === 'connected' && (
             <div 
-              title={firebaseErrorDetails || "Connected successfully to Firebase Database API"}
+              title={supabaseErrorDetails || "Connected successfully to Supabase Database API"}
               className="px-3 py-1.5 bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold rounded-xl border border-emerald-200 inline-flex items-center gap-1.5 cursor-help"
             >
               <Database size={11} className="text-emerald-500 animate-pulse" />
-              <span>FIREBASE ACTIVE</span>
+              <span>SUPABASE ACTIVE</span>
             </div>
           )}
-          {firebaseStatus === 'quota_exceeded' && (
+          {supabaseStatus === 'error' && (
             <div 
-              title={firebaseErrorDetails || "Firebase daily free write quota reached. System is safely falling back to local client state and background buffering with zero data loss."}
-              className="px-3 py-1.5 bg-amber-50 text-amber-850 font-mono text-[10px] font-bold rounded-xl border border-amber-200 inline-flex items-center gap-1.5 cursor-help animate-pulse"
-            >
-              <Database size={11} className="text-amber-500" />
-              <span>QUOTA MET (FALLBACK ACTIVE)</span>
-            </div>
-          )}
-          {firebaseStatus === 'error' && (
-            <div 
-              title={firebaseErrorDetails || "Connection failed. Please verify setup."}
+              title={supabaseErrorDetails || "Connection failed. Please verify setup."}
               className="px-3 py-1.5 bg-rose-50 text-rose-700 font-mono text-[10px] font-bold rounded-xl border border-rose-200 inline-flex items-center gap-1.5 cursor-help"
             >
               <Database size={11} className="text-rose-500 animate-bounce" />
-              <span>FIREBASE OFFLINE</span>
+              <span>SUPABASE OFFLINE</span>
             </div>
           )}
         </div>
@@ -1021,8 +1000,8 @@ export default function AdminPanel({
           )}
 
           <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
-            <span className={`w-1 h-1 rounded-full ${firebaseStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : firebaseStatus === 'quota_exceeded' ? 'bg-amber-400 animate-pulse' : 'bg-amber-400'}`} />
-            <span>{firebaseStatus === 'connected' ? 'Live Firebase Sync Active' : firebaseStatus === 'quota_exceeded' ? 'Offline Local Storage (Firebase Quota Met)' : 'Offline Local Storage'}</span>
+            <span className={`w-1 h-1 rounded-full ${supabaseStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{supabaseStatus === 'connected' ? 'Live Supabase Sync Active' : 'Offline Local Storage'}</span>
           </p>
         </div>
 
@@ -1215,9 +1194,23 @@ export default function AdminPanel({
               <div>
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">App Logo Branding</label>
                 <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
-                  {logoUrl ? (
+                  {logoUrl && !logoError ? (
                     <div className="relative group w-20 h-20 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white flex items-center justify-center p-1">
-                      <img src={logoUrl} alt="App Logo" className="max-w-full max-h-full object-contain" />
+                      <img 
+                        src={logoUrl} 
+                        alt="App Logo" 
+                        className="max-w-full max-h-full object-contain" 
+                        onError={(e) => {
+                          const currentSrc = e.currentTarget.src;
+                          if (currentSrc.includes('/storage/v1/object/public/')) {
+                            const parts = currentSrc.split('/');
+                            const filename = parts[parts.length - 1];
+                            e.currentTarget.src = `/uploads/${filename}`;
+                          } else {
+                            setLogoError(true);
+                          }
+                        }}
+                      />
                       <button
                         type="button"
                         onClick={() => setLogoUrl('')}
@@ -1305,9 +1298,23 @@ export default function AdminPanel({
               <div>
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Banner Image Upload</label>
                 <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
-                  {bannerUrl ? (
+                  {bannerUrl && !bannerError ? (
                     <div className="relative group w-full h-24 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white">
-                      <img src={bannerUrl} alt="Careers Banner" className="w-full h-full object-cover" />
+                      <img 
+                        src={bannerUrl} 
+                        alt="Careers Banner" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => {
+                          const currentSrc = e.currentTarget.src;
+                          if (currentSrc.includes('/storage/v1/object/public/')) {
+                            const parts = currentSrc.split('/');
+                            const filename = parts[parts.length - 1];
+                            e.currentTarget.src = `/uploads/${filename}`;
+                          } else {
+                            setBannerError(true);
+                          }
+                        }}
+                      />
                       <button
                         type="button"
                         onClick={() => setBannerUrl('')}

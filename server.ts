@@ -10,25 +10,7 @@ import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
-import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
-
-// Initialize Firebase SDK on Server
-let firestoreDb: any = null;
-try {
-  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(firebaseConfigPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
-    const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
-    firestoreDb = getFirestore(firebaseApp, dbId);
-    console.log('[Firebase] Successfully initialized Firebase Firestore on server.');
-  } else {
-    console.warn('[Firebase] Warning: firebase-applet-config.json not found on server.');
-  }
-} catch (err: any) {
-  console.error('[Firebase Init Error]:', err.message || String(err));
-}
+// Firebase initialization completely removed in favor of Supabase
 
 const app = express();
 const PORT = 3000;
@@ -387,98 +369,9 @@ function readDB() {
   }
 }
 
-let isSyncing = false;
-let pendingSync = false;
-
-async function syncCollection(colName: string, localArray: any[]) {
-  if (!firestoreDb) return;
-  try {
-    const localMap = new Map();
-    localArray.forEach(item => {
-      if (item && item.id) {
-        localMap.set(String(item.id), item);
-      }
-    });
-
-    // 1. Upsert local items
-    for (const [id, item] of localMap.entries()) {
-      const cleanItem = JSON.parse(JSON.stringify(item));
-      await setDoc(doc(firestoreDb, colName, id), cleanItem);
-    }
-
-    // 2. Delete removed items
-    const snap = await getDocs(collection(firestoreDb, colName));
-    for (const docSnap of snap.docs) {
-      if (!localMap.has(docSnap.id)) {
-        await deleteDoc(docSnap.ref);
-      }
-    }
-  } catch (err: any) {
-    console.error(`[Firebase syncCollection Error for ${colName}]:`, err.message || String(err));
-  }
-}
-
-let isServerFirestoreQuotaExceeded = false;
-
-async function syncToFirebase(dbData: any) {
-  if (!firestoreDb) return;
-  if (isServerFirestoreQuotaExceeded) {
-    return;
-  }
-  if (isSyncing) {
-    pendingSync = true;
-    return;
-  }
-  isSyncing = true;
-  try {
-    // 1. Admin Settings
-    if (dbData.adminSettings) {
-      const cleanSettings = JSON.parse(JSON.stringify(dbData.adminSettings));
-      await setDoc(doc(firestoreDb, 'admin_settings', 'global'), cleanSettings);
-    }
-
-    // Sync arrays
-    await syncCollection('jobs', dbData.jobs || []);
-    await syncCollection('community_posts', dbData.communityPosts || []);
-    await syncCollection('users', dbData.users || []);
-    await syncCollection('pages', dbData.pages || []);
-    await syncCollection('contacts', dbData.contacts || []);
-    await syncCollection('payment_logs', dbData.paymentLogs || []);
-    await syncCollection('resumes', dbData.resumes || []);
-
-  } catch (err: any) {
-    const errMsg = err.message || String(err);
-    if (
-      errMsg.includes('RESOURCE_EXHAUSTED') || 
-      errMsg.includes('Quota limit exceeded') || 
-      err.code === 'resource-exhausted' || 
-      err.code === 8
-    ) {
-      if (!isServerFirestoreQuotaExceeded) {
-        isServerFirestoreQuotaExceeded = true;
-        console.warn('[Firebase] Firestore daily free write quota has been reached on the server. Temporarily bypassing server-side Firestore sync to prevent crashes and error logs.');
-      }
-    } else {
-      console.error('[Firebase Background Sync Error]:', errMsg);
-    }
-  } finally {
-    isSyncing = false;
-    if (pendingSync && !isServerFirestoreQuotaExceeded) {
-      pendingSync = false;
-      const latestData = readDB();
-      syncToFirebase(latestData);
-    }
-  }
-}
-
 function writeDB(data: any) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
-    if (firestoreDb) {
-      syncToFirebase(data).catch(err => {
-        console.error('[Firebase Write Sync Catch]:', err);
-      });
-    }
   } catch (e) {
     console.error('Error writing DB', e);
   }
@@ -2871,103 +2764,125 @@ function escapeHtml(unsafe: string): string {
 
 // Vite Setup for Development and static handling in Production
 async function startServer() {
-  // Sync and migrate data with Firebase Firestore on startup
+  // Sync and migrate data with Supabase on startup (Bulletproof & Self-Healing, No Data Loss)
   try {
-    if (firestoreDb) {
-      const dbData = readDB();
-      // Determine if Firebase currently has data by checking if we have any jobs or users in Firestore
-      const jobsSnap = await getDocs(collection(firestoreDb, 'jobs'));
+    const dbData = readDB();
+    const supabase = getServerSupabase();
+    if (supabase) {
+      console.log('[Startup] Custom Supabase is configured. Checking for database seeding or hydration...');
       
-      if (jobsSnap.empty && ((dbData.jobs && dbData.jobs.length > 0) || (dbData.communityPosts && dbData.communityPosts.length > 0))) {
-        // Firebase is empty, but local has data -> RUN ONE-TIME MIGRATION TO SEED FIREBASE!
-        console.log('[Startup] Firebase is empty but local db.json has data. Performing one-time migration to seed Firebase...');
-        await syncToFirebase(dbData);
-        console.log('[Startup] One-time Firebase seeding completed successfully.');
+      // Query to check if we can reach the 'jobs' table and if it is empty
+      const { data: jobs, error: jobsErr } = await supabase.from('jobs').select('id').limit(1);
+      
+      if (jobsErr) {
+        console.warn('[Startup] Warning checking Supabase jobs table (it might not exist yet):', jobsErr.message);
       } else {
-        // Firebase has data (or local is also empty) -> HYDRATE LOCAL DB FROM FIREBASE!
-        console.log('[Startup] Hydrating local db.json from Firebase Firestore...');
+        const isSupabaseEmpty = !jobs || jobs.length === 0;
         
-        // 1. Settings
-        const settingsSnap = await getDoc(doc(firestoreDb, 'admin_settings', 'global'));
-        if (settingsSnap.exists()) {
-          dbData.adminSettings = settingsSnap.data();
+        if (isSupabaseEmpty && ((dbData.jobs && dbData.jobs.length > 0) || (dbData.communityPosts && dbData.communityPosts.length > 0))) {
+          console.log('[Startup] Supabase is empty but local db.json has data. Performing one-time migration to seed Supabase...');
+          
+          // Seed Admin Settings
+          if (dbData.adminSettings) {
+            await supabase.from('admin_settings').upsert({
+              id: 'global_settings',
+              ...mapSettingsToSupabase(dbData.adminSettings)
+            });
+          }
+          
+          // Seed Jobs
+          if (dbData.jobs && dbData.jobs.length > 0) {
+            const rows = dbData.jobs.map(mapJobToSupabase);
+            await supabase.from('jobs').upsert(rows);
+          }
+          
+          // Seed Community Posts
+          if (dbData.communityPosts && dbData.communityPosts.length > 0) {
+            const rows = dbData.communityPosts.map(mapPostToSupabase);
+            await supabase.from('community_posts').upsert(rows);
+          }
+          
+          // Seed Users
+          if (dbData.users && dbData.users.length > 0) {
+            const rows = dbData.users.map(mapUserToSupabase);
+            await supabase.from('users').upsert(rows);
+          }
+          
+          // Seed Pages
+          if (dbData.pages && dbData.pages.length > 0) {
+            const rows = dbData.pages.map(mapPageToSupabase);
+            await supabase.from('pages').upsert(rows);
+          }
+          
+          // Seed Contacts
+          if (dbData.contacts && dbData.contacts.length > 0) {
+            const rows = dbData.contacts.map(mapContactToSupabase);
+            await supabase.from('contacts').upsert(rows);
+          }
+          
+          // Seed Resumes
+          if (dbData.resumes && dbData.resumes.length > 0) {
+            const rows = dbData.resumes.map(mapResumeToSupabase);
+            await supabase.from('resumes').upsert(rows);
+          }
+          
+          console.log('[Startup] One-time Supabase seeding finished successfully.');
+        } else if (!isSupabaseEmpty) {
+          console.log('[Startup] Supabase has data. Hydrating local db.json cache from Supabase...');
+          
+          // Hydrate Settings
+          const { data: sData } = await supabase.from('admin_settings').select('*').eq('id', 'global_settings').maybeSingle();
+          if (sData) {
+            dbData.adminSettings = { ...dbData.adminSettings, ...mapSettingsFromSupabase(sData, dbData.adminSettings) };
+          }
+          
+          // Hydrate Jobs
+          const { data: jData } = await supabase.from('jobs').select('*');
+          if (jData && jData.length > 0) {
+            dbData.jobs = jData.map(mapJobFromSupabase);
+          }
+          
+          // Hydrate Community Posts
+          const { data: cpData } = await supabase.from('community_posts').select('*');
+          if (cpData && cpData.length > 0) {
+            dbData.communityPosts = cpData.map(mapPostFromSupabase);
+          }
+          
+          // Hydrate Users
+          const { data: uData } = await supabase.from('users').select('*');
+          if (uData && uData.length > 0) {
+            dbData.users = uData.map(mapUserFromSupabase);
+          }
+          
+          // Hydrate Pages
+          const { data: pgData } = await supabase.from('pages').select('*');
+          if (pgData && pgData.length > 0) {
+            const mapped = pgData.map(mapPageFromSupabase);
+            mapped.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+            dbData.pages = mapped;
+          }
+          
+          // Hydrate Contacts
+          const { data: cData } = await supabase.from('contacts').select('*');
+          if (cData && cData.length > 0) {
+            dbData.contacts = cData.map(mapContactFromSupabase);
+          }
+          
+          // Hydrate Resumes
+          const { data: rData } = await supabase.from('resumes').select('*');
+          if (rData && rData.length > 0) {
+            dbData.resumes = rData.map(mapResumeFromSupabase);
+          }
+          
+          fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), 'utf-8');
+          console.log('[Startup] Successfully hydrated local db.json cache from Supabase.');
         }
-
-        // 2. Jobs
-        const jobsList: any[] = [];
-        jobsSnap.forEach((doc: any) => {
-          jobsList.push(doc.data());
-        });
-        if (jobsList.length > 0) {
-          dbData.jobs = jobsList;
-        }
-
-        // 3. Community Posts
-        const postsSnap = await getDocs(collection(firestoreDb, 'community_posts'));
-        const postsList: any[] = [];
-        postsSnap.forEach((doc: any) => {
-          postsList.push(doc.data());
-        });
-        if (postsList.length > 0) {
-          dbData.communityPosts = postsList;
-        }
-
-        // 4. Users
-        const usersSnap = await getDocs(collection(firestoreDb, 'users'));
-        const usersList: any[] = [];
-        usersSnap.forEach((doc: any) => {
-          usersList.push(doc.data());
-        });
-        if (usersList.length > 0) {
-          dbData.users = usersList;
-        }
-
-        // 5. Pages
-        const pagesSnap = await getDocs(collection(firestoreDb, 'pages'));
-        const pagesList: any[] = [];
-        pagesSnap.forEach((doc: any) => {
-          pagesList.push(doc.data());
-        });
-        if (pagesList.length > 0) {
-          dbData.pages = pagesList;
-        }
-
-        // 6. Contacts
-        const contactsSnap = await getDocs(collection(firestoreDb, 'contacts'));
-        const contactsList: any[] = [];
-        contactsSnap.forEach((doc: any) => {
-          contactsList.push(doc.data());
-        });
-        if (contactsList.length > 0) {
-          dbData.contacts = contactsList;
-        }
-
-        // 7. Payment Logs
-        const logsSnap = await getDocs(collection(firestoreDb, 'payment_logs'));
-        const logsList: any[] = [];
-        logsSnap.forEach((doc: any) => {
-          logsList.push(doc.data());
-        });
-        if (logsList.length > 0) {
-          dbData.paymentLogs = logsList;
-        }
-
-        // 8. Resumes
-        const resumesSnap = await getDocs(collection(firestoreDb, 'resumes'));
-        const resumesList: any[] = [];
-        resumesSnap.forEach((doc: any) => {
-          resumesList.push(doc.data());
-        });
-        if (resumesList.length > 0) {
-          dbData.resumes = resumesList;
-        }
-
-        fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), 'utf-8');
-        console.log('[Startup] Successfully hydrated local db.json cache from Firebase.');
       }
+    } else {
+      console.log('[Startup] Supabase is not configured on server startup. Skipping startup sync.');
     }
   } catch (startupErr: any) {
-    console.warn('[Startup Warning] Error pre-fetching or seeding Firebase:', startupErr.message || String(startupErr));
+    console.warn('[Startup Warning] Error pre-fetching or seeding Supabase:', startupErr.message || String(startupErr));
   }
 
   let vite: any = null;
@@ -3024,7 +2939,7 @@ async function startServer() {
       // Create a sanitized settings object for instant client-side rendering
       const clientSettings = { 
         ...settings,
-        isFirestoreQuotaExceeded: isServerFirestoreQuotaExceeded 
+        isFirestoreQuotaExceeded: false 
       };
       delete clientSettings.razorpayKeySecret;
       delete clientSettings.cashfreeSecretKey;

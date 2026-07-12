@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState } from 'react';
 import { User, AdminSettings } from '../types';
 import { Briefcase, LogOut, User as UserIcon, ShieldAlert, Settings, FileText } from 'lucide-react';
 import { getUserBadge } from '../lib/badgeUtils';
@@ -18,6 +19,7 @@ interface HeaderProps {
 
 export default function Header({ user, settings, onLogout, onLoginClick, onUpgradeClick, onChangeTab }: HeaderProps) {
   const isAdmin = user && user.role === 'admin' && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
+  const [logoError, setLogoError] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-xs">
@@ -25,12 +27,22 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
         
         {/* Brand Section */}
         <div className="flex items-center gap-3">
-          {settings.logoUrl ? (
+          {settings.logoUrl && !logoError ? (
             <img 
               src={settings.logoUrl} 
               alt={settings.brandName} 
               className="w-10 h-10 object-contain rounded-lg"
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                const currentSrc = e.currentTarget.src;
+                if (currentSrc.includes('/storage/v1/object/public/')) {
+                  const parts = currentSrc.split('/');
+                  const filename = parts[parts.length - 1];
+                  e.currentTarget.src = `/uploads/${filename}`;
+                } else {
+                  setLogoError(true);
+                }
+              }}
             />
           ) : (
             <div className="w-10 h-10 bg-teal-600 flex items-center justify-center text-white rounded-lg shadow-sm">

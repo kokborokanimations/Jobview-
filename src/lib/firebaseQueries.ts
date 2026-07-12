@@ -1,26 +1,33 @@
-import { 
-  collection, 
-  doc, 
-  getDoc, 
-  getDocs, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  where,
-  orderBy
-} from 'firebase/firestore';
-import { db } from './firebase';
+import { createClient } from '@supabase/supabase-js';
 import { CommunityPost } from '../types';
 
 /**
- * PRODUCTION-READY FIREBASE FIRESTORE QUERIES AND LOGIC
- * WITH AUTOMATIC QUOTA-EXHAUSTION RECOVERY & LOCAL FALLBACKS
+ * CLIENT-SIDE SUPABASE QUERIES AND LOGIC
+ * WITH ROBUST AUTOMATIC RESTORE & LOCAL STORAGE FALLBACKS
  */
 
-// Global tracking to prevent network errors/slowdowns once quota is reached
-let isFirestoreQuotaExceeded = typeof window !== 'undefined' && 
-  (window as any).__INITIAL_SETTINGS__?.isFirestoreQuotaExceeded === true;
+let supabaseClient: any = null;
+
+export function getClientSupabase() {
+  if (supabaseClient) return supabaseClient;
+  
+  const settings = (window as any).__INITIAL_SETTINGS__ || {};
+  const url = settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || (import.meta as any).env?.VITE_SUPABASE_URL || '';
+  const anonKey = settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || '';
+  
+  if (url && anonKey) {
+    try {
+      supabaseClient = createClient(url, anonKey);
+      return supabaseClient;
+    } catch (e) {
+      console.error('[Supabase Client Initialization Error]:', e);
+    }
+  }
+  return null;
+}
+
+// Global tracking to maintain compatibility with existing frontend calls
+let isFirestoreQuotaExceeded = false;
 
 export function getFirestoreQuotaExceeded(): boolean {
   return isFirestoreQuotaExceeded;
@@ -30,20 +37,6 @@ export function setFirestoreQuotaExceeded(val: boolean) {
   isFirestoreQuotaExceeded = val;
 }
 
-function checkAndHandleError(err: any) {
-  if (err && (
-    err.code === 'resource-exhausted' || 
-    err.code === 8 ||
-    String(err).toLowerCase().includes('quota') ||
-    String(err).toLowerCase().includes('exhausted')
-  )) {
-    if (!isFirestoreQuotaExceeded) {
-      isFirestoreQuotaExceeded = true;
-      console.warn('[Firebase] Firestore daily free quota has been reached. Automatically activated high-performance local fallback mode to prevent crashes.');
-    }
-  }
-}
-
 /**
  * 1. Fetch saved posts specifically for a logged-in user.
  */
@@ -51,30 +44,27 @@ export async function fetchSavedPostsFromSupabase(
   userId: string,
   allPosts: CommunityPost[]
 ): Promise<CommunityPost[]> {
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return getLocalSavedPosts(allPosts);
   }
 
   try {
-    const q = query(collection(db, 'saved_posts'), where('user_id', '==', userId));
-    const querySnapshot = await getDocs(q);
+    const { data, error } = await supabase
+      .from('saved_posts')
+      .select('post_id')
+      .eq('user_id', userId);
     
-    if (querySnapshot.empty) {
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
       return [];
     }
 
-    const savedIds: string[] = [];
-    querySnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.post_id) {
-        savedIds.push(data.post_id);
-      }
-    });
-
+    const savedIds = data.map((d: any) => d.post_id);
     return allPosts.filter(post => savedIds.includes(post.id));
   } catch (err) {
-    checkAndHandleError(err);
-    console.error('Error fetching saved posts from Firebase:', err);
+    console.error('Error fetching saved posts from Supabase:', err);
     return getLocalSavedPosts(allPosts);
   }
 }
@@ -87,31 +77,50 @@ export async function toggleSavedPostInSupabase(
   postId: string,
   isAlreadySaved: boolean
 ): Promise<{ success: boolean; error?: string; newState: boolean }> {
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     const newState = toggleLocalSavedPost(postId);
     return { success: true, newState };
   }
 
   try {
-    const docId = `${userId}_${postId}`;
-    const docRef = doc(db, 'saved_posts', docId);
-
     if (isAlreadySaved) {
-      await deleteDoc(docRef);
+      const { error } = await supabase
+        .from('saved_posts')
+        .delete()
+        .eq('user_id', userId)
+        .eq('post_id', postId);
+      
+      if (error) throw error;
       toggleLocalSavedPost(postId);
       return { success: true, newState: false };
     } else {
-      await setDoc(docRef, {
-        user_id: userId,
-        post_id: postId,
-        created_at: new Date().toISOString()
-      });
+      const { error } = await supabase
+        .from('saved_posts')
+        .insert([{
+          id: `${userId}_${postId}`,
+          user_id: userId,
+          post_id: postId,
+          created_at: new Date().toISOString()
+        }]);
+      
+      if (error) {
+        // Fallback for schemas that auto-generate the 'id' field
+        const { error: altError } = await supabase
+          .from('saved_posts')
+          .insert([{
+            user_id: userId,
+            post_id: postId,
+            created_at: new Date().toISOString()
+          }]);
+        if (altError) throw altError;
+      }
+      
       toggleLocalSavedPost(postId);
       return { success: true, newState: true };
     }
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Firebase save post toggle failed:', err);
+    console.error('Supabase save post toggle failed:', err);
     const newState = toggleLocalSavedPost(postId);
     return { success: true, newState, error: err.message || String(err) };
   }
@@ -125,27 +134,28 @@ export async function reportPostToSupabase(
   postId: string,
   reason: string = 'Inappropriate content'
 ): Promise<{ success: boolean; error?: string }> {
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     trackLocalReport(postId);
     return { success: true };
   }
 
   try {
-    const reportId = `${userId || 'anon'}_${postId}_${Date.now()}`;
-    const reportRef = doc(db, 'reported_posts', reportId);
+    const { error } = await supabase
+      .from('reported_posts')
+      .insert([{
+        user_id: userId,
+        post_id: postId,
+        reason,
+        reported_at: new Date().toISOString()
+      }]);
 
-    await setDoc(reportRef, {
-      user_id: userId,
-      post_id: postId,
-      reason,
-      reported_at: new Date().toISOString()
-    });
+    if (error) throw error;
 
     trackLocalReport(postId);
     return { success: true };
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Firebase report post failed:', err);
+    console.error('Supabase report post failed:', err);
     trackLocalReport(postId);
     return { success: true, error: err.message || String(err) };
   }
@@ -186,25 +196,30 @@ function trackLocalReport(postId: string) {
 }
 
 /**
- * 4. Delete a job post from Firebase
+ * 4. Delete a job post from Supabase
  */
 export async function deleteJobFromSupabase(jobId: string): Promise<{ success: boolean; error?: string }> {
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return { success: true };
   }
 
   try {
-    await deleteDoc(doc(db, 'jobs', jobId));
+    const { error } = await supabase
+      .from('jobs')
+      .delete()
+      .eq('id', jobId);
+    
+    if (error) throw error;
     return { success: true };
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error deleting job from Firebase:', err);
+    console.error('Error deleting job from Supabase:', err);
     return { success: false, error: err.message || String(err) };
   }
 }
 
 /**
- * 5. Increment visit count with intelligent session control and 1-document aggregation.
+ * 5. Increment visit count with intelligent session control and 1-document aggregation in Supabase.
  */
 export async function incrementVisitCount(): Promise<{ success: boolean; visitCount?: number; error?: string }> {
   let localNextCount = 1;
@@ -227,10 +242,10 @@ export async function incrementVisitCount(): Promise<{ success: boolean; visitCo
     }
   }
 
-  // Session debounce: only write to Firestore once per active browser session
+  // Session debounce: only write to cloud database once per active browser session
   if (typeof window !== 'undefined') {
     try {
-      if (sessionStorage.getItem('firestore_visit_incremented') === 'true') {
+      if (sessionStorage.getItem('supabase_visit_incremented') === 'true') {
         const localVal = localStorage.getItem('local_visit_count');
         return { success: true, visitCount: localVal ? parseInt(localVal, 10) : localNextCount };
       }
@@ -239,26 +254,28 @@ export async function incrementVisitCount(): Promise<{ success: boolean; visitCo
     }
   }
 
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return { success: true, visitCount: localNextCount };
   }
 
   try {
-    const docRef = doc(db, 'analytics', 'site-visitors');
-    const docSnap = await getDoc(docRef);
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('*')
+      .eq('id', 'site-visitors')
+      .maybeSingle();
 
     let nextCount = 1;
     let dailyCounts: Record<string, number> = {};
     const todayStr = new Date().toDateString();
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
+    if (data) {
       nextCount = (data.visit_count || 0) + 1;
       dailyCounts = data.daily_counts || {};
-      
       dailyCounts[todayStr] = (dailyCounts[todayStr] || 0) + 1;
 
-      // Keep daily history compact (prune entries older than 90 days to stay under 1MB limits)
+      // Keep daily history compact
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - 90);
       for (const dateKey of Object.keys(dailyCounts)) {
@@ -272,22 +289,27 @@ export async function incrementVisitCount(): Promise<{ success: boolean; visitCo
         }
       }
 
-      await updateDoc(docRef, { 
-        visit_count: nextCount,
-        daily_counts: dailyCounts
-      });
+      await supabase
+        .from('analytics')
+        .update({ 
+          visit_count: nextCount,
+          daily_counts: dailyCounts
+        })
+        .eq('id', 'site-visitors');
     } else {
       dailyCounts[todayStr] = 1;
-      await setDoc(docRef, { 
-        id: 'site-visitors', 
-        visit_count: nextCount,
-        daily_counts: dailyCounts
-      });
+      await supabase
+        .from('analytics')
+        .insert([{ 
+          id: 'site-visitors', 
+          visit_count: nextCount,
+          daily_counts: dailyCounts
+        }]);
     }
 
     if (typeof window !== 'undefined') {
       try {
-        sessionStorage.setItem('firestore_visit_incremented', 'true');
+        sessionStorage.setItem('supabase_visit_incremented', 'true');
       } catch (e) {
         // ignore
       }
@@ -295,8 +317,7 @@ export async function incrementVisitCount(): Promise<{ success: boolean; visitCo
 
     return { success: true, visitCount: nextCount };
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error incrementing visit count in Firebase:', err);
+    console.warn('Error incrementing visit count in Supabase (falling back to local):', err.message || String(err));
     return { success: true, visitCount: localNextCount };
   }
 }
@@ -305,21 +326,25 @@ export async function incrementVisitCount(): Promise<{ success: boolean; visitCo
  * 6. Fetch current visit count
  */
 export async function fetchVisitCount(): Promise<number | null> {
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     const localVal = typeof window !== 'undefined' ? localStorage.getItem('local_visit_count') : null;
     return localVal ? parseInt(localVal, 10) : 0;
   }
 
   try {
-    const docRef = doc(db, 'analytics', 'site-visitors');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data().visit_count || 0;
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('visit_count')
+      .eq('id', 'site-visitors')
+      .maybeSingle();
+
+    if (data) {
+      return data.visit_count || 0;
     }
     return 0;
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error in fetchVisitCount from Firebase:', err);
+    console.error('Error fetching visit count from Supabase:', err);
     const localVal = typeof window !== 'undefined' ? localStorage.getItem('local_visit_count') : null;
     return localVal ? parseInt(localVal, 10) : 0;
   }
@@ -333,25 +358,26 @@ export interface DetailedVisitStats {
 }
 
 /**
- * 7. Fetch detailed visitor analytics metrics using the single site-visitors doc.
- * This completely eliminates pulling thousands of detailed document rows and hitting Firestore read limits.
+ * 7. Fetch detailed visitor analytics metrics using the site-visitors table.
  */
 export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
   const stats: DetailedVisitStats = { today: 0, sevenDays: 0, oneMonth: 0, total: 0 };
-
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return getLocalDetailedStats(stats);
   }
 
   try {
-    const docRef = doc(db, 'analytics', 'site-visitors');
-    const docSnap = await getDoc(docRef);
+    const { data, error } = await supabase
+      .from('analytics')
+      .select('*')
+      .eq('id', 'site-visitors')
+      .maybeSingle();
 
-    if (!docSnap.exists()) {
+    if (!data) {
       return getLocalDetailedStats(stats);
     }
 
-    const data = docSnap.data();
     const siteVisitorsTotal = data.visit_count || 0;
     const dailyCounts: Record<string, number> = data.daily_counts || {};
 
@@ -397,8 +423,7 @@ export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
 
     return stats;
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error fetching detailed visit stats from Firebase:', err);
+    console.error('Error fetching detailed visit stats from Supabase:', err);
     return getLocalDetailedStats(stats);
   }
 }
@@ -451,24 +476,32 @@ function getLocalDetailedStats(stats: DetailedVisitStats): DetailedVisitStats {
 }
 
 /**
- * 8. Fetch saved resumes from Firebase for a given user
+ * 8. Fetch saved resumes from Supabase for a given user
  */
 export async function fetchResumesFromSupabase(userId: string): Promise<any[]> {
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return getLocalResumes(userId);
   }
 
   try {
-    const q = query(collection(db, 'resumes'), where('user_id', '==', userId));
-    const querySnapshot = await getDocs(q);
-    const resumes: any[] = [];
-    querySnapshot.forEach((doc) => {
-      resumes.push({ id: doc.id, ...doc.data() });
-    });
-    return resumes;
+    const { data, error } = await supabase
+      .from('resumes')
+      .select('*')
+      .eq('user_id', userId);
+    
+    if (error) {
+      // Fallback to alternative user_resumes table
+      const { data: altData, error: altError } = await supabase
+        .from('user_resumes')
+        .select('*')
+        .eq('user_id', userId);
+      if (altError) throw altError;
+      return altData || [];
+    }
+    return data || [];
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error fetching resumes from Firebase:', err);
+    console.error('Error fetching resumes from Supabase:', err);
     return getLocalResumes(userId);
   }
 }
@@ -487,7 +520,7 @@ function getLocalResumes(userId: string): any[] {
 }
 
 /**
- * 9. Save or update a resume in Firebase
+ * 9. Save or update a resume in Supabase
  */
 export async function saveResumeToSupabase(
   userId: string,
@@ -511,7 +544,8 @@ export async function saveResumeToSupabase(
     }
   }
 
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return { success: true };
   }
 
@@ -532,17 +566,26 @@ export async function saveResumeToSupabase(
       updated_at: new Date().toISOString()
     };
 
-    await setDoc(doc(db, 'resumes', resumeId), payload);
+    const { error } = await supabase
+      .from('resumes')
+      .upsert(payload);
+    
+    if (error) {
+      // Try alt table user_resumes
+      const { error: altError } = await supabase
+        .from('user_resumes')
+        .upsert(payload);
+      if (altError) throw altError;
+    }
     return { success: true };
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error saving resume to Firebase:', err);
+    console.error('Error saving resume to Supabase:', err);
     return { success: false, error: err.message || String(err) };
   }
 }
 
 /**
- * 10. Delete a resume from Firebase
+ * 10. Delete a resume from Supabase
  */
 export async function deleteResumeFromSupabase(
   userId: string,
@@ -563,16 +606,28 @@ export async function deleteResumeFromSupabase(
     }
   }
 
-  if (isFirestoreQuotaExceeded) {
+  const supabase = getClientSupabase();
+  if (!supabase) {
     return { success: true };
   }
 
   try {
-    await deleteDoc(doc(db, 'resumes', resumeId));
+    const { error } = await supabase
+      .from('resumes')
+      .delete()
+      .eq('id', resumeId);
+    
+    if (error) {
+      // Try alt table user_resumes
+      const { error: altError } = await supabase
+        .from('user_resumes')
+        .delete()
+        .eq('id', resumeId);
+      if (altError) throw altError;
+    }
     return { success: true };
   } catch (err: any) {
-    checkAndHandleError(err);
-    console.error('Error deleting resume from Firebase:', err);
+    console.error('Error deleting resume from Supabase:', err);
     return { success: false, error: err.message || String(err) };
   }
 }

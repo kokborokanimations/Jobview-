@@ -86,6 +86,7 @@ export const LOGO_GRADIENTS = [
 export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState('');
+  const [bannerError, setBannerError] = useState(false);
 
   const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
@@ -126,13 +127,23 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
     <div className="w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
       
       {/* Dynamic Job Feed Banner */}
-      <div className={`relative h-32 md:h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs ${!settings.bannerUrl ? 'bg-gradient-to-r from-teal-900 via-slate-800 to-indigo-950' : ''}`}>
-        {settings.bannerUrl && (
+      <div className={`relative h-32 md:h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs ${(!settings.bannerUrl || bannerError) ? 'bg-gradient-to-r from-teal-900 via-slate-800 to-indigo-950' : ''}`}>
+        {settings.bannerUrl && !bannerError && (
           <img
             src={settings.bannerUrl}
             alt="Careers Banner"
             className="w-full h-full object-cover"
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              const currentSrc = e.currentTarget.src;
+              if (currentSrc.includes('/storage/v1/object/public/')) {
+                const parts = currentSrc.split('/');
+                const filename = parts[parts.length - 1];
+                e.currentTarget.src = `/uploads/${filename}`;
+              } else {
+                setBannerError(true);
+              }
+            }}
           />
         )}
         {/* Overlay gradient */}
