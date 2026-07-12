@@ -9,11 +9,10 @@ import {
   Settings, Briefcase, Users, CreditCard, Shield, Plus, 
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
   Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail, LogIn,
-  ArrowUp, ArrowDown
+  ArrowUp, ArrowDown, Bell
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
-import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
 const ADMIN_LOGO_GRADIENTS = [
   'from-blue-600 to-cyan-500 text-white',
@@ -57,7 +56,7 @@ export default function AdminPanel({
   onDeleteUser,
   onRefreshJobs
 }: AdminPanelProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'razorpay' | 'posts' | 'pages' | 'contacts'>('branding');
+  const [activeSubTab, setActiveSubTab] = useState<'branding' | 'pricing' | 'users' | 'cashfree' | 'posts' | 'pages' | 'contacts'>('branding');
   
   // Settings Form state
   const [brandName, setBrandName] = useState(settings.brandName || '');
@@ -77,21 +76,26 @@ export default function AdminPanel({
   const [paywallSubtitle, setPaywallSubtitle] = useState(settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.');
   const [paywallButtonText, setPaywallButtonText] = useState(settings.paywallButtonText || 'Activate Membership Now');
   const [paywallPriceDescription, setPaywallPriceDescription] = useState(settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.');
-  const [paywallFooterText, setPaywallFooterText] = useState(settings.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
+  const [paywallFooterText, setPaywallFooterText] = useState(settings.paywallFooterText || 'Secured & processed under Cashfree Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
   const [paywallExtendTitle, setPaywallExtendTitle] = useState(settings.paywallExtendTitle || 'Extend Premium');
   const [paywallExtendSubtitle, setPaywallExtendSubtitle] = useState(settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.');
   const [paywallExtendButtonText, setPaywallExtendButtonText] = useState(settings.paywallExtendButtonText || 'Extend Membership Now');
-  const [razorpayKeyId, setRazorpayKeyId] = useState(settings.razorpayKeyId || '');
-  const [razorpayKeySecret, setRazorpayKeySecret] = useState(settings.razorpayKeySecret || '');
+  const [cashfreeAppId, setCashfreeAppId] = useState(settings.cashfreeAppId || settings.razorpayKeyId || '');
+  const [cashfreeSecretKey, setCashfreeSecretKey] = useState(settings.cashfreeSecretKey || settings.razorpayKeySecret || '');
   const [postApprovalMode, setPostApprovalMode] = useState(settings.postApprovalMode || false);
+  const [showJobFilters, setShowJobFilters] = useState(settings.showJobFilters !== false);
   const [supabaseUrl, setSupabaseUrl] = useState(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [supabaseAnonKey, setSupabaseAnonKey] = useState(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [supabaseServiceRoleKey, setSupabaseServiceRoleKey] = useState(settings.supabaseServiceRoleKey || localStorage.getItem('SUPABASE_SERVICE_ROLE_KEY') || '');
   const [googleSiteVerification, setGoogleSiteVerification] = useState(settings.googleSiteVerification || '');
+  const [oneSignalCode, setOneSignalCode] = useState(settings.oneSignalCode || '');
+  const [oneSignalAppId, setOneSignalAppId] = useState(settings.oneSignalAppId || '');
+  const [oneSignalRestApiKey, setOneSignalRestApiKey] = useState(settings.oneSignalRestApiKey || '');
+  const [oneSignalAutoNotify, setOneSignalAutoNotify] = useState(settings.oneSignalAutoNotify !== false);
   const [communityMindPlaceholder, setCommunityMindPlaceholder] = useState(settings.communityMindPlaceholder || '');
   const [communityReviewNotice, setCommunityReviewNotice] = useState(settings.communityReviewNotice || '');
-  const [loginTitle, setLoginTitle] = useState(settings.loginTitle || '');
-  const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || '');
+  const [loginTitle, setLoginTitle] = useState(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
+  const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
   const [googleOnly, setGoogleOnly] = useState(settings.googleOnly || false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   
@@ -202,17 +206,16 @@ export default function AdminPanel({
     );
   });
 
-  // Supabase Connection Status State
-  const [supabaseStatus, setSupabaseStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured' | 'missing-table'>('checking');
-  const [supabaseErrorDetails, setSupabaseErrorDetails] = useState<string | null>(null);
+  // Firebase Connection Status State
+  const [firebaseStatus, setFirebaseStatus] = useState<'checking' | 'connected' | 'error'>('checking');
+  const [firebaseErrorDetails, setFirebaseErrorDetails] = useState<string | null>(null);
   const [visitCount, setVisitCount] = useState<number | null>(null);
   const [detailedStats, setDetailedStats] = useState<{ today: number; sevenDays: number; oneMonth: number; total: number } | null>(null);
   const [visitorFilter, setVisitorFilter] = useState<'today' | '7day' | '1month' | 'total'>('total');
-  const [showSqlHelper, setShowSqlHelper] = useState(false);
 
   const refreshAnalytics = async () => {
     try {
-      const { fetchDetailedVisitStats } = await import('../lib/supabaseQueries');
+      const { fetchDetailedVisitStats } = await import('../lib/firebaseQueries');
       const stats = await fetchDetailedVisitStats();
       if (stats) {
         setDetailedStats(stats);
@@ -224,35 +227,47 @@ export default function AdminPanel({
   };
 
   useEffect(() => {
-    async function checkSupabaseConnection() {
+    async function checkFirebaseConnection() {
       // Fetch detailed analytics (with local storage fallback)
       await refreshAnalytics();
 
-      if (!isCustomSupabaseConfigured() || !supabase) {
-        setSupabaseStatus('not-configured');
-        return;
-      }
       try {
-        const { error } = await supabase.from('jobs').select('id').limit(1);
-        if (error) {
-          if (error.code === 'PGRST116') {
-            setSupabaseStatus('connected');
-          } else if (error.message && (error.message.includes('relation') || error.message.includes('does not exist'))) {
-            setSupabaseStatus('missing-table');
-            setSupabaseErrorDetails('Connected successfully to Supabase, but the "jobs" table is missing in your Supabase schema.');
-          } else {
-            setSupabaseStatus('error');
-            setSupabaseErrorDetails(error.message);
-          }
-        } else {
-          setSupabaseStatus('connected');
+        const { getFirestoreQuotaExceeded, setFirestoreQuotaExceeded } = await import('../lib/firebaseQueries');
+        if (getFirestoreQuotaExceeded()) {
+          setFirebaseStatus('quota_exceeded');
+          setFirebaseErrorDetails('Firebase daily free write/read quota reached. Safely using local storage fallback mode with zero service degradation.');
+          return;
         }
+
+        const { collection, getDocs, limit, query } = await import('firebase/firestore');
+        const { db } = await import('../lib/firebase');
+        const q = query(collection(db, 'jobs'), limit(1));
+        await getDocs(q);
+        setFirebaseStatus('connected');
+        setFirebaseErrorDetails('Connected successfully to Firebase Database API');
       } catch (err: any) {
-        setSupabaseStatus('error');
-        setSupabaseErrorDetails(err.message || String(err));
+        const errMsg = err.message || String(err);
+        if (
+          errMsg.includes('RESOURCE_EXHAUSTED') || 
+          errMsg.includes('Quota limit exceeded') || 
+          err.code === 'resource-exhausted' || 
+          err.code === 8
+        ) {
+          try {
+            const { setFirestoreQuotaExceeded } = await import('../lib/firebaseQueries');
+            setFirestoreQuotaExceeded(true);
+          } catch (e) {
+            // ignore
+          }
+          setFirebaseStatus('quota_exceeded');
+          setFirebaseErrorDetails('Firebase daily free write/read quota reached. Safely using local storage fallback mode with zero service degradation.');
+        } else {
+          setFirebaseStatus('error');
+          setFirebaseErrorDetails(errMsg);
+        }
       }
     }
-    checkSupabaseConnection();
+    checkFirebaseConnection();
   }, []);
 
   useEffect(() => {
@@ -275,21 +290,26 @@ export default function AdminPanel({
     setPaywallSubtitle(settings.paywallSubtitle || 'Unlock Premium access to continue searching & applying.');
     setPaywallButtonText(settings.paywallButtonText || 'Activate Membership Now');
     setPaywallPriceDescription(settings.paywallPriceDescription || 'One-time manual purchase. Extend anytime.');
-    setPaywallFooterText(settings.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
+    setPaywallFooterText(settings.paywallFooterText || 'Secured & processed under Cashfree Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.');
     setPaywallExtendTitle(settings.paywallExtendTitle || 'Extend Premium');
     setPaywallExtendSubtitle(settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.');
     setPaywallExtendButtonText(settings.paywallExtendButtonText || 'Extend Membership Now');
-    setRazorpayKeyId(settings.razorpayKeyId || '');
-    setRazorpayKeySecret(settings.razorpayKeySecret || '');
+    setCashfreeAppId(settings.cashfreeAppId || settings.razorpayKeyId || '');
+    setCashfreeSecretKey(settings.cashfreeSecretKey || settings.razorpayKeySecret || '');
     setPostApprovalMode(settings.postApprovalMode || false);
+    setShowJobFilters(settings.showJobFilters !== false);
     setSupabaseUrl(settings.supabaseUrl || localStorage.getItem('VITE_SUPABASE_URL') || '');
     setSupabaseAnonKey(settings.supabaseAnonKey || localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
     setSupabaseServiceRoleKey(settings.supabaseServiceRoleKey || localStorage.getItem('SUPABASE_SERVICE_ROLE_KEY') || '');
     setGoogleSiteVerification(settings.googleSiteVerification || '');
+    setOneSignalCode(settings.oneSignalCode || '');
+    setOneSignalAppId(settings.oneSignalAppId || '');
+    setOneSignalRestApiKey(settings.oneSignalRestApiKey || '');
+    setOneSignalAutoNotify(settings.oneSignalAutoNotify !== false);
     setCommunityMindPlaceholder(settings.communityMindPlaceholder || '');
     setCommunityReviewNotice(settings.communityReviewNotice || '');
-    setLoginTitle(settings.loginTitle || '');
-    setLoginSubtitle(settings.loginSubtitle || '');
+    setLoginTitle(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
+    setLoginSubtitle(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
     setGoogleOnly(settings.googleOnly || false);
   }, [settings]);
 
@@ -487,13 +507,18 @@ export default function AdminPanel({
       paywallExtendTitle !== (settings.paywallExtendTitle || 'Extend Premium') ||
       paywallExtendSubtitle !== (settings.paywallExtendSubtitle || 'Extend your manual premium access for another month.') ||
       paywallExtendButtonText !== (settings.paywallExtendButtonText || 'Extend Membership Now') ||
-      razorpayKeyId !== (settings.razorpayKeyId || '') ||
-      razorpayKeySecret !== (settings.razorpayKeySecret || '') ||
+      cashfreeAppId !== (settings.cashfreeAppId || settings.razorpayKeyId || '') ||
+      cashfreeSecretKey !== (settings.cashfreeSecretKey || settings.razorpayKeySecret || '') ||
       postApprovalMode !== (settings.postApprovalMode || false) ||
+      showJobFilters !== (settings.showJobFilters !== false) ||
       supabaseUrl !== (settings.supabaseUrl || '') ||
       supabaseAnonKey !== (settings.supabaseAnonKey || '') ||
       supabaseServiceRoleKey !== (settings.supabaseServiceRoleKey || '') ||
       googleSiteVerification !== (settings.googleSiteVerification || '') ||
+      oneSignalCode !== (settings.oneSignalCode || '') ||
+      oneSignalAppId !== (settings.oneSignalAppId || '') ||
+      oneSignalRestApiKey !== (settings.oneSignalRestApiKey || '') ||
+      oneSignalAutoNotify !== (settings.oneSignalAutoNotify !== false) ||
       communityMindPlaceholder !== (settings.communityMindPlaceholder || '') ||
       communityReviewNotice !== (settings.communityReviewNotice || '') ||
       loginTitle !== (settings.loginTitle || '') ||
@@ -531,13 +556,20 @@ export default function AdminPanel({
         paywallExtendTitle,
         paywallExtendSubtitle,
         paywallExtendButtonText,
-        razorpayKeyId,
-        razorpayKeySecret,
+        razorpayKeyId: cashfreeAppId,
+        razorpayKeySecret: cashfreeSecretKey,
+        cashfreeAppId,
+        cashfreeSecretKey,
         postApprovalMode,
+        showJobFilters,
         supabaseUrl,
         supabaseAnonKey,
         supabaseServiceRoleKey,
         googleSiteVerification,
+        oneSignalCode,
+        oneSignalAppId,
+        oneSignalRestApiKey,
+        oneSignalAutoNotify,
         communityMindPlaceholder,
         communityReviewNotice,
         loginTitle,
@@ -823,44 +855,37 @@ export default function AdminPanel({
             </div>
           )}
 
-          {supabaseStatus === 'checking' && (
+          {firebaseStatus === 'checking' && (
             <div className="px-3 py-1.5 bg-slate-100 text-gray-500 font-mono text-[10px] font-bold rounded-xl border border-gray-200 inline-flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-pulse" />
-              <span>CHECKING SUPABASE...</span>
+              <span>CHECKING FIREBASE...</span>
             </div>
           )}
-          {supabaseStatus === 'connected' && (
+          {firebaseStatus === 'connected' && (
             <div 
-              title={supabaseErrorDetails || "Connected successfully to Supabase Database API"}
+              title={firebaseErrorDetails || "Connected successfully to Firebase Database API"}
               className="px-3 py-1.5 bg-emerald-50 text-emerald-700 font-mono text-[10px] font-bold rounded-xl border border-emerald-200 inline-flex items-center gap-1.5 cursor-help"
             >
               <Database size={11} className="text-emerald-500 animate-pulse" />
-              <span>SUPABASE ACTIVE</span>
+              <span>FIREBASE ACTIVE</span>
             </div>
           )}
-          {supabaseStatus === 'missing-table' && (
-            <button 
-              onClick={() => setShowSqlHelper(true)}
-              title="Click to view SQL schema script to create the 'jobs' table"
-              className="px-3 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 font-mono text-[10px] font-bold rounded-xl border border-amber-200 inline-flex items-center gap-1.5 cursor-pointer transition-colors"
-            >
-              <Database size={11} className="text-amber-500 animate-bounce" />
-              <span>SETUP TABLE (REQUIRED)</span>
-            </button>
-          )}
-          {supabaseStatus === 'error' && (
+          {firebaseStatus === 'quota_exceeded' && (
             <div 
-              title={supabaseErrorDetails || "Connection failed. Please verify credentials."}
+              title={firebaseErrorDetails || "Firebase daily free write quota reached. System is safely falling back to local client state and background buffering with zero data loss."}
+              className="px-3 py-1.5 bg-amber-50 text-amber-850 font-mono text-[10px] font-bold rounded-xl border border-amber-200 inline-flex items-center gap-1.5 cursor-help animate-pulse"
+            >
+              <Database size={11} className="text-amber-500" />
+              <span>QUOTA MET (FALLBACK ACTIVE)</span>
+            </div>
+          )}
+          {firebaseStatus === 'error' && (
+            <div 
+              title={firebaseErrorDetails || "Connection failed. Please verify setup."}
               className="px-3 py-1.5 bg-rose-50 text-rose-700 font-mono text-[10px] font-bold rounded-xl border border-rose-200 inline-flex items-center gap-1.5 cursor-help"
             >
               <Database size={11} className="text-rose-500 animate-bounce" />
-              <span>SUPABASE OFFLINE</span>
-            </div>
-          )}
-          {supabaseStatus === 'not-configured' && (
-            <div className="px-3 py-1.5 bg-amber-50 text-amber-700 font-mono text-[10px] font-bold rounded-xl border border-amber-200 inline-flex items-center gap-1.5">
-              <Database size={11} className="text-amber-500" />
-              <span>SUPABASE LOCAL MODE</span>
+              <span>FIREBASE OFFLINE</span>
             </div>
           )}
         </div>
@@ -996,8 +1021,8 @@ export default function AdminPanel({
           )}
 
           <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
-            <span className={`w-1 h-1 rounded-full ${supabaseStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-            <span>{supabaseStatus === 'connected' ? 'Live Supabase Sync Active' : 'Offline Local Storage'}</span>
+            <span className={`w-1 h-1 rounded-full ${firebaseStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : firebaseStatus === 'quota_exceeded' ? 'bg-amber-400 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{firebaseStatus === 'connected' ? 'Live Firebase Sync Active' : firebaseStatus === 'quota_exceeded' ? 'Offline Local Storage (Firebase Quota Met)' : 'Offline Local Storage'}</span>
           </p>
         </div>
 
@@ -1138,11 +1163,11 @@ export default function AdminPanel({
 
         <button
           onClick={() => {
-            setActiveSubTab('razorpay');
+            setActiveSubTab('cashfree');
             fetchPaymentLogs();
           }}
           className={`pb-3 px-4 text-xs font-bold transition-all relative ${
-            activeSubTab === 'razorpay' 
+            activeSubTab === 'cashfree' 
               ? 'text-teal-600 border-b-2 border-teal-600 font-extrabold' 
               : 'text-gray-500 hover:text-gray-900'
           }`}
@@ -1820,7 +1845,7 @@ export default function AdminPanel({
                     )}
                   </div>
                   <p className="text-slate-500 text-[11px] font-normal italic">
-                    This will permanently delete the job from both the Supabase table and the local store. This action is irreversible.
+                    This will permanently delete the job from both the Firebase database and the local store. This action is irreversible.
                   </p>
                 </div>
 
@@ -1866,7 +1891,7 @@ export default function AdminPanel({
           )}
 
           {/* Supabase SQL Schema Helper Modal */}
-          {showSqlHelper && (
+          {false && (
             <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fade-in">
               <div className="bg-white rounded-2xl max-w-2xl w-full p-6 border border-gray-100 shadow-2xl space-y-4">
                 <div className="flex items-center gap-3 text-amber-600">
@@ -2030,6 +2055,7 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     supabase_anon_key TEXT,
     supabase_service_role_key TEXT,
     google_site_verification TEXT,
+    one_signal_code TEXT,
     community_mind_placeholder TEXT,
     community_review_notice TEXT,
     login_title TEXT,
@@ -2253,6 +2279,7 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     supabase_anon_key TEXT,
     supabase_service_role_key TEXT,
     google_site_verification TEXT,
+    one_signal_code TEXT,
     community_mind_placeholder TEXT,
     community_review_notice TEXT,
     login_title TEXT,
@@ -2345,7 +2372,7 @@ ON CONFLICT (id) DO NOTHING;`;
 
                 <div className="flex items-center justify-end gap-2 pt-2">
                   <button
-                    onClick={() => setShowSqlHelper(false)}
+                    onClick={() => {}}
                     className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
                   >
                     Close Helper
@@ -2382,6 +2409,24 @@ ON CONFLICT (id) DO NOTHING;`;
                 className="text-teal-600 hover:text-teal-800 transition-colors focus:outline-none cursor-pointer"
               >
                 {premiumMode ? <ToggleRight size={44} /> : <ToggleLeft size={44} className="text-gray-400" />}
+              </button>
+            </div>
+
+            {/* Job Search/Filter Toggle */}
+            <div className="p-4 bg-slate-50/50 rounded-2xl border border-gray-200 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-extrabold text-slate-900 font-display">Job Feed Search & Filters</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Toggle to show or hide the search bar and location filter component in the Job Feed.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowJobFilters(!showJobFilters)}
+                className="text-teal-600 hover:text-teal-800 transition-colors focus:outline-none cursor-pointer"
+              >
+                {showJobFilters ? <ToggleRight size={44} /> : <ToggleLeft size={44} className="text-gray-400" />}
               </button>
             </div>
 
@@ -2471,7 +2516,7 @@ ON CONFLICT (id) DO NOTHING;`;
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Footer Disclaimer / Gateway Details Text</label>
                 <textarea
                   rows={2} value={paywallFooterText} onChange={(e) => setPaywallFooterText(e.target.value)}
-                  placeholder="Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles."
+                  placeholder="Secured & processed under Cashfree Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles."
                   className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-sans"
                 />
               </div>
@@ -2648,7 +2693,7 @@ ON CONFLICT (id) DO NOTHING;`;
                 </div>
                 
                 <p className="text-xs text-gray-600 leading-relaxed font-semibold text-left">
-                  Are you sure you want to permanently delete <span className="font-bold text-slate-900">{userToDelete.name}</span> (<span className="text-slate-500">{userToDelete.email}</span>)? This will permanently remove their account from Supabase Authentication and clear all of their custom profile and community data. This action is irreversible.
+                  Are you sure you want to permanently delete <span className="font-bold text-slate-900">{userToDelete.name}</span> (<span className="text-slate-500">{userToDelete.email}</span>)? This will permanently remove their account from Firebase Authentication and clear all of their custom profile and community data. This action is irreversible.
                 </p>
 
                 <div className="flex items-center justify-end gap-2 pt-2">
@@ -2695,7 +2740,7 @@ ON CONFLICT (id) DO NOTHING;`;
       )}
 
       {/* SUBTAB CONTENT: CASHFREE GATEWAY LOGS & SETTINGS */}
-      {activeSubTab === 'razorpay' && (
+      {activeSubTab === 'cashfree' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* Left Column Settings */}
@@ -2717,8 +2762,8 @@ ON CONFLICT (id) DO NOTHING;`;
                   <input
                     type="text"
                     placeholder="e.g., TEST..."
-                    value={razorpayKeyId}
-                    onChange={(e) => setRazorpayKeyId(e.target.value)}
+                    value={cashfreeAppId}
+                    onChange={(e) => setCashfreeAppId(e.target.value)}
                     className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
                   />
                 </div>
@@ -2738,8 +2783,8 @@ ON CONFLICT (id) DO NOTHING;`;
                   <input
                     type={showSecret ? 'text' : 'password'}
                     placeholder="e.g., cf_secret_key_..."
-                    value={razorpayKeySecret}
-                    onChange={(e) => setRazorpayKeySecret(e.target.value)}
+                    value={cashfreeSecretKey}
+                    onChange={(e) => setCashfreeSecretKey(e.target.value)}
                     className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
                   />
                 </div>
@@ -2757,72 +2802,7 @@ ON CONFLICT (id) DO NOTHING;`;
               </form>
             </div>
 
-            {/* Supabase Configuration Card */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
-                <Database size={15} className="text-teal-600" />
-                Supabase Connection settings
-              </h3>
 
-              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
-                Re-submit or configure your custom Supabase Project credentials. They will update immediately on both the client and server!
-              </p>
-
-              <form onSubmit={handleSaveSettings} className="space-y-4">
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Supabase URL</label>
-                  <input
-                    type="text"
-                    placeholder="https://your-project-id.supabase.co"
-                    value={supabaseUrl}
-                    onChange={(e) => setSupabaseUrl(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between font-display">
-                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Supabase Anon Key</label>
-                    <button
-                      type="button"
-                      onClick={() => setShowSecret(!showSecret)}
-                      className="text-xs text-teal-600 font-bold hover:underline"
-                    >
-                      {showSecret ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    placeholder="eyJhbGciOiJIUzI1NiIs..."
-                    value={supabaseAnonKey}
-                    onChange={(e) => setSupabaseAnonKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Supabase Service Role Key (Optional)</label>
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    placeholder="For server-side admin / auth operations"
-                    value={supabaseServiceRoleKey}
-                    onChange={(e) => setSupabaseServiceRoleKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSavingSettings}
-                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
-                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                  }`}
-                >
-                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
-                  <span>{isSavingSettings ? 'Applying DB Settings...' : 'Apply DB Settings'}</span>
-                </button>
-              </form>
-            </div>
 
             {/* Google Search Console Verification Card */}
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
@@ -2859,6 +2839,93 @@ ON CONFLICT (id) DO NOTHING;`;
                 </button>
               </form>
             </div>
+
+            {/* OneSignal Push Notification Integration Card */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+                <Bell size={15} className="text-teal-600" />
+                OneSignal Push Notifications
+              </h3>
+
+              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
+                Apne active users ko new job update push notifications bhejne ke liye OneSignal settings configure karein.
+              </p>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                {/* Auto notify check */}
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-gray-800 font-display">Auto-Send Notifications</span>
+                    <p className="text-[9px] text-gray-400 font-medium">Naya job post live hote hi auto-send push notification.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setOneSignalAutoNotify(!oneSignalAutoNotify)}
+                    className="text-teal-600 focus:outline-none"
+                  >
+                    {oneSignalAutoNotify ? (
+                      <ToggleRight size={32} className="text-teal-600 transition-colors" />
+                    ) : (
+                      <ToggleLeft size={32} className="text-gray-300 transition-colors" />
+                    )}
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">OneSignal App ID</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                    value={oneSignalAppId}
+                    onChange={(e) => setOneSignalAppId(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between font-display">
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">OneSignal REST API Key</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSecret(!showSecret)}
+                      className="text-xs text-teal-600 font-bold hover:underline"
+                    >
+                      {showSecret ? <EyeOff size={14} className="inline mr-1" /> : <Eye size={14} className="inline mr-1" />}
+                      {showSecret ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    placeholder="e.g., os_v2_app_xxxxxxxxxxxx..."
+                    value={oneSignalRestApiKey}
+                    onChange={(e) => setOneSignalRestApiKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">OneSignal Script Code (Injected in &lt;head&gt;)</label>
+                  <textarea
+                    rows={4}
+                    value={oneSignalCode}
+                    onChange={(e) => setOneSignalCode(e.target.value)}
+                    placeholder={`e.g.\n<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>\n<script>\n  window.OneSignal = window.OneSignal || [];\n  OneSignal.push(function() {\n    OneSignal.init({\n      appId: "your-onesignal-app-id",\n    });\n  });\n</script>`}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono resize-none leading-relaxed"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                  <span>{isSavingSettings ? 'Saving...' : 'Save OneSignal Settings'}</span>
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Transactions Table Log */}
@@ -2866,7 +2933,7 @@ ON CONFLICT (id) DO NOTHING;`;
             <div className="flex items-center justify-between border-b border-gray-50 pb-3">
               <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest flex items-center gap-1.5 font-display">
                 <CreditCard size={15} className="text-teal-600" />
-                Recent Razorpay Transactions
+                Recent Cashfree Transactions
               </h3>
               
               <button

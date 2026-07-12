@@ -423,28 +423,7 @@ export default function CommunityFeed({
                       </button>
                     </div>
 
-                    {/* Share Post Button */}
-                    <button
-                      onClick={() => handleShare(post.id)}
-                      className={`p-2 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 text-xs font-bold ${
-                        isShared
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                          : 'bg-transparent text-slate-500 hover:bg-slate-100 border border-transparent'
-                      }`}
-                      title="Share post"
-                    >
-                      {isShared ? (
-                        <>
-                          <Check size={14} className="text-emerald-600" />
-                          <span className="text-[11px] text-emerald-600">Copied</span>
-                        </>
-                      ) : (
-                        <>
-                          <Share2 size={14} />
-                          <span className="text-[11px]">Share</span>
-                        </>
-                      )}
-                    </button>
+
                   </div>
 
                 </article>

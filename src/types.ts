@@ -83,17 +83,22 @@ export interface AdminSettings {
   paywallExtendTitle?: string;
   paywallExtendSubtitle?: string;
   paywallExtendButtonText?: string;
-  razorpayKeyId: string;
-  razorpayKeySecret: string;
+  razorpayKeyId?: string;
+  razorpayKeySecret?: string;
   cashfreeAppId?: string;
   cashfreeSecretKey?: string;
   cashfreeSandbox?: boolean;
   postApprovalMode?: boolean; // Master Toggle: manual approval vs automatic instant
+  showJobFilters?: boolean; // Toggle to show/hide Search and Filter component in Job Feed
   supabaseUrl?: string;
   supabaseAnonKey?: string;
   supabaseServiceRoleKey?: string;
   serpapiApiKey?: string;
   googleSiteVerification?: string;
+  oneSignalCode?: string;
+  oneSignalAppId?: string;
+  oneSignalRestApiKey?: string;
+  oneSignalAutoNotify?: boolean;
   communityMindPlaceholder?: string;
   communityReviewNotice?: string;
   loginTitle?: string;

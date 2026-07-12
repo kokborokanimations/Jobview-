@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { User, CommunityPost, AdminSettings, Job } from '../types';
 import { User as UserIcon, Calendar, FileText, BadgeCheck, AlertTriangle, Clock, Edit3, Save, X, Sparkles, Image as ImageIcon, Bookmark, Heart, Share2, Check, Flag, Briefcase, MapPin, Trash2, Camera, Upload } from 'lucide-react';
-import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
+import { getUserBadge, getTrialInfo, getPremiumInfo } from '../lib/badgeUtils';
 
 interface UserProfileProps {
   user: User | null;
@@ -38,29 +38,6 @@ export default function UserProfile({
   onDeletePost
 }: UserProfileProps) {
   const [isEditing, setIsEditing] = useState(false);
-  const [supabaseUser, setSupabaseUser] = useState<any>(null);
-
-  React.useEffect(() => {
-    async function fetchAuthUser() {
-      try {
-        const { getSupabaseClient } = await import('../lib/supabase');
-        const client = getSupabaseClient();
-        if (client) {
-          const { data: { user: authUser } } = await client.auth.getUser();
-          if (authUser) {
-            setSupabaseUser(authUser);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching Supabase auth user:', err);
-      }
-    }
-    if (user) {
-      fetchAuthUser();
-    } else {
-      setSupabaseUser(null);
-    }
-  }, [user]);
 
   const [editName, setEditName] = useState(user?.name || '');
   const [editBio, setEditBio] = useState(user?.bio || '');
@@ -192,7 +169,7 @@ export default function UserProfile({
   React.useEffect(() => {
     if (user && activeSubTab === 'saved') {
       setIsLoadingSaved(true);
-      import('../lib/supabaseQueries')
+      import('../lib/firebaseQueries')
         .then(({ fetchSavedPostsFromSupabase }) => {
           return fetchSavedPostsFromSupabase(user.id, posts);
         })
@@ -213,7 +190,7 @@ export default function UserProfile({
   const handleToggleSavedInProfile = async (postId: string) => {
     if (!user) return;
     try {
-      const { toggleSavedPostInSupabase } = await import('../lib/supabaseQueries');
+      const { toggleSavedPostInSupabase } = await import('../lib/firebaseQueries');
       const isAlreadySaved = bookmarkedPostIds.includes(postId);
       const res = await toggleSavedPostInSupabase(user.id, postId, isAlreadySaved);
       
@@ -286,6 +263,7 @@ export default function UserProfile({
 
   // Get premium badge styling
   const getSubscriptionBadge = () => {
+    if (!settings.premiumMode) return null;
     const badge = getUserBadge(user, settings);
     switch (badge) {
       case 'PREMIUM':
@@ -542,7 +520,7 @@ export default function UserProfile({
               <Calendar size={12} className="text-slate-400" />
               <span>Joined {new Date(user.joinDate).toLocaleDateString()}</span>
             </div>
-            {getUserBadge(user, settings) === 'TRIAL' && (() => {
+            {settings.premiumMode && getUserBadge(user, settings) === 'TRIAL' && (() => {
               const info = getTrialInfo(user);
               if (!info) return null;
               return (
@@ -554,6 +532,22 @@ export default function UserProfile({
                   <div className="hidden sm:block text-teal-300">|</div>
                   <div>
                     <span>Expires: <span className="font-bold text-teal-900">{info.expiryDate.toLocaleDateString()}</span></span>
+                  </div>
+                </div>
+              );
+            })()}
+            {settings.premiumMode && getUserBadge(user, settings) === 'PREMIUM' && (() => {
+              const info = getPremiumInfo(user);
+              if (!info) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-amber-50/60 text-amber-800 border border-amber-100 rounded-xl px-3 py-1.5 font-semibold text-[11px] font-sans mt-1">
+                  <div className="flex items-center gap-1">
+                    <Clock size={12} className="text-amber-600 animate-pulse" />
+                    <span>Premium Active: <span className="font-bold">{info.daysRemaining} days left</span></span>
+                  </div>
+                  <div className="hidden sm:block text-amber-300">|</div>
+                  <div>
+                    <span>Expires: <span className="font-bold text-amber-900">{info.expiryDate.toLocaleDateString()}</span></span>
                   </div>
                 </div>
               );

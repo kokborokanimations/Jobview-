@@ -76,17 +76,19 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
               )}
               <div className="text-right hidden sm:block">
                 <p className="text-xs font-bold text-gray-800 line-clamp-1">{user.name}</p>
-                <p className="text-[10px] font-bold uppercase tracking-widest font-display mt-0.5">
-                  {getUserBadge(user, settings) === 'PREMIUM' && (
-                    <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200/50">👑 Premium</span>
-                  )}
-                  {getUserBadge(user, settings) === 'TRIAL' && (
-                    <span className="text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200/50">🌱 Trial</span>
-                  )}
-                  {getUserBadge(user, settings) === 'EXPIRED' && (
-                    <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200/50">🛑 Expired</span>
-                  )}
-                </p>
+                {settings.premiumMode && (
+                  <p className="text-[10px] font-bold uppercase tracking-widest font-display mt-0.5">
+                    {getUserBadge(user, settings) === 'PREMIUM' && (
+                      <span className="text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-200/50">👑 Premium</span>
+                    )}
+                    {getUserBadge(user, settings) === 'TRIAL' && (
+                      <span className="text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded-md border border-teal-200/50">🌱 Trial</span>
+                    )}
+                    {getUserBadge(user, settings) === 'EXPIRED' && (
+                      <span className="text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md border border-rose-200/50">🛑 Expired</span>
+                    )}
+                  </p>
+                )}
               </div>
 
               <div className="relative group">

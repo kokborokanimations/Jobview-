@@ -113,11 +113,12 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
   };
 
   const filteredJobs = jobs.filter((job) => {
-    const matchesSearch =
+    const showFilters = settings.showJobFilters !== false;
+    const matchesSearch = !showFilters ||
       job.title.toLowerCase().includes(search.toLowerCase()) ||
       job.companyName.toLowerCase().includes(search.toLowerCase()) ||
       job.shortDescription.toLowerCase().includes(search.toLowerCase());
-    const matchesLocation = job.location.toLowerCase().includes(location.toLowerCase());
+    const matchesLocation = !showFilters || job.location.toLowerCase().includes(location.toLowerCase());
     return matchesSearch && matchesLocation && job.isLive;
   });
 
@@ -158,33 +159,35 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
       </div>
 
       {/* Modern Filter Bars */}
-      <div className="bg-white p-3 rounded-xl shadow-xs border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-            <Search size={16} />
-          </span>
-          <input
-            type="text"
-            placeholder="Search Job Title, Company, or Keywords..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/10 focus:border-teal-500 transition-all text-xs text-slate-900 placeholder:text-slate-400 font-sans"
-          />
-        </div>
+      {settings.showJobFilters !== false && (
+        <div className="bg-white p-3 rounded-xl shadow-xs border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <Search size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search Job Title, Company, or Keywords..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/10 focus:border-teal-500 transition-all text-xs text-slate-900 placeholder:text-slate-400 font-sans"
+            />
+          </div>
 
-        <div className="relative">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
-            <MapPin size={16} />
-          </span>
-          <input
-            type="text"
-            placeholder="Filter by Location (e.g., Remote, Bangalore)..."
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/10 focus:border-teal-500 transition-all text-xs text-slate-900 placeholder:text-slate-400 font-sans"
-          />
+          <div className="relative">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+              <MapPin size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Filter by Location (e.g., Remote, Bangalore)..."
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/10 focus:border-teal-500 transition-all text-xs text-slate-900 placeholder:text-slate-400 font-sans"
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Jobs List Header & Count */}
       <div className="flex items-center justify-between">

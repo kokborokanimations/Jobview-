@@ -1,0 +1,187 @@
+{
+  "entities": {
+    "Job": {
+      "title": "Job",
+      "description": "A job listing",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "company": { "type": "string" },
+        "location": { "type": "string" },
+        "type": { "type": "string" },
+        "salary": { "type": "string" },
+        "description": { "type": "string" },
+        "requirements": { "type": "string" },
+        "benefits": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "title", "company"]
+    },
+    "CommunityPost": {
+      "title": "CommunityPost",
+      "description": "A community discussion post",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "user_id": { "type": "string" },
+        "author_name": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "title", "content"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "full_name": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id"]
+    },
+    "Page": {
+      "title": "Page",
+      "description": "A custom static page content",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "slug": { "type": "string" },
+        "content": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "title", "slug"]
+    },
+    "Contact": {
+      "title": "Contact",
+      "description": "A contact form submission",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "message": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "email", "message"]
+    },
+    "PaymentLog": {
+      "title": "PaymentLog",
+      "description": "A payment transaction log",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "amount": { "type": "number" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["id", "user_id"]
+    },
+    "Resume": {
+      "title": "Resume",
+      "description": "A user resume document",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "name": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "template": { "type": "string" },
+        "updated_at": { "type": "string" }
+      },
+      "required": ["id", "user_id"]
+    },
+    "SavedPost": {
+      "title": "SavedPost",
+      "description": "A post saved by a user",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "post_id": { "type": "string" },
+        "created_at": { "type": "string" }
+      },
+      "required": ["user_id", "post_id"]
+    },
+    "ReportedPost": {
+      "title": "ReportedPost",
+      "description": "A post reported by a user",
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "post_id": { "type": "string" },
+        "reason": { "type": "string" },
+        "reported_at": { "type": "string" }
+      },
+      "required": ["post_id", "reason"]
+    },
+    "Analytics": {
+      "title": "Analytics",
+      "description": "Site visitors or individual visit analytics",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "visit_count": { "type": "number" }
+      },
+      "required": ["id", "visit_count"]
+    },
+    "AdminSettings": {
+      "title": "AdminSettings",
+      "description": "Global administration settings",
+      "type": "object",
+      "properties": {
+        "global_settings": { "type": "object" }
+      }
+    }
+  },
+  "firestore": {
+    "admin_settings/global": {
+      "schema": { "$ref": "#/entities/AdminSettings" },
+      "description": "Global administration settings document"
+    },
+    "jobs/{jobId}": {
+      "schema": { "$ref": "#/entities/Job" },
+      "description": "Job listings"
+    },
+    "community_posts/{postId}": {
+      "schema": { "$ref": "#/entities/CommunityPost" },
+      "description": "Community posts"
+    },
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles"
+    },
+    "pages/{pageId}": {
+      "schema": { "$ref": "#/entities/Page" },
+      "description": "Static custom page data"
+    },
+    "contacts/{contactId}": {
+      "schema": { "$ref": "#/entities/Contact" },
+      "description": "Contact form submissions"
+    },
+    "payment_logs/{logId}": {
+      "schema": { "$ref": "#/entities/PaymentLog" },
+      "description": "Payment logs"
+    },
+    "resumes/{resumeId}": {
+      "schema": { "$ref": "#/entities/Resume" },
+      "description": "User resumes"
+    },
+    "saved_posts/{savedId}": {
+      "schema": { "$ref": "#/entities/SavedPost" },
+      "description": "User-saved jobs/posts"
+    },
+    "reported_posts/{reportId}": {
+      "schema": { "$ref": "#/entities/ReportedPost" },
+      "description": "Reported community posts or jobs"
+    },
+    "analytics/{analyticId}": {
+      "schema": { "$ref": "#/entities/Analytics" },
+      "description": "Site visitor counts and traffic logs"
+    }
+  }
+}

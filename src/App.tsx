@@ -39,7 +39,8 @@ export default function App() {
         'Direct WhatsApp Chat with Hiring Managers'
       ],
       cashfreeAppId: '',
-      cashfreeSecretKey: ''
+      cashfreeSecretKey: '',
+      showJobFilters: true
     };
     if (typeof window !== 'undefined' && (window as any).__INITIAL_SETTINGS__) {
       return { ...defaults, ...(window as any).__INITIAL_SETTINGS__ };
@@ -72,13 +73,13 @@ export default function App() {
     setBookmarkedPostIds(updated);
     localStorage.setItem('sebok_bookmarked_posts', JSON.stringify(updated));
 
-    // Async update to Supabase (if user is logged in)
+    // Async update to Firebase (if user is logged in)
     if (user) {
       try {
-        const { toggleSavedPostInSupabase } = await import('./lib/supabaseQueries');
+        const { toggleSavedPostInSupabase } = await import('./lib/firebaseQueries');
         await toggleSavedPostInSupabase(user.id, postId, isBookmarked);
       } catch (err) {
-        console.error('Error toggling saved post in Supabase from App.tsx:', err);
+        console.error('Error toggling saved post in Firebase from App.tsx:', err);
       }
     }
 
@@ -109,77 +110,14 @@ export default function App() {
     }
   };
 
-  // Global listener for Supabase OAuth sign-ins (especially for redirects or popups with lost opener)
-  useEffect(() => {
-    let unsubscribe: (() => void) | null = null;
 
-    async function checkSupabaseSession() {
-      try {
-        const { getSupabaseClient, isCustomSupabaseConfigured } = await import('./lib/supabase');
-        if (!isCustomSupabaseConfigured()) return;
-        const client = getSupabaseClient();
-        if (!client) return;
-
-        // Helper to sync user session back to Express database
-        const syncSupabaseUser = async (sUser: any) => {
-          try {
-            const res = await fetch('/api/users/sync', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: sUser.user_metadata?.full_name || sUser.user_metadata?.name || sUser.email?.split('@')[0],
-                email: sUser.email,
-                avatar: sUser.user_metadata?.avatar_url || sUser.user_metadata?.picture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(sUser.email || '')}`
-              })
-            });
-            if (res.ok) {
-              const syncedUser = await res.json();
-              handleLogin(syncedUser);
-              if (window.location.hash && (window.location.hash.includes('access_token') || window.location.hash.includes('error'))) {
-                window.history.replaceState(null, '', window.location.pathname);
-              }
-            }
-          } catch (syncErr) {
-            console.error('Error syncing Supabase user to server:', syncErr);
-          }
-        };
-
-        // 1. Check current session immediately (if any)
-        const { data: { session } } = await client.auth.getSession();
-        if (session && session.user) {
-          await syncSupabaseUser(session.user);
-        }
-
-        // 2. Listen to state changes
-        const { data: { subscription } } = client.auth.onAuthStateChange(async (event: string, session: any) => {
-          if (session && session.user) {
-            await syncSupabaseUser(session.user);
-          }
-        });
-
-        unsubscribe = () => {
-          subscription?.unsubscribe();
-        };
-      } catch (err) {
-        console.error('Error setting up global Supabase listener:', err);
-      }
-    }
-
-    checkSupabaseSession();
-
-    return () => {
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, []);
 
   // Load Initial Data
   useEffect(() => {
     fetchInitialData();
     
-    // Track site visit count in Supabase analytics
-    import('./lib/supabaseQueries')
+    // Track site visit count in Firebase analytics
+    import('./lib/firebaseQueries')
       .then(({ incrementVisitCount }) => incrementVisitCount())
       .catch(err => console.error('Error auto-incrementing visitor count:', err));
   }, []);
@@ -206,7 +144,7 @@ export default function App() {
   // Sync bookmarks from Supabase on login/user state change
   useEffect(() => {
     if (user && posts.length > 0) {
-      import('./lib/supabaseQueries')
+      import('./lib/firebaseQueries')
         .then(({ fetchSavedPostsFromSupabase }) => {
           return fetchSavedPostsFromSupabase(user.id, posts);
         })
@@ -466,12 +404,12 @@ export default function App() {
 
   const handleDeleteJob = async (id: string) => {
     try {
-      // 1. Delete from Supabase
-      const { deleteJobFromSupabase } = await import('./lib/supabaseQueries');
-      const supabaseResult = await deleteJobFromSupabase(id);
+      // 1. Delete from Firebase
+      const { deleteJobFromSupabase } = await import('./lib/firebaseQueries');
+      const firebaseResult = await deleteJobFromSupabase(id);
       
-      if (supabaseResult && !supabaseResult.success && supabaseResult.error) {
-        console.warn('Could not delete from Supabase, but continuing to local database:', supabaseResult.error);
+      if (firebaseResult && !firebaseResult.success && firebaseResult.error) {
+        console.warn('Could not delete from Firebase, but continuing to local database:', firebaseResult.error);
       }
 
       // 2. Delete from local database backend
@@ -732,6 +670,7 @@ export default function App() {
               selectedJob ? (
                 <JobDetails
                   job={selectedJob}
+                  settings={settings}
                   onBack={() => setSelectedJob(null)}
                 />
               ) : (

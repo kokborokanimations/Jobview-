@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Job } from '../types';
+import { Job, AdminSettings } from '../types';
 import { 
   ArrowLeft, MapPin, DollarSign, Calendar, ExternalLink, 
   Mail, Phone, Share2, Bookmark, Check, Briefcase, Award 
@@ -13,10 +13,11 @@ import { LOGO_GRADIENTS } from './JobFeed';
 
 interface JobDetailsProps {
   job: Job;
+  settings: AdminSettings;
   onBack: () => void;
 }
 
-export default function JobDetails({ job, onBack }: JobDetailsProps) {
+export default function JobDetails({ job, settings, onBack }: JobDetailsProps) {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -51,9 +52,15 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
     localStorage.setItem('sebok_bookmarked_jobs', JSON.stringify(ids));
   };
 
+  const brand = settings?.brandName || 'Sebok';
+  const tagline = settings?.tagline || 'Tripura jobs in your finger';
+  const descriptionText = job.shortDescription || (job.fullDescription && job.fullDescription.length > 200 ? `${job.fullDescription.substring(0, 200)}...` : job.fullDescription) || '';
+
   const copyToClipboard = () => {
     const shareUrl = `${window.location.origin}/job/${String(job.id)}`;
-    navigator.clipboard.writeText(shareUrl).then(() => {
+    const textToCopy = `*${brand} - ${tagline}*\n\n💼 *Job Title:* ${job.title}\n🏢 *Company:* ${job.companyName}\n📝 *Description:* ${descriptionText}\n\n🔗 *Apply here:* ${shareUrl}`;
+    
+    navigator.clipboard.writeText(textToCopy).then(() => {
       setIsShared(true);
       setTimeout(() => setIsShared(false), 2500);
     }).catch(err => {
@@ -63,8 +70,8 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/job/${String(job.id)}`;
-    const shareTitle = `${job.title} - ${job.companyName}`;
-    const shareText = `Check out this job opening: ${job.title} at ${job.companyName} on Sebok!`;
+    const shareTitle = `${job.title} at ${job.companyName} | ${brand}`;
+    const shareText = `*${brand} - ${tagline}*\n\n💼 *Job Title:* ${job.title}\n🏢 *Company:* ${job.companyName}\n📝 *Description:* ${descriptionText}`;
 
     if (navigator.share) {
       try {
@@ -215,7 +222,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
             <span className="w-1 h-3 bg-teal-600 rounded-full" />
             Job Description
           </h3>
-          <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-xl border border-slate-200/50">
+          <p className="text-[14px] text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-xl border border-slate-200/50">
             {job.fullDescription}
           </p>
         </div>
@@ -326,7 +333,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
             <div className="grid grid-cols-2 gap-3 mb-6">
               {/* WhatsApp */}
               <a
-                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Check out this job opening: *${job.title}* at *${job.companyName}*\n\nApply here: ${window.location.origin}/job/${job.id}`)}`}
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`*${brand} - ${tagline}*\n\n💼 *Job Title:* ${job.title}\n🏢 *Company:* ${job.companyName}\n📝 *Description:* ${descriptionText}\n\n🔗 *Apply here:* ${window.location.origin}/job/${job.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 p-3 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-700 transition-all border border-emerald-100/60 cursor-pointer text-xs font-bold"
@@ -356,7 +363,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
 
               {/* Twitter / X */}
               <a
-                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out this job opening: ${job.title} at ${job.companyName}`)}&url=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}`}
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`💼 Job: ${job.title} at ${job.companyName}\n📝 Desc: ${descriptionText.length > 100 ? `${descriptionText.substring(0, 100)}...` : descriptionText}\n\nShared via ${brand}`)}&url=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-700 transition-all border border-slate-100 cursor-pointer text-xs font-bold"
@@ -371,7 +378,7 @@ export default function JobDetails({ job, onBack }: JobDetailsProps) {
 
               {/* Telegram */}
               <a
-                href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}&text=${encodeURIComponent(`Check out this job opening: ${job.title} at ${job.companyName}`)}`}
+                href={`https://t.me/share/url?url=${encodeURIComponent(`${window.location.origin}/job/${job.id}`)}&text=${encodeURIComponent(`*${brand} - ${tagline}*\n\n💼 *Job Title:* ${job.title}\n🏢 *Company:* ${job.companyName}\n📝 *Description:* ${descriptionText}`)}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2.5 p-3 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 transition-all border border-sky-100/60 cursor-pointer text-xs font-bold"

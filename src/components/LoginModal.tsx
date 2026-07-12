@@ -6,7 +6,6 @@
 import React, { useState, useEffect, FormEvent } from 'react';
 import { User, AdminSettings } from '../types';
 import { LogIn, Sparkles, Mail, User as UserIcon, X, Lock, Eye, EyeOff } from 'lucide-react';
-import { supabase, isCustomSupabaseConfigured } from '../lib/supabase';
 
 interface LoginModalProps {
   onLogin: (user: User) => void;
@@ -83,53 +82,44 @@ export default function LoginModal({ onLogin, onClose, isClosable = false, setti
 
   const handleGoogleLogin = async () => {
     setError('');
-    
-    if (!isCustomSupabaseConfigured() || !supabase) {
-      setError('Google Sign-In is not configured. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Admin settings first.');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
-      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          skipBrowserRedirect: true,
-          queryParams: {
-            prompt: 'select_account',
-          },
-        },
+      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+      const { auth } = await import('../lib/firebase');
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      const response = await fetch('/api/users/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: user.displayName || user.email?.split('@')[0] || 'User',
+          email: user.email,
+          avatar: user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.email || 'user')}`
+        })
       });
 
-      if (oauthError) {
-        throw oauthError;
-      }
-
-      if (!data || !data.url) {
-        throw new Error('No authorization URL returned from Supabase Auth');
-      }
-
-      // Open OAuth provider URL directly in popup
-      const width = 600;
-      const height = 700;
-      const left = window.screen.width / 2 - width / 2;
-      const top = window.screen.height / 2 - height / 2;
-      
-      const authWindow = window.open(
-        data.url,
-        'supabase_oauth_popup',
-        `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`
-      );
-
-      if (!authWindow) {
-        setError('Popup blocked. Please allow popups for this site to complete sign-in.');
-        setIsLoading(false);
+      if (response.ok) {
+        const syncedUser = await response.json();
+        localStorage.setItem('sb-access-token', 'firebase-auth-token');
+        onLogin(syncedUser);
+      } else {
+        setError('Failed to sync authenticated profile with server.');
       }
     } catch (err: any) {
       console.error('Google Sign-In Error:', err);
-      setError(err.message || 'Failed to initiate Google Sign-In.');
+      if (err.code === 'auth/cancelled-popup-request' || err.message?.includes('cancelled-popup-request')) {
+        setError('गूगल साइन-इन पॉपअप रद्द हो गया था। यदि आप आईफ़्रेम (iframe) प्रीव्यू में हैं, तो कृपया ऐप को नई टैब (New Tab) में खोलकर साइन-इन करें। (Google Sign-In popup was cancelled. If you are inside the preview iframe, please open the app in a new tab to sign in successfully.)');
+      } else if (err.code === 'auth/popup-closed-by-user' || err.message?.includes('popup-closed-by-user')) {
+        setError('साइन-इन पॉपअप को बंद कर दिया गया था। कृपया फिर से प्रयास करें या नई टैब में खोलें। (Sign-in popup was closed. Please try again or open in a new tab.)');
+      } else if (err.code === 'auth/popup-blocked' || err.message?.includes('popup-blocked')) {
+        setError('पॉपअप अवरुद्ध (blocked) हो गया है। कृपया अपने ब्राउज़र में पॉपअप की अनुमति दें। (Popup was blocked. Please allow popups for this site in your browser.)');
+      } else {
+        setError(err.message || 'Failed to complete Google Sign-In.');
+      }
+    } finally {
       setIsLoading(false);
     }
   };

@@ -10,6 +10,25 @@ import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import crypto from 'crypto';
+import { initializeApp, getApp, getApps } from 'firebase/app';
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, deleteDoc } from 'firebase/firestore';
+
+// Initialize Firebase SDK on Server
+let firestoreDb: any = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+    const firebaseApp = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    const dbId = firebaseConfig.firestoreDatabaseId || '(default)';
+    firestoreDb = getFirestore(firebaseApp, dbId);
+    console.log('[Firebase] Successfully initialized Firebase Firestore on server.');
+  } else {
+    console.warn('[Firebase] Warning: firebase-applet-config.json not found on server.');
+  }
+} catch (err: any) {
+  console.error('[Firebase Init Error]:', err.message || String(err));
+}
 
 const app = express();
 const PORT = 3000;
@@ -50,7 +69,7 @@ app.use(async (req, res, next) => {
           .eq('id', 'global_settings')
           .single();
         if (!sErr && sData) {
-          const mapped = mapSettingsFromSupabase(sData);
+          const mapped = mapSettingsFromSupabase(sData, db.adminSettings);
           db.adminSettings = { ...db.adminSettings, ...mapped };
           writeDB(db);
           console.log('[Middleware Sync] Loaded admin settings from Supabase successfully.');
@@ -143,7 +162,14 @@ function initDB() {
       ],
       razorpayKeyId: '',
       razorpayKeySecret: '',
-      postApprovalMode: true // Manual post approval mode (ON) by default
+      cashfreeAppId: '',
+      cashfreeSecretKey: '',
+      postApprovalMode: true, // Manual post approval mode (ON) by default
+      oneSignalAppId: '',
+      oneSignalRestApiKey: '',
+      oneSignalAutoNotify: true,
+      loginTitle: 'Welcome to Sebok',
+      loginSubtitle: 'Sign in to unlock verified hiring managers, contact details, and our community wall.'
     },
     jobs: [
       {
@@ -190,7 +216,7 @@ function initDB() {
       },
       {
         id: 'job-3',
-        companyName: 'Razorpay',
+        companyName: 'Cashfree Payments',
         companyLogoIndex: 2,
         title: 'Full-Stack Developer (Express & Node)',
         location: 'Mumbai, Maharashtra',
@@ -199,8 +225,8 @@ function initDB() {
         qualifications: 'Strong grasp of Node.js, relational databases, API gateway security, webhook handlers, and modern web applications.',
         salary: '₹15,0,000 - ₹20,0,000 / year',
         isLive: true,
-        applyLink: 'https://razorpay.com/jobs',
-        email: 'tech-recruiting@razorpay.com',
+        applyLink: 'https://cashfree.com/jobs',
+        email: 'tech-recruiting@cashfree.com',
         phone: '+91 99008 87766',
         whatsapp: '919900887766',
         createdAt: new Date(Date.now() - 172800000).toISOString(),
@@ -361,9 +387,98 @@ function readDB() {
   }
 }
 
+let isSyncing = false;
+let pendingSync = false;
+
+async function syncCollection(colName: string, localArray: any[]) {
+  if (!firestoreDb) return;
+  try {
+    const localMap = new Map();
+    localArray.forEach(item => {
+      if (item && item.id) {
+        localMap.set(String(item.id), item);
+      }
+    });
+
+    // 1. Upsert local items
+    for (const [id, item] of localMap.entries()) {
+      const cleanItem = JSON.parse(JSON.stringify(item));
+      await setDoc(doc(firestoreDb, colName, id), cleanItem);
+    }
+
+    // 2. Delete removed items
+    const snap = await getDocs(collection(firestoreDb, colName));
+    for (const docSnap of snap.docs) {
+      if (!localMap.has(docSnap.id)) {
+        await deleteDoc(docSnap.ref);
+      }
+    }
+  } catch (err: any) {
+    console.error(`[Firebase syncCollection Error for ${colName}]:`, err.message || String(err));
+  }
+}
+
+let isServerFirestoreQuotaExceeded = false;
+
+async function syncToFirebase(dbData: any) {
+  if (!firestoreDb) return;
+  if (isServerFirestoreQuotaExceeded) {
+    return;
+  }
+  if (isSyncing) {
+    pendingSync = true;
+    return;
+  }
+  isSyncing = true;
+  try {
+    // 1. Admin Settings
+    if (dbData.adminSettings) {
+      const cleanSettings = JSON.parse(JSON.stringify(dbData.adminSettings));
+      await setDoc(doc(firestoreDb, 'admin_settings', 'global'), cleanSettings);
+    }
+
+    // Sync arrays
+    await syncCollection('jobs', dbData.jobs || []);
+    await syncCollection('community_posts', dbData.communityPosts || []);
+    await syncCollection('users', dbData.users || []);
+    await syncCollection('pages', dbData.pages || []);
+    await syncCollection('contacts', dbData.contacts || []);
+    await syncCollection('payment_logs', dbData.paymentLogs || []);
+    await syncCollection('resumes', dbData.resumes || []);
+
+  } catch (err: any) {
+    const errMsg = err.message || String(err);
+    if (
+      errMsg.includes('RESOURCE_EXHAUSTED') || 
+      errMsg.includes('Quota limit exceeded') || 
+      err.code === 'resource-exhausted' || 
+      err.code === 8
+    ) {
+      if (!isServerFirestoreQuotaExceeded) {
+        isServerFirestoreQuotaExceeded = true;
+        console.warn('[Firebase] Firestore daily free write quota has been reached on the server. Temporarily bypassing server-side Firestore sync to prevent crashes and error logs.');
+      }
+    } else {
+      console.error('[Firebase Background Sync Error]:', errMsg);
+    }
+  } finally {
+    isSyncing = false;
+    if (pendingSync && !isServerFirestoreQuotaExceeded) {
+      pendingSync = false;
+      const latestData = readDB();
+      syncToFirebase(latestData);
+    }
+  }
+}
+
 function writeDB(data: any) {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf-8');
+    if (firestoreDb) {
+      syncToFirebase(data).catch(err => {
+        console.error('[Firebase Write Sync Catch]:', err);
+      });
+    }
   } catch (e) {
     console.error('Error writing DB', e);
   }
@@ -564,7 +679,7 @@ function mapContactToSupabase(c: any) {
   };
 }
 
-function mapSettingsFromSupabase(s: any) {
+function mapSettingsFromSupabase(s: any, currentSettings: any = {}) {
   let paywallFeatures = [];
   if (s.paywall_features) {
     try {
@@ -572,38 +687,66 @@ function mapSettingsFromSupabase(s: any) {
     } catch (e) {
       paywallFeatures = String(s.paywall_features).split('\n').filter(Boolean);
     }
+  } else if (currentSettings.paywallFeatures) {
+    paywallFeatures = currentSettings.paywallFeatures;
   }
+
+  const getBool = (dbVal: any, localVal: any, defaultVal: boolean) => {
+    if (dbVal !== undefined && dbVal !== null) return dbVal;
+    if (localVal !== undefined && localVal !== null) return localVal;
+    return defaultVal;
+  };
+
+  const getStr = (dbVal: any, localVal: any, defaultVal: string) => {
+    if (dbVal !== undefined && dbVal !== null && dbVal !== '') return dbVal;
+    if (localVal !== undefined && localVal !== null && localVal !== '') return localVal;
+    return defaultVal;
+  };
+
+  const getNum = (dbVal: any, localVal: any, defaultVal: number) => {
+    if (dbVal !== undefined && dbVal !== null) return dbVal;
+    if (localVal !== undefined && localVal !== null) return localVal;
+    return defaultVal;
+  };
+
   return {
-    brandName: s.brand_name || s.brandName || 'Sebok',
-    tagline: s.tagline || 'Your Premium Portal to Verified Careers & Networking',
-    logoUrl: s.logo_url || s.logoUrl || '',
-    faviconUrl: s.favicon_url || s.faviconUrl || '',
-    bannerUrl: s.banner_url || s.bannerUrl || '',
-    bannerHtml: s.banner_html || s.bannerHtml || '',
-    premiumMode: s.premium_mode !== undefined ? s.premium_mode : (s.premiumMode !== undefined ? s.premiumMode : true),
-    membershipPrice: s.membership_price !== undefined ? s.membership_price : (s.membershipPrice || 499),
-    currency: s.currency || 'INR',
+    brandName: getStr(s.brand_name, currentSettings.brandName, 'Sebok'),
+    tagline: getStr(s.tagline, currentSettings.tagline, 'Your Premium Portal to Verified Careers & Networking'),
+    logoUrl: getStr(s.logo_url, currentSettings.logoUrl, ''),
+    faviconUrl: getStr(s.favicon_url, currentSettings.faviconUrl, ''),
+    bannerUrl: getStr(s.banner_url, currentSettings.bannerUrl, ''),
+    bannerHtml: getStr(s.banner_html, currentSettings.bannerHtml, ''),
+    premiumMode: getBool(s.premium_mode, currentSettings.premiumMode, true),
+    membershipPrice: getNum(s.membership_price, currentSettings.membershipPrice, 499),
+    currency: getStr(s.currency, currentSettings.currency, 'INR'),
     paywallFeatures: paywallFeatures,
-    paywallTitle: s.paywall_title || s.paywallTitle || 'Activate Premium',
-    paywallSubtitle: s.paywall_subtitle || s.paywallSubtitle || 'Unlock Premium access to continue searching & applying.',
-    paywallButtonText: s.paywall_button_text || s.paywallButtonText || 'Activate Membership Now',
-    paywallPriceDescription: s.paywall_price_description || s.paywallPriceDescription || 'One-time manual purchase. Extend anytime.',
-    paywallFooterText: s.paywall_footer_text || s.paywallFooterText || 'Secured & processed under Razorpay Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.',
-    paywallExtendTitle: s.paywall_extend_title || s.paywallExtendTitle || 'Extend Premium',
-    paywallExtendSubtitle: s.paywall_extend_subtitle || s.paywallExtendSubtitle || 'Extend your manual premium access for another month.',
-    paywallExtendButtonText: s.paywall_extend_button_text || s.paywallExtendButtonText || 'Extend Membership Now',
-    razorpayKeyId: s.razorpay_key_id || s.cashfree_app_id || s.razorpayKeyId || '',
-    razorpayKeySecret: s.razorpay_key_secret || s.cashfree_secret_key || s.razorpayKeySecret || '',
-    postApprovalMode: s.post_approval_mode !== undefined ? s.post_approval_mode : (s.postApprovalMode !== undefined ? s.postApprovalMode : true),
-    supabaseUrl: s.supabase_url || s.supabaseUrl || '',
-    supabaseAnonKey: s.supabase_anon_key || s.supabaseAnonKey || '',
-    supabaseServiceRoleKey: s.supabase_service_role_key || s.supabaseServiceRoleKey || '',
-    googleSiteVerification: s.google_site_verification || s.googleSiteVerification || '',
-    communityMindPlaceholder: s.community_mind_placeholder || s.communityMindPlaceholder || '',
-    communityReviewNotice: s.community_review_notice || s.communityReviewNotice || '',
-    loginTitle: s.login_title || s.loginTitle || '',
-    loginSubtitle: s.login_subtitle || s.loginSubtitle || '',
-    googleOnly: s.google_only !== undefined ? s.google_only : (s.googleOnly !== undefined ? s.googleOnly : false)
+    paywallTitle: getStr(s.paywall_title, currentSettings.paywallTitle, 'Activate Premium'),
+    paywallSubtitle: getStr(s.paywall_subtitle, currentSettings.paywallSubtitle, 'Unlock Premium access to continue searching & applying.'),
+    paywallButtonText: getStr(s.paywall_button_text, currentSettings.paywallButtonText, 'Activate Membership Now'),
+    paywallPriceDescription: getStr(s.paywall_price_description, currentSettings.paywallPriceDescription, 'One-time manual purchase. Extend anytime.'),
+    paywallFooterText: getStr(s.paywall_footer_text, currentSettings.paywallFooterText, 'Secured & processed under Cashfree Secure Gateway. This is a one-time manual charge. No automatic renewals or recurring billing cycles.'),
+    paywallExtendTitle: getStr(s.paywall_extend_title, currentSettings.paywallExtendTitle, 'Extend Premium'),
+    paywallExtendSubtitle: getStr(s.paywall_extend_subtitle, currentSettings.paywallExtendSubtitle, 'Extend your manual premium access for another month.'),
+    paywallExtendButtonText: getStr(s.paywall_extend_button_text, currentSettings.paywallExtendButtonText, 'Extend Membership Now'),
+    razorpayKeyId: getStr(s.razorpay_key_id, currentSettings.razorpayKeyId, ''),
+    razorpayKeySecret: getStr(s.razorpay_key_secret, currentSettings.razorpayKeySecret, ''),
+    cashfreeAppId: getStr(s.cashfree_app_id || s.razorpay_key_id, currentSettings.cashfreeAppId || currentSettings.razorpayKeyId, ''),
+    cashfreeSecretKey: getStr(s.cashfree_secret_key || s.razorpay_key_secret, currentSettings.cashfreeSecretKey || currentSettings.razorpayKeySecret, ''),
+    postApprovalMode: getBool(s.post_approval_mode, currentSettings.postApprovalMode, true),
+    supabaseUrl: getStr(s.supabase_url, currentSettings.supabaseUrl, ''),
+    supabaseAnonKey: getStr(s.supabase_anon_key, currentSettings.supabaseAnonKey, ''),
+    supabaseServiceRoleKey: getStr(s.supabase_service_role_key, currentSettings.supabaseServiceRoleKey, ''),
+    googleSiteVerification: getStr(s.google_site_verification, currentSettings.googleSiteVerification, ''),
+    oneSignalCode: getStr(s.one_signal_code, currentSettings.oneSignalCode, ''),
+    oneSignalAppId: getStr(s.one_signal_app_id, currentSettings.oneSignalAppId, ''),
+    oneSignalRestApiKey: getStr(s.one_signal_rest_api_key, currentSettings.oneSignalRestApiKey, ''),
+    oneSignalAutoNotify: getBool(s.one_signal_auto_notify, currentSettings.oneSignalAutoNotify, true),
+    communityMindPlaceholder: getStr(s.community_mind_placeholder, currentSettings.communityMindPlaceholder, ''),
+    communityReviewNotice: getStr(s.community_review_notice, currentSettings.communityReviewNotice, ''),
+    loginTitle: getStr(s.login_title, currentSettings.loginTitle, ''),
+    loginSubtitle: getStr(s.login_subtitle, currentSettings.loginSubtitle, ''),
+    googleOnly: getBool(s.google_only, currentSettings.googleOnly, false),
+    showJobFilters: getBool(s.show_job_filters, currentSettings.showJobFilters, true)
   };
 }
 
@@ -628,18 +771,23 @@ function mapSettingsToSupabase(s: any) {
     paywall_extend_title: s.paywallExtendTitle,
     paywall_extend_subtitle: s.paywallExtendSubtitle,
     paywall_extend_button_text: s.paywallExtendButtonText,
-    cashfree_app_id: s.razorpayKeyId || '',
-    cashfree_secret_key: s.razorpayKeySecret || '',
+    cashfree_app_id: s.cashfreeAppId || s.razorpayKeyId || '',
+    cashfree_secret_key: s.cashfreeSecretKey || s.razorpayKeySecret || '',
     post_approval_mode: s.postApprovalMode,
     supabase_url: s.supabaseUrl,
     supabase_anon_key: s.supabaseAnonKey,
     supabase_service_role_key: s.supabaseServiceRoleKey,
     google_site_verification: s.googleSiteVerification,
+    one_signal_code: s.oneSignalCode || '',
+    one_signal_app_id: s.oneSignalAppId || '',
+    one_signal_rest_api_key: s.oneSignalRestApiKey || '',
+    one_signal_auto_notify: s.oneSignalAutoNotify !== false,
     community_mind_placeholder: s.communityMindPlaceholder,
     community_review_notice: s.communityReviewNotice,
     login_title: s.loginTitle,
     login_subtitle: s.loginSubtitle,
-    google_only: s.googleOnly
+    google_only: s.googleOnly,
+    show_job_filters: s.showJobFilters !== false
   };
 }
 
@@ -812,7 +960,7 @@ app.get('/api/settings', async (req, res) => {
           .single();
         
         if (!error && data) {
-          const mappedSettings = mapSettingsFromSupabase(data);
+          const mappedSettings = mapSettingsFromSupabase(data, db.adminSettings);
           db.adminSettings = { ...db.adminSettings, ...mappedSettings };
           writeDB(db);
           return res.json(db.adminSettings);
@@ -921,6 +1069,59 @@ app.get('/api/jobs', async (req, res) => {
   res.json(localJobs);
 });
 
+async function triggerOneSignalNotification(newJob: any, host: string) {
+  try {
+    const db = readDB();
+    const settings = db.adminSettings || {};
+    const appId = settings.oneSignalAppId;
+    const restApiKey = settings.oneSignalRestApiKey;
+    const autoNotify = settings.oneSignalAutoNotify !== false;
+
+    if (!autoNotify || !appId || !restApiKey) {
+      console.log('[OneSignal] Auto notify is disabled or missing App ID / REST API Key settings.');
+      return;
+    }
+
+    const jobTitle = newJob.title || 'New Job';
+    const companyName = newJob.companyName || 'Company';
+    const jobId = newJob.id;
+    
+    // Construct target URL
+    const protocol = host.includes('localhost') ? 'http' : 'https';
+    const targetUrl = `${protocol}://${host}/job/${jobId}`;
+
+    const payload = {
+      app_id: appId,
+      included_segments: ['All'],
+      contents: {
+        en: `New Job Posted: ${jobTitle} at ${companyName}`,
+        hi: `नयी जॉब अलर्ट: ${companyName} में ${jobTitle} की भर्ती`
+      },
+      headings: {
+        en: `New Job Alert! 🔔`,
+        hi: `नया जॉब अपडेट! 🔔`
+      },
+      url: targetUrl
+    };
+
+    console.log('[OneSignal] Sending push notification with payload:', JSON.stringify(payload));
+
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Basic ${restApiKey}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    console.log('[OneSignal] API Response:', result);
+  } catch (error: any) {
+    console.error('[OneSignal] Error sending notification:', error.message || error);
+  }
+}
+
 app.post('/api/jobs', async (req, res) => {
   const db = readDB();
   const newJobId = 'job-' + Date.now();
@@ -932,6 +1133,11 @@ app.post('/api/jobs', async (req, res) => {
   };
   db.jobs.unshift(newJob);
   writeDB(db);
+
+  // Trigger push notification asynchronously in the background
+  triggerOneSignalNotification(newJob, req.headers.host || 'localhost:3000').catch(err => {
+    console.error('[OneSignal Background Error]:', err);
+  });
 
   try {
     const supabase = getServerSupabase();
@@ -2348,8 +2554,11 @@ app.post('/api/payments/create-order', async (req, res) => {
 
   const orderId = 'order_' + Date.now();
 
+  const cfAppId = settings.cashfreeAppId || settings.razorpayKeyId || '';
+  const cfSecret = settings.cashfreeSecretKey || settings.razorpayKeySecret || '';
+
   // If Cashfree credentials are missing, we run in Simulator Mode
-  if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
+  if (!cfAppId || !cfSecret) {
     return res.json({
       isMock: true,
       order_id: orderId,
@@ -2360,12 +2569,16 @@ app.post('/api/payments/create-order', async (req, res) => {
   }
 
   try {
-    const isSandbox = !settings.razorpayKeyId || settings.razorpayKeyId.startsWith('TEST') || settings.cashfreeSandbox === true;
+    const isSandbox = cfAppId.startsWith('TEST') || settings.cashfreeSandbox === true;
     const cashfreeUrl = isSandbox 
       ? 'https://sandbox.cashfree.com/pg/orders' 
       : 'https://api.cashfree.com/pg/orders';
 
     const finalAmount = Number(amount || settings.membershipPrice || 499);
+    const reqHost = req.headers.host || 'sebok.in';
+    const protocol = reqHost.includes('localhost') ? 'http' : 'https';
+    const dynamicReturnUrl = `${protocol}://${reqHost}/payments/success?order_id=${orderId}`;
+
     const payload = {
       order_amount: finalAmount,
       order_currency: settings.currency || 'INR',
@@ -2376,14 +2589,14 @@ app.post('/api/payments/create-order', async (req, res) => {
         customer_email: userEmail || 'guest@sebok.in'
       },
       order_meta: {
-        return_url: `https://sebok.in/payments/success?order_id=${orderId}`
+        return_url: dynamicReturnUrl
       }
     };
 
     const headers = {
       'Content-Type': 'application/json',
-      'x-client-id': settings.razorpayKeyId,
-      'x-client-secret': settings.razorpayKeySecret,
+      'x-client-id': cfAppId,
+      'x-client-secret': cfSecret,
       'x-api-version': '2023-08-01'
     };
 
@@ -2434,13 +2647,16 @@ app.get('/api/payments/status/:orderId', async (req, res) => {
     return res.json({ status: 'SUCCESS' });
   }
 
+  const cfAppId = settings.cashfreeAppId || settings.razorpayKeyId || '';
+  const cfSecret = settings.cashfreeSecretKey || settings.razorpayKeySecret || '';
+
   // If credentials are empty, we don't query Cashfree, it's simulated
-  if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
+  if (!cfAppId || !cfSecret) {
     return res.json({ status: 'MOCK' });
   }
 
   try {
-    const isSandbox = !settings.razorpayKeyId || settings.razorpayKeyId.startsWith('TEST') || settings.cashfreeSandbox === true;
+    const isSandbox = cfAppId.startsWith('TEST') || settings.cashfreeSandbox === true;
     const cashfreeUrl = isSandbox 
       ? `https://sandbox.cashfree.com/pg/orders/${orderId}` 
       : `https://api.cashfree.com/pg/orders/${orderId}`;
@@ -2448,8 +2664,8 @@ app.get('/api/payments/status/:orderId', async (req, res) => {
     const cfResponse = await fetch(cashfreeUrl, {
       method: 'GET',
       headers: {
-        'x-client-id': settings.razorpayKeyId,
-        'x-client-secret': settings.razorpayKeySecret,
+        'x-client-id': cfAppId,
+        'x-client-secret': cfSecret,
         'x-api-version': '2023-08-01'
       }
     });
@@ -2521,11 +2737,14 @@ app.post('/api/payments/verify', async (req, res) => {
   let finalStatus = 'FAILED';
   let verifiedTxId = txId || paymentId || 'cf_tx_' + Date.now();
 
-  if (!settings.razorpayKeyId || !settings.razorpayKeySecret) {
+  const cfAppId = settings.cashfreeAppId || settings.razorpayKeyId || '';
+  const cfSecret = settings.cashfreeSecretKey || settings.razorpayKeySecret || '';
+
+  if (!cfAppId || !cfSecret) {
     finalStatus = status === 'SUCCESS' ? 'SUCCESS' : 'FAILED';
   } else {
     try {
-      const isSandbox = !settings.razorpayKeyId || settings.razorpayKeyId.startsWith('TEST') || settings.cashfreeSandbox === true;
+      const isSandbox = cfAppId.startsWith('TEST') || settings.cashfreeSandbox === true;
       const cashfreeUrl = isSandbox 
         ? `https://sandbox.cashfree.com/pg/orders/${orderId}` 
         : `https://api.cashfree.com/pg/orders/${orderId}`;
@@ -2533,8 +2752,8 @@ app.post('/api/payments/verify', async (req, res) => {
       const cfResponse = await fetch(cashfreeUrl, {
         method: 'GET',
         headers: {
-          'x-client-id': settings.razorpayKeyId,
-          'x-client-secret': settings.razorpayKeySecret,
+          'x-client-id': cfAppId,
+          'x-client-secret': cfSecret,
           'x-api-version': '2023-08-01'
         }
       });
@@ -2652,83 +2871,103 @@ function escapeHtml(unsafe: string): string {
 
 // Vite Setup for Development and static handling in Production
 async function startServer() {
-  // Pre-fetch settings, jobs, and pages from Supabase on startup if configured to hydrate local db.json cache (Cloud Run/Hostinger state recovery)
+  // Sync and migrate data with Firebase Firestore on startup
   try {
-    const db = readDB();
-    if (isCustomSupabaseConfigured(db)) {
-      const url = db.adminSettings?.supabaseUrl || process.env.VITE_SUPABASE_URL || 'https://crdmccidgzknnylyggbf.supabase.co';
-      const anonKey = db.adminSettings?.supabaseAnonKey || process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNyZG1jY2lkZ3prbm55bHlnZ2JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI0NDg1NjAsImV4cCI6MjA5ODAyNDU2MH0.gPwgKSe-0lSFZf4holpBctmYSGrTYsv5cwpKcgLODBs';
-      if (url && anonKey) {
-        const tempSupabase = createClient(url, anonKey);
+    if (firestoreDb) {
+      const dbData = readDB();
+      // Determine if Firebase currently has data by checking if we have any jobs or users in Firestore
+      const jobsSnap = await getDocs(collection(firestoreDb, 'jobs'));
+      
+      if (jobsSnap.empty && ((dbData.jobs && dbData.jobs.length > 0) || (dbData.communityPosts && dbData.communityPosts.length > 0))) {
+        // Firebase is empty, but local has data -> RUN ONE-TIME MIGRATION TO SEED FIREBASE!
+        console.log('[Startup] Firebase is empty but local db.json has data. Performing one-time migration to seed Firebase...');
+        await syncToFirebase(dbData);
+        console.log('[Startup] One-time Firebase seeding completed successfully.');
+      } else {
+        // Firebase has data (or local is also empty) -> HYDRATE LOCAL DB FROM FIREBASE!
+        console.log('[Startup] Hydrating local db.json from Firebase Firestore...');
         
-        // 1. Fetch settings
-        const { data: settingsData, error: settingsError } = await tempSupabase
-          .from('admin_settings')
-          .select('*')
-          .eq('id', 'global_settings')
-          .single();
-        if (!settingsError && settingsData) {
-          const mappedSettings = mapSettingsFromSupabase(settingsData);
-          db.adminSettings = { ...db.adminSettings, ...mappedSettings };
-          writeDB(db);
-          console.log('[Startup] Successfully pre-fetched and synchronized admin settings from Supabase.');
-        } else if (settingsError) {
-          console.log('[Startup Info] Pre-fetching settings from Supabase skipped:', settingsError.message);
+        // 1. Settings
+        const settingsSnap = await getDoc(doc(firestoreDb, 'admin_settings', 'global'));
+        if (settingsSnap.exists()) {
+          dbData.adminSettings = settingsSnap.data();
         }
 
-        // 2. Fetch jobs
-        const { data: jobsData, error: jobsError } = await tempSupabase
-          .from('jobs')
-          .select('*')
-          .order('created_at', { ascending: false });
-        if (!jobsError && jobsData) {
-          const mappedJobs = jobsData.map(mapJobFromSupabase);
-          db.jobs = mappedJobs;
-          writeDB(db);
-          console.log(`[Startup] Successfully pre-fetched and synchronized ${mappedJobs.length} jobs from Supabase.`);
-        } else if (jobsError) {
-          console.log('[Startup Info] Pre-fetching jobs from Supabase skipped:', jobsError.message);
+        // 2. Jobs
+        const jobsList: any[] = [];
+        jobsSnap.forEach((doc: any) => {
+          jobsList.push(doc.data());
+        });
+        if (jobsList.length > 0) {
+          dbData.jobs = jobsList;
         }
 
-        // 3. Fetch pages
-        const { data: pagesData, error: pagesError } = await tempSupabase
-          .from('pages')
-          .select('*');
-        if (!pagesError && pagesData) {
-          const mappedPages = pagesData.map(mapPageFromSupabase);
-          mappedPages.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-          db.pages = mappedPages;
-          writeDB(db);
-          console.log(`[Startup] Successfully pre-fetched and synchronized ${mappedPages.length} pages from Supabase.`);
-        } else if (pagesError) {
-          console.log('[Startup Info] Pre-fetching pages from Supabase skipped:', pagesError.message);
+        // 3. Community Posts
+        const postsSnap = await getDocs(collection(firestoreDb, 'community_posts'));
+        const postsList: any[] = [];
+        postsSnap.forEach((doc: any) => {
+          postsList.push(doc.data());
+        });
+        if (postsList.length > 0) {
+          dbData.communityPosts = postsList;
         }
 
-        // 4. Fetch resumes
-        const { data: resumesData, error: resumesError } = await tempSupabase
-          .from('resumes')
-          .select('*');
-        if (!resumesError && resumesData) {
-          db.resumes = resumesData.map(mapResumeFromSupabase);
-          writeDB(db);
-          console.log(`[Startup] Successfully pre-fetched and synchronized ${resumesData.length} resumes from Supabase.`);
-        } else if (resumesError) {
-          // Fallback to user_resumes
-          const { data: altResumes, error: altResumesError } = await tempSupabase
-            .from('user_resumes')
-            .select('*');
-          if (!altResumesError && altResumes) {
-            db.resumes = altResumes.map(mapResumeFromSupabase);
-            writeDB(db);
-            console.log(`[Startup] Successfully pre-fetched and synchronized ${altResumes.length} resumes from user_resumes table in Supabase.`);
-          } else {
-            console.log('[Startup Info] Pre-fetching resumes from Supabase skipped:', resumesError.message);
-          }
+        // 4. Users
+        const usersSnap = await getDocs(collection(firestoreDb, 'users'));
+        const usersList: any[] = [];
+        usersSnap.forEach((doc: any) => {
+          usersList.push(doc.data());
+        });
+        if (usersList.length > 0) {
+          dbData.users = usersList;
         }
+
+        // 5. Pages
+        const pagesSnap = await getDocs(collection(firestoreDb, 'pages'));
+        const pagesList: any[] = [];
+        pagesSnap.forEach((doc: any) => {
+          pagesList.push(doc.data());
+        });
+        if (pagesList.length > 0) {
+          dbData.pages = pagesList;
+        }
+
+        // 6. Contacts
+        const contactsSnap = await getDocs(collection(firestoreDb, 'contacts'));
+        const contactsList: any[] = [];
+        contactsSnap.forEach((doc: any) => {
+          contactsList.push(doc.data());
+        });
+        if (contactsList.length > 0) {
+          dbData.contacts = contactsList;
+        }
+
+        // 7. Payment Logs
+        const logsSnap = await getDocs(collection(firestoreDb, 'payment_logs'));
+        const logsList: any[] = [];
+        logsSnap.forEach((doc: any) => {
+          logsList.push(doc.data());
+        });
+        if (logsList.length > 0) {
+          dbData.paymentLogs = logsList;
+        }
+
+        // 8. Resumes
+        const resumesSnap = await getDocs(collection(firestoreDb, 'resumes'));
+        const resumesList: any[] = [];
+        resumesSnap.forEach((doc: any) => {
+          resumesList.push(doc.data());
+        });
+        if (resumesList.length > 0) {
+          dbData.resumes = resumesList;
+        }
+
+        fs.writeFileSync(DB_FILE, JSON.stringify(dbData, null, 2), 'utf-8');
+        console.log('[Startup] Successfully hydrated local db.json cache from Firebase.');
       }
     }
   } catch (startupErr: any) {
-    console.warn('[Startup Warning] Error pre-fetching settings/jobs/pages/resumes from Supabase:', startupErr.message || String(startupErr));
+    console.warn('[Startup Warning] Error pre-fetching or seeding Firebase:', startupErr.message || String(startupErr));
   }
 
   let vite: any = null;
@@ -2783,9 +3022,16 @@ async function startServer() {
       const logoUrl = settings.logoUrl || '';
 
       // Create a sanitized settings object for instant client-side rendering
-      const clientSettings = { ...settings };
+      const clientSettings = { 
+        ...settings,
+        isFirestoreQuotaExceeded: isServerFirestoreQuotaExceeded 
+      };
       delete clientSettings.razorpayKeySecret;
+      delete clientSettings.cashfreeSecretKey;
       delete clientSettings.supabaseServiceRoleKey;
+      delete clientSettings.oneSignalRestApiKey;
+      delete clientSettings.oneSignalCode;
+      delete clientSettings.googleSiteVerification;
 
       let title = brand;
       if (tagline) {
@@ -2855,11 +3101,19 @@ async function startServer() {
 `;
 
       // Replace the default static title block with dynamic meta tags
-      html = html.replace(/<title>.*?<\/title>/i, metadataHtml);
+      html = html.replace(/<title>.*?<\/title>/i, () => metadataHtml);
 
       // Pre-inject the settings into the window object so client-side React can load it instantly
       const initialSettingsScript = `<script>window.__INITIAL_SETTINGS__ = ${JSON.stringify(clientSettings)};</script>`;
       html = html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n  ${initialSettingsScript}`);
+
+      // Inject OneSignal Push Notification script if configured and on the production domain
+      const oneSignalCode = settings.oneSignalCode;
+      const hostLower = host.toLowerCase();
+      const isProductionDomain = hostLower.includes('sebok.in');
+      if (oneSignalCode && oneSignalCode.trim() && isProductionDomain) {
+        html = html.replace(/<head(\s[^>]*)?>/i, (match) => `${match}\n  ${oneSignalCode.trim()}`);
+      }
 
       const verificationCode = db.adminSettings?.googleSiteVerification;
       if (verificationCode) {

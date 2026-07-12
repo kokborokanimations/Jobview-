@@ -96,3 +96,34 @@ export function getTrialInfo(user: User | null): TrialInfo | null {
     isTrialActive
   };
 }
+
+export interface PremiumInfo {
+  expiryDate: Date;
+  daysRemaining: number;
+  isPremiumActive: boolean;
+}
+
+/**
+ * Calculates premium subscription info (expiry date, days remaining) for a user.
+ */
+export function getPremiumInfo(user: User | null): PremiumInfo | null {
+  if (!user || user.subscriptionStatus !== 'Active') return null;
+
+  const expiryStr = user.plan_expiry_date || user.planExpiryDate;
+  if (!expiryStr) return null;
+
+  const expiryDate = new Date(expiryStr);
+  const now = new Date();
+
+  // Calculate remaining days
+  const diffTime = expiryDate.getTime() - now.getTime();
+  const daysRemaining = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+  const isPremiumActive = now <= expiryDate;
+
+  return {
+    expiryDate,
+    daysRemaining,
+    isPremiumActive
+  };
+}
+
