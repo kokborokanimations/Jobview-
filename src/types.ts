@@ -71,6 +71,10 @@ export interface AdminSettings {
   faviconUrl?: string; // App Favicon Icon URL
   bannerUrl: string; // Job Feed Banner
   bannerHtml?: string; // Customizable Rich Text Banner
+  bannerHeightType?: 'default' | 'small' | 'medium' | 'large' | 'custom';
+  bannerHeightCustomValue?: number;
+  bannerObjectFit?: 'cover' | 'contain' | 'fill';
+  bannerPosition?: 'center' | 'top' | 'bottom';
   premiumMode: boolean;
   membershipPrice: number;
   currency: string;

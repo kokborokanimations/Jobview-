@@ -272,39 +272,61 @@ export async function incrementVisitCount(): Promise<{ success: boolean; visitCo
 
     if (data) {
       nextCount = (data.visit_count || 0) + 1;
-      dailyCounts = data.daily_counts || {};
-      dailyCounts[todayStr] = (dailyCounts[todayStr] || 0) + 1;
+      const hasDailyCounts = 'daily_counts' in data;
+      const updatePayload: any = { visit_count: nextCount };
 
-      // Keep daily history compact
-      const cutoffDate = new Date();
-      cutoffDate.setDate(cutoffDate.getDate() - 90);
-      for (const dateKey of Object.keys(dailyCounts)) {
-        try {
-          const d = new Date(dateKey);
-          if (!isNaN(d.getTime()) && d < cutoffDate) {
-            delete dailyCounts[dateKey];
+      if (hasDailyCounts) {
+        dailyCounts = data.daily_counts || {};
+        dailyCounts[todayStr] = (dailyCounts[todayStr] || 0) + 1;
+
+        // Keep daily history compact
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - 90);
+        for (const dateKey of Object.keys(dailyCounts)) {
+          try {
+            const d = new Date(dateKey);
+            if (!isNaN(d.getTime()) && d < cutoffDate) {
+              delete dailyCounts[dateKey];
+            }
+          } catch (e) {
+            // ignore
           }
-        } catch (e) {
-          // ignore
         }
+        updatePayload.daily_counts = dailyCounts;
       }
 
       await supabase
         .from('analytics')
-        .update({ 
-          visit_count: nextCount,
-          daily_counts: dailyCounts
-        })
+        .update(updatePayload)
         .eq('id', 'site-visitors');
     } else {
-      dailyCounts[todayStr] = 1;
-      await supabase
-        .from('analytics')
-        .insert([{ 
-          id: 'site-visitors', 
-          visit_count: nextCount,
-          daily_counts: dailyCounts
-        }]);
+      // Try with daily_counts first, fallback if it fails
+      try {
+        dailyCounts[todayStr] = 1;
+        const { error: insertError } = await supabase
+          .from('analytics')
+          .insert([{ 
+            id: 'site-visitors', 
+            visit_count: nextCount,
+            daily_counts: dailyCounts
+          }]);
+        
+        if (insertError) {
+          await supabase
+            .from('analytics')
+            .insert([{ 
+              id: 'site-visitors', 
+              visit_count: nextCount
+            }]);
+        }
+      } catch (insertErr) {
+        await supabase
+          .from('analytics')
+          .insert([{ 
+            id: 'site-visitors', 
+            visit_count: nextCount
+          }]);
+      }
     }
 
     if (typeof window !== 'undefined') {
@@ -355,16 +377,19 @@ export interface DetailedVisitStats {
   sevenDays: number;
   oneMonth: number;
   total: number;
+  hasDailyCounts?: boolean;
 }
 
 /**
  * 7. Fetch detailed visitor analytics metrics using the site-visitors table.
  */
 export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
-  const stats: DetailedVisitStats = { today: 0, sevenDays: 0, oneMonth: 0, total: 0 };
+  const stats: DetailedVisitStats = { today: 0, sevenDays: 0, oneMonth: 0, total: 0, hasDailyCounts: true };
   const supabase = getClientSupabase();
   if (!supabase) {
-    return getLocalDetailedStats(stats);
+    const local = getLocalDetailedStats(stats);
+    local.hasDailyCounts = false;
+    return local;
   }
 
   try {
@@ -375,10 +400,27 @@ export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
       .maybeSingle();
 
     if (!data) {
-      return getLocalDetailedStats(stats);
+      const local = getLocalDetailedStats(stats);
+      local.hasDailyCounts = false;
+      return local;
     }
 
     const siteVisitorsTotal = data.visit_count || 0;
+    const hasDailyCounts = 'daily_counts' in data;
+    stats.hasDailyCounts = hasDailyCounts;
+
+    if (!hasDailyCounts) {
+      // Fallback: Use local logs for intervals, but use live cloud visit_count as total
+      getLocalDetailedStats(stats);
+      stats.total = siteVisitorsTotal;
+      stats.hasDailyCounts = false;
+
+      if (stats.today > stats.total) stats.today = stats.total;
+      if (stats.sevenDays > stats.total) stats.sevenDays = stats.total;
+      if (stats.oneMonth > stats.total) stats.oneMonth = stats.total;
+      return stats;
+    }
+
     const dailyCounts: Record<string, number> = data.daily_counts || {};
 
     const now = new Date();
@@ -424,7 +466,9 @@ export async function fetchDetailedVisitStats(): Promise<DetailedVisitStats> {
     return stats;
   } catch (err: any) {
     console.error('Error fetching detailed visit stats from Supabase:', err);
-    return getLocalDetailedStats(stats);
+    const local = getLocalDetailedStats(stats);
+    local.hasDailyCounts = false;
+    return local;
   }
 }
 

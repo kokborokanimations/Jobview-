@@ -65,11 +65,13 @@ export default function AdminPanel({
   const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || '');
   const [bannerUrl, setBannerUrl] = useState(settings.bannerUrl || '');
   const [bannerHtml, setBannerHtml] = useState(settings.bannerHtml || '');
+  const [bannerHeightType, setBannerHeightType] = useState<'default' | 'small' | 'medium' | 'large' | 'custom'>(settings.bannerHeightType || 'default');
+  const [bannerHeightCustomValue, setBannerHeightCustomValue] = useState<number>(settings.bannerHeightCustomValue || 150);
+  const [bannerObjectFit, setBannerObjectFit] = useState<'cover' | 'contain' | 'fill'>(settings.bannerObjectFit || 'cover');
+  const [bannerPosition, setBannerPosition] = useState<'center' | 'top' | 'bottom'>(settings.bannerPosition || 'center');
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
-  const [logoError, setLogoError] = useState(false);
-  const [bannerError, setBannerError] = useState(false);
   const [premiumMode, setPremiumMode] = useState(settings.premiumMode);
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
   const [currency, setCurrency] = useState(settings.currency || 'INR');
@@ -482,6 +484,10 @@ export default function AdminPanel({
       faviconUrl !== (settings.faviconUrl || '') ||
       bannerUrl !== (settings.bannerUrl || '') ||
       bannerHtml !== (settings.bannerHtml || '') ||
+      bannerHeightType !== (settings.bannerHeightType || 'default') ||
+      bannerHeightCustomValue !== (settings.bannerHeightCustomValue || 150) ||
+      bannerObjectFit !== (settings.bannerObjectFit || 'cover') ||
+      bannerPosition !== (settings.bannerPosition || 'center') ||
       premiumMode !== settings.premiumMode ||
       Number(membershipPrice) !== (settings.membershipPrice || 499) ||
       currency !== (settings.currency || 'INR') ||
@@ -530,6 +536,10 @@ export default function AdminPanel({
         faviconUrl,
         bannerUrl,
         bannerHtml,
+        bannerHeightType,
+        bannerHeightCustomValue: Number(bannerHeightCustomValue),
+        bannerObjectFit,
+        bannerPosition,
         premiumMode,
         membershipPrice: Number(membershipPrice),
         currency,
@@ -755,19 +765,68 @@ export default function AdminPanel({
     });
   };
 
+  const saveSettingsWithUpdatedField = async (fieldName: string, value: any) => {
+    const features = paywallFeaturesText
+      .split('\n')
+      .map(f => f.trim())
+      .filter(Boolean);
+
+    const updatedSettings = {
+      brandName,
+      tagline,
+      logoUrl,
+      faviconUrl,
+      bannerUrl,
+      bannerHtml,
+      bannerHeightType,
+      bannerHeightCustomValue: Number(bannerHeightCustomValue),
+      bannerObjectFit,
+      bannerPosition,
+      premiumMode,
+      membershipPrice: Number(membershipPrice),
+      currency,
+      paywallFeatures: features,
+      paywallTitle,
+      paywallSubtitle,
+      paywallButtonText,
+      paywallPriceDescription,
+      paywallFooterText,
+      paywallExtendTitle,
+      paywallExtendSubtitle,
+      paywallExtendButtonText,
+      razorpayKeyId: cashfreeAppId,
+      razorpayKeySecret: cashfreeSecretKey,
+      cashfreeAppId,
+      cashfreeSecretKey,
+      postApprovalMode,
+      showJobFilters,
+      supabaseUrl,
+      supabaseAnonKey,
+      supabaseServiceRoleKey,
+      googleSiteVerification,
+      oneSignalCode,
+      oneSignalAppId,
+      oneSignalRestApiKey,
+      oneSignalAutoNotify,
+      communityMindPlaceholder,
+      communityReviewNotice,
+      loginTitle,
+      loginSubtitle,
+      googleOnly,
+      [fieldName]: value
+    };
+
+    await onUpdateSettings(updatedSettings);
+  };
+
   const handleLogoChange = async (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setIsUploadingLogo(true);
       const url = await handleFileUpload(e.target.files[0], 'app_logo');
       setIsUploadingLogo(false);
       if (url) {
-        setLogoError(false);
         setLogoUrl(url);
-        // Automatically save branding settings so it persists instantly without requiring clicking Save!
-        await onUpdateSettings({
-          ...settings,
-          logoUrl: url
-        });
+        await saveSettingsWithUpdatedField('logoUrl', url);
       }
     }
   };
@@ -779,11 +838,7 @@ export default function AdminPanel({
       setIsUploadingFavicon(false);
       if (url) {
         setFaviconUrl(url);
-        // Automatically save branding settings so it persists instantly without requiring clicking Save!
-        await onUpdateSettings({
-          ...settings,
-          faviconUrl: url
-        });
+        await saveSettingsWithUpdatedField('faviconUrl', url);
       }
     }
   };
@@ -794,13 +849,8 @@ export default function AdminPanel({
       const url = await handleFileUpload(e.target.files[0], 'jobs_banner');
       setIsUploadingBanner(false);
       if (url) {
-        setBannerError(false);
         setBannerUrl(url);
-        // Automatically save branding settings so it persists instantly without requiring clicking Save!
-        await onUpdateSettings({
-          ...settings,
-          bannerUrl: url
-        });
+        await saveSettingsWithUpdatedField('bannerUrl', url);
       }
     }
   };
@@ -999,6 +1049,8 @@ export default function AdminPanel({
             </div>
           )}
 
+
+
           <p className="text-[9px] text-gray-400 mt-2 font-semibold flex items-center gap-1">
             <span className={`w-1 h-1 rounded-full ${supabaseStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
             <span>{supabaseStatus === 'connected' ? 'Live Supabase Sync Active' : 'Offline Local Storage'}</span>
@@ -1194,7 +1246,7 @@ export default function AdminPanel({
               <div>
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">App Logo Branding</label>
                 <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
-                  {logoUrl && !logoError ? (
+                  {logoUrl ? (
                     <div className="relative group w-20 h-20 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white flex items-center justify-center p-1">
                       <img 
                         src={logoUrl} 
@@ -1202,12 +1254,10 @@ export default function AdminPanel({
                         className="max-w-full max-h-full object-contain" 
                         onError={(e) => {
                           const currentSrc = e.currentTarget.src;
-                          if (currentSrc.includes('/storage/v1/object/public/')) {
+                          if (currentSrc && currentSrc.includes('/storage/v1/object/public/') && !currentSrc.includes('/uploads/')) {
                             const parts = currentSrc.split('/');
                             const filename = parts[parts.length - 1];
                             e.currentTarget.src = `/uploads/${filename}`;
-                          } else {
-                            setLogoError(true);
                           }
                         }}
                       />
@@ -1298,7 +1348,7 @@ export default function AdminPanel({
               <div>
                 <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Banner Image Upload</label>
                 <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
-                  {bannerUrl && !bannerError ? (
+                  {bannerUrl ? (
                     <div className="relative group w-full h-24 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white">
                       <img 
                         src={bannerUrl} 
@@ -1306,12 +1356,10 @@ export default function AdminPanel({
                         className="w-full h-full object-cover" 
                         onError={(e) => {
                           const currentSrc = e.currentTarget.src;
-                          if (currentSrc.includes('/storage/v1/object/public/')) {
+                          if (currentSrc && currentSrc.includes('/storage/v1/object/public/') && !currentSrc.includes('/uploads/')) {
                             const parts = currentSrc.split('/');
                             const filename = parts[parts.length - 1];
                             e.currentTarget.src = `/uploads/${filename}`;
-                          } else {
-                            setBannerError(true);
                           }
                         }}
                       />
@@ -1351,6 +1399,75 @@ export default function AdminPanel({
                       {isUploadingBanner ? 'Uploading...' : 'Browse File'}
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Banner Size & Fit Customization */}
+              <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-200/80 pb-2">
+                  <span className="text-[11px] font-bold text-slate-700 font-display">Banner Dimensions & Styling</span>
+                  <span className="text-[9px] bg-teal-100 text-teal-800 font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider">Dynamic Layout</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Banner Height Type selection */}
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-display block mb-1">Banner Height Type</label>
+                    <select
+                      value={bannerHeightType}
+                      onChange={(e) => setBannerHeightType(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-hidden focus:border-teal-500"
+                    >
+                      <option value="default">Default (Responsive)</option>
+                      <option value="small">Small (96px)</option>
+                      <option value="medium">Medium (144px)</option>
+                      <option value="large">Large (192px)</option>
+                      <option value="custom">Custom (Specify pixels)</option>
+                    </select>
+                  </div>
+
+                  {/* Banner Height Custom Value (Shown only if custom is selected) */}
+                  {bannerHeightType === 'custom' && (
+                    <div>
+                      <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-display block mb-1">Custom Height (px)</label>
+                      <input
+                        type="number"
+                        min="60"
+                        max="600"
+                        value={bannerHeightCustomValue}
+                        onChange={(e) => setBannerHeightCustomValue(Number(e.target.value))}
+                        className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-hidden focus:border-teal-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* Object Fit */}
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-display block mb-1">Image Fit Mode</label>
+                    <select
+                      value={bannerObjectFit}
+                      onChange={(e) => setBannerObjectFit(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-hidden focus:border-teal-500"
+                    >
+                      <option value="cover">Cover (Fill & Crop)</option>
+                      <option value="contain">Contain (Full Image - No Crop)</option>
+                      <option value="fill">Fill (Stretch to Fit)</option>
+                    </select>
+                  </div>
+
+                  {/* Object Position */}
+                  <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase tracking-wider font-display block mb-1">Image Align Position</label>
+                    <select
+                      value={bannerPosition}
+                      onChange={(e) => setBannerPosition(e.target.value as any)}
+                      className="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-hidden focus:border-teal-500"
+                    >
+                      <option value="center">Center</option>
+                      <option value="top">Top</option>
+                      <option value="bottom">Bottom</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
@@ -2108,7 +2225,8 @@ CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (tru
 -- 10. ANALYTICS TABLE
 CREATE TABLE IF NOT EXISTS public.analytics (
     id TEXT PRIMARY KEY,
-    visit_count INT DEFAULT 0
+    visit_count INT DEFAULT 0,
+    daily_counts JSONB DEFAULT '{}'::jsonb
 );
 
 ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;
@@ -2332,7 +2450,8 @@ CREATE POLICY "Allow anon delete" ON public.reported_posts FOR DELETE USING (tru
 -- 10. ANALYTICS TABLE
 CREATE TABLE IF NOT EXISTS public.analytics (
     id TEXT PRIMARY KEY,
-    visit_count INT DEFAULT 0
+    visit_count INT DEFAULT 0,
+    daily_counts JSONB DEFAULT '{}'::jsonb
 );
 
 ALTER TABLE public.analytics ENABLE ROW LEVEL SECURITY;

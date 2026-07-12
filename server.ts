@@ -639,7 +639,11 @@ function mapSettingsFromSupabase(s: any, currentSettings: any = {}) {
     loginTitle: getStr(s.login_title, currentSettings.loginTitle, ''),
     loginSubtitle: getStr(s.login_subtitle, currentSettings.loginSubtitle, ''),
     googleOnly: getBool(s.google_only, currentSettings.googleOnly, false),
-    showJobFilters: getBool(s.show_job_filters, currentSettings.showJobFilters, true)
+    showJobFilters: getBool(s.show_job_filters, currentSettings.showJobFilters, true),
+    bannerHeightType: getStr(s.banner_height_type, currentSettings.bannerHeightType, 'default'),
+    bannerHeightCustomValue: getNum(s.banner_height_custom_value, currentSettings.bannerHeightCustomValue, 150),
+    bannerObjectFit: getStr(s.banner_object_fit, currentSettings.bannerObjectFit, 'cover'),
+    bannerPosition: getStr(s.banner_position, currentSettings.bannerPosition, 'center')
   };
 }
 
@@ -680,7 +684,11 @@ function mapSettingsToSupabase(s: any) {
     login_title: s.loginTitle,
     login_subtitle: s.loginSubtitle,
     google_only: s.googleOnly,
-    show_job_filters: s.showJobFilters !== false
+    show_job_filters: s.showJobFilters !== false,
+    banner_height_type: s.bannerHeightType,
+    banner_height_custom_value: s.bannerHeightCustomValue,
+    banner_object_fit: s.bannerObjectFit,
+    banner_position: s.bannerPosition
   };
 }
 

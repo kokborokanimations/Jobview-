@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Job, AdminSettings } from '../types';
 import { Search, MapPin, Briefcase, Calendar, ChevronRight, Activity, Bookmark, Share2, Check, Clock } from 'lucide-react';
 
@@ -86,7 +86,6 @@ export const LOGO_GRADIENTS = [
 export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState('');
-  const [bannerError, setBannerError] = useState(false);
 
   const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
@@ -123,25 +122,53 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
     return matchesSearch && matchesLocation && job.isLive;
   });
 
+  const bannerHeightType = settings.bannerHeightType || 'default';
+  const bannerHeightCustomValue = settings.bannerHeightCustomValue || 150;
+  const bannerObjectFit = settings.bannerObjectFit || 'cover';
+  const bannerPosition = settings.bannerPosition || 'center';
+
+  let bannerHeightStyle: React.CSSProperties = {};
+  let bannerHeightClass = 'h-32 md:h-36'; // Default
+
+  if (bannerHeightType === 'small') {
+    bannerHeightClass = 'h-24';
+  } else if (bannerHeightType === 'medium') {
+    bannerHeightClass = 'h-36';
+  } else if (bannerHeightType === 'large') {
+    bannerHeightClass = 'h-48 md:h-52';
+  } else if (bannerHeightType === 'custom') {
+    bannerHeightClass = '';
+    bannerHeightStyle = { height: `${bannerHeightCustomValue}px` };
+  }
+
+  const fitClass = 
+    bannerObjectFit === 'contain' ? 'object-contain bg-slate-900' :
+    bannerObjectFit === 'fill' ? 'object-fill' : 'object-cover';
+
+  const positionClass = 
+    bannerPosition === 'top' ? 'object-top' :
+    bannerPosition === 'bottom' ? 'object-bottom' : 'object-center';
+
   return (
     <div className="w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
       
       {/* Dynamic Job Feed Banner */}
-      <div className={`relative h-32 md:h-36 rounded-2xl overflow-hidden border border-slate-200 shadow-xs ${(!settings.bannerUrl || bannerError) ? 'bg-gradient-to-r from-teal-900 via-slate-800 to-indigo-950' : ''}`}>
-        {settings.bannerUrl && !bannerError && (
+      <div 
+        className={`relative rounded-2xl overflow-hidden border border-slate-200 shadow-xs ${bannerHeightClass} ${!settings.bannerUrl ? 'bg-gradient-to-r from-teal-900 via-slate-800 to-indigo-950' : ''}`}
+        style={bannerHeightStyle}
+      >
+        {settings.bannerUrl && (
           <img
             src={settings.bannerUrl}
             alt="Careers Banner"
-            className="w-full h-full object-cover"
+            className={`w-full h-full ${fitClass} ${positionClass}`}
             referrerPolicy="no-referrer"
             onError={(e) => {
               const currentSrc = e.currentTarget.src;
-              if (currentSrc.includes('/storage/v1/object/public/')) {
+              if (currentSrc && currentSrc.includes('/storage/v1/object/public/') && !currentSrc.includes('/uploads/')) {
                 const parts = currentSrc.split('/');
                 const filename = parts[parts.length - 1];
                 e.currentTarget.src = `/uploads/${filename}`;
-              } else {
-                setBannerError(true);
               }
             }}
           />
