@@ -23,11 +23,13 @@ function parseFcmConfig(configStr: string): any {
   }
 }
 
-export async function registerFcm(settings: AdminSettings) {
-  if (typeof window === 'undefined') return;
+export async function registerFcm(settings: AdminSettings): Promise<{ success: boolean; token?: string; error?: string }> {
+  if (typeof window === 'undefined') {
+    return { success: false, error: 'Window is undefined' };
+  }
   if (!('serviceWorker' in navigator) || !('Notification' in window)) {
     console.warn('[FCM] Service worker or Notifications are not supported in this browser.');
-    return;
+    return { success: false, error: 'Your browser does not support Service Workers or Web Notifications. Please use Chrome, Edge, or Safari.' };
   }
 
   const fcmConfigStr = settings.fcmConfigJson;
@@ -35,7 +37,7 @@ export async function registerFcm(settings: AdminSettings) {
 
   if (!fcmConfigStr || !fcmConfigStr.trim()) {
     console.log('[FCM] Client configuration is not set up in Admin settings.');
-    return;
+    return { success: false, error: 'Firebase FCM client configuration is empty or not set up in Admin Settings.' };
   }
 
   try {
@@ -55,7 +57,7 @@ export async function registerFcm(settings: AdminSettings) {
     const permission = await Notification.requestPermission();
     if (permission !== 'granted') {
       console.warn('[FCM] Notification permission denied by user.');
-      return;
+      return { success: false, error: 'Notification permission was denied by the user.' };
     }
 
     // Retrieve FCM Registration Token
@@ -68,35 +70,43 @@ export async function registerFcm(settings: AdminSettings) {
       console.log('[FCM] Generated client registration token:', token);
       
       // Save token to backend server
-      await fetch('/api/fcm/register', {
+      const response = await fetch('/api/fcm/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token })
       });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server registration endpoint returned HTTP ${response.status}`);
+      }
+      
       console.log('[FCM] Registration token successfully submitted to backend.');
+      
+      // Set up foreground message listener
+      onMessage(messaging, (payload) => {
+        console.log('[FCM] Received foreground message:', payload);
+        const title = payload.notification?.title || payload.data?.title || 'Notification! 🔔';
+        const body = payload.notification?.body || payload.data?.body || '';
+        
+        if (typeof (window as any).showJobSavedToast === 'function') {
+          (window as any).showJobSavedToast(`${title}: ${body}`);
+        } else {
+          new Notification(title, {
+            body,
+            icon: settings.logoUrl || '/favicon.ico'
+          });
+        }
+      });
+
+      return { success: true, token };
     } else {
       console.warn('[FCM] No registration token received. Check your Firebase console settings.');
+      return { success: false, error: 'No registration token received. Please make sure your VAPID Key and Firebase credentials are correct.' };
     }
 
-    // Set up foreground message listener
-    onMessage(messaging, (payload) => {
-      console.log('[FCM] Received foreground message:', payload);
-      // Fire custom notification toast or trigger browser alert
-      const title = payload.notification?.title || payload.data?.title || 'Notification! 🔔';
-      const body = payload.notification?.body || payload.data?.body || '';
-      
-      if (typeof (window as any).showJobSavedToast === 'function') {
-        (window as any).showJobSavedToast(`${title}: ${body}`);
-      } else {
-        // Fallback to traditional Web Notification if in foreground
-        new Notification(title, {
-          body,
-          icon: settings.logoUrl || '/favicon.ico'
-        });
-      }
-    });
-
-  } catch (err) {
+  } catch (err: any) {
     console.error('[FCM] Setup failed:', err);
+    return { success: false, error: err.message || String(err) };
   }
 }

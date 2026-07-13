@@ -144,10 +144,12 @@ export default function App() {
         linkTag.href = settings.faviconUrl;
       }
 
-      // Initialize FCM Client
-      registerFcm(settings).catch(err => {
-        console.error('[FCM Client Error]:', err);
-      });
+      // Initialize FCM Client only if permission is already granted
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        registerFcm(settings).catch(err => {
+          console.error('[FCM Client Error]:', err);
+        });
+      }
     }
   }, [settings]);
 

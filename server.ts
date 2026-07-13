@@ -1173,6 +1173,36 @@ app.post('/api/fcm/register', (req, res) => {
   res.json({ success: true });
 });
 
+app.get('/api/fcm/status', (req, res) => {
+  const db = readDB();
+  const settings = db.adminSettings || {};
+  res.json({
+    totalTokens: (db.fcmTokens || []).length,
+    fcmConfigured: !!(settings.fcmConfigJson && settings.fcmConfigJson.trim()),
+    serviceAccountConfigured: !!(settings.fcmServiceAccountJson && settings.fcmServiceAccountJson.trim()),
+    serverKeyConfigured: !!(settings.fcmServerKey && settings.fcmServerKey.trim())
+  });
+});
+
+app.post('/api/fcm/test', async (req, res) => {
+  try {
+    const db = readDB();
+    const tokens = db.fcmTokens || [];
+    if (tokens.length === 0) {
+      return res.status(400).json({ error: 'No registered client tokens. Open the website directly (not inside AI Studio iframe), grant permission via the Bell icon, then retry.' });
+    }
+    
+    const title = req.body.title || 'FCM Test Notification! 🔔';
+    const body = req.body.body || 'Your Firebase Cloud Messaging setup is working perfectly!';
+    const url = req.body.url || '/';
+
+    await triggerFcmNotification(title, body, url);
+    res.json({ success: true, message: `Test notification sent to ${tokens.length} device(s)!` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message || String(error) });
+  }
+});
+
 app.post('/api/jobs', async (req, res) => {
   const db = readDB();
   const newJobId = 'job-' + Date.now();

@@ -108,6 +108,13 @@ export default function AdminPanel({
   const [googleOnly, setGoogleOnly] = useState(settings.googleOnly || false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   
+  // FCM Diagnostic State
+  const [fcmStatus, setFcmStatus] = useState<{ totalTokens: number; fcmConfigured: boolean; serviceAccountConfigured: boolean; serverKeyConfigured: boolean } | null>(null);
+  const [isLoadingFcmStatus, setIsLoadingFcmStatus] = useState(false);
+  const [isTestingFcm, setIsTestingFcm] = useState(false);
+  const [fcmTestMessage, setFcmTestMessage] = useState('');
+  const [fcmTestSuccess, setFcmTestSuccess] = useState<boolean | null>(null);
+
   // Secret Keys visibility toggle
   const [showSecret, setShowSecret] = useState(false);
 
@@ -461,7 +468,54 @@ export default function AdminPanel({
 
   useEffect(() => {
     fetchPaymentLogs();
+    fetchFcmStatus();
   }, []);
+
+  const fetchFcmStatus = async () => {
+    setIsLoadingFcmStatus(true);
+    try {
+      const res = await fetch('/api/fcm/status');
+      if (res.ok) {
+        const data = await res.json();
+        setFcmStatus(data);
+      }
+    } catch (e) {
+      console.error('[FCM Status Error]', e);
+    } finally {
+      setIsLoadingFcmStatus(false);
+    }
+  };
+
+  const handleTestFcmNotification = async () => {
+    setIsTestingFcm(true);
+    setFcmTestMessage('');
+    setFcmTestSuccess(null);
+    try {
+      const res = await fetch('/api/fcm/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Admin Test 🔔',
+          body: 'This is a live test notification sent from your Admin Panel!',
+          url: '/community'
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setFcmTestSuccess(true);
+        setFcmTestMessage(data.message || 'Notification triggered successfully!');
+        fetchFcmStatus(); // update token count
+      } else {
+        setFcmTestSuccess(false);
+        setFcmTestMessage(data.error || 'Failed to trigger test notification.');
+      }
+    } catch (err: any) {
+      setFcmTestSuccess(false);
+      setFcmTestMessage(err.message || String(err));
+    } finally {
+      setIsTestingFcm(false);
+    }
+  };
 
   const fetchPaymentLogs = async () => {
     setIsLoadingLogs(true);
@@ -3167,6 +3221,80 @@ ON CONFLICT (id) DO NOTHING;`;
                   <span>{isSavingSettings ? 'Saving...' : 'Save Firebase FCM Settings'}</span>
                 </button>
               </form>
+
+              {/* FCM Connection Diagnostics Section */}
+              <div className="mt-6 pt-5 border-t border-slate-100 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider font-display flex items-center gap-1.5">
+                    <RefreshCw size={12} className={isLoadingFcmStatus ? 'animate-spin' : ''} />
+                    FCM Connection Diagnostics
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={fetchFcmStatus}
+                    className="text-[9px] font-bold text-teal-600 hover:text-teal-700 cursor-pointer"
+                  >
+                    Refresh Status
+                  </button>
+                </div>
+
+                {fcmStatus ? (
+                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200/50">
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Registered Devices</span>
+                      <span className="text-xs font-black text-slate-800 font-mono">{fcmStatus.totalTokens} device(s)</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] text-gray-400 font-bold uppercase block">SDK Config</span>
+                      <span className={`text-[10px] font-bold ${fcmStatus.fcmConfigured ? 'text-teal-600' : 'text-rose-500'}`}>
+                        {fcmStatus.fcmConfigured ? '✓ Configured' : '✗ Empty'}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Service Account</span>
+                      <span className={`text-[10px] font-bold ${fcmStatus.serviceAccountConfigured ? 'text-teal-600' : 'text-amber-500'}`}>
+                        {fcmStatus.serviceAccountConfigured ? '✓ Loaded' : '✗ Missing'}
+                      </span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Legacy Server Key</span>
+                      <span className={`text-[10px] font-bold ${fcmStatus.serverKeyConfigured ? 'text-teal-600' : 'text-gray-400'}`}>
+                        {fcmStatus.serverKeyConfigured ? '✓ Available' : 'Not Set'}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-400 italic">Retrieving FCM database status...</p>
+                )}
+
+                <div className="bg-amber-50/50 border border-amber-200/50 p-3 rounded-xl space-y-1.5">
+                  <span className="text-[10px] font-black text-amber-800 uppercase block font-display">Testing FCM Notifications</span>
+                  <p className="text-[9px] text-amber-700 font-medium leading-relaxed">
+                    Test notification bhejne ke liye, pehle aap is app ko direct browser me open karein (AI Studio iframe me nahi), Header me <strong>Bell Icon 🔔</strong> par click karke request <strong>Allow</strong> karein. Tabhi aapka device register hoga.
+                  </p>
+                  
+                  <button
+                    type="button"
+                    onClick={handleTestFcmNotification}
+                    disabled={isTestingFcm || (fcmStatus && fcmStatus.totalTokens === 0)}
+                    className={`w-full py-2 rounded-lg text-[10px] font-extrabold font-display border transition-all mt-2 flex items-center justify-center gap-1.5 ${
+                      fcmStatus && fcmStatus.totalTokens === 0
+                        ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 cursor-pointer shadow-xs'
+                    }`}
+                  >
+                    {isTestingFcm ? 'Sending Test Push...' : 'Send Live Test Push Alert 🔔'}
+                  </button>
+
+                  {fcmTestMessage && (
+                    <div className={`p-2 rounded-lg text-[9px] font-mono leading-relaxed mt-2 ${
+                      fcmTestSuccess ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                    }`}>
+                      {fcmTestMessage}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
 

@@ -48,11 +48,15 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
 
       if (requestedPermission === 'granted') {
         // Now register FCM since we have the user gesture and permission
-        await registerFcm(settings);
-        if (typeof (window as any).showJobSavedToast === 'function') {
-          (window as any).showJobSavedToast('Notifications successfully enabled! 🔔');
+        const result = await registerFcm(settings);
+        if (result.success) {
+          if (typeof (window as any).showJobSavedToast === 'function') {
+            (window as any).showJobSavedToast('Notifications successfully enabled! 🔔');
+          } else {
+            alert('Notifications successfully enabled! 🔔');
+          }
         } else {
-          alert('Notifications successfully enabled! 🔔');
+          alert(`Notification Registration failed: ${result.error || 'Unknown error'}`);
         }
       } else {
         alert('Notification permission denied by user.');
