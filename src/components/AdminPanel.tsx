@@ -96,6 +96,11 @@ export default function AdminPanel({
   const [oneSignalAppId, setOneSignalAppId] = useState(settings.oneSignalAppId || '');
   const [oneSignalRestApiKey, setOneSignalRestApiKey] = useState(settings.oneSignalRestApiKey || '');
   const [oneSignalAutoNotify, setOneSignalAutoNotify] = useState(settings.oneSignalAutoNotify !== false);
+  const [fcmConfigJson, setFcmConfigJson] = useState(settings.fcmConfigJson || '');
+  const [fcmVapidKey, setFcmVapidKey] = useState(settings.fcmVapidKey || '');
+  const [fcmServerKey, setFcmServerKey] = useState(settings.fcmServerKey || '');
+  const [fcmServiceAccountJson, setFcmServiceAccountJson] = useState(settings.fcmServiceAccountJson || '');
+  const [fcmAutoNotify, setFcmAutoNotify] = useState(settings.fcmAutoNotify !== false);
   const [communityMindPlaceholder, setCommunityMindPlaceholder] = useState(settings.communityMindPlaceholder || '');
   const [communityReviewNotice, setCommunityReviewNotice] = useState(settings.communityReviewNotice || '');
   const [loginTitle, setLoginTitle] = useState(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
@@ -105,6 +110,8 @@ export default function AdminPanel({
   
   // Secret Keys visibility toggle
   const [showSecret, setShowSecret] = useState(false);
+
+
 
   // Job creation Form state
   const [isAddingJob, setIsAddingJob] = useState(false);
@@ -294,6 +301,11 @@ export default function AdminPanel({
     setOneSignalAppId(settings.oneSignalAppId || '');
     setOneSignalRestApiKey(settings.oneSignalRestApiKey || '');
     setOneSignalAutoNotify(settings.oneSignalAutoNotify !== false);
+    setFcmConfigJson(settings.fcmConfigJson || '');
+    setFcmVapidKey(settings.fcmVapidKey || '');
+    setFcmServerKey(settings.fcmServerKey || '');
+    setFcmServiceAccountJson(settings.fcmServiceAccountJson || '');
+    setFcmAutoNotify(settings.fcmAutoNotify !== false);
     setCommunityMindPlaceholder(settings.communityMindPlaceholder || '');
     setCommunityReviewNotice(settings.communityReviewNotice || '');
     setLoginTitle(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
@@ -511,6 +523,11 @@ export default function AdminPanel({
       oneSignalAppId !== (settings.oneSignalAppId || '') ||
       oneSignalRestApiKey !== (settings.oneSignalRestApiKey || '') ||
       oneSignalAutoNotify !== (settings.oneSignalAutoNotify !== false) ||
+      fcmConfigJson !== (settings.fcmConfigJson || '') ||
+      fcmVapidKey !== (settings.fcmVapidKey || '') ||
+      fcmServerKey !== (settings.fcmServerKey || '') ||
+      fcmServiceAccountJson !== (settings.fcmServiceAccountJson || '') ||
+      fcmAutoNotify !== (settings.fcmAutoNotify !== false) ||
       communityMindPlaceholder !== (settings.communityMindPlaceholder || '') ||
       communityReviewNotice !== (settings.communityReviewNotice || '') ||
       loginTitle !== (settings.loginTitle || '') ||
@@ -566,6 +583,11 @@ export default function AdminPanel({
         oneSignalAppId,
         oneSignalRestApiKey,
         oneSignalAutoNotify,
+        fcmConfigJson,
+        fcmVapidKey,
+        fcmServerKey,
+        fcmServiceAccountJson,
+        fcmAutoNotify,
         communityMindPlaceholder,
         communityReviewNotice,
         loginTitle,
@@ -1191,6 +1213,8 @@ export default function AdminPanel({
         >
           ✉️ Contact Submissions
         </button>
+
+
 
         <button
           onClick={() => {
@@ -3052,6 +3076,98 @@ ON CONFLICT (id) DO NOTHING;`;
                 </button>
               </form>
             </div>
+
+            {/* Firebase FCM Push Notification Integration Card */}
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+                <Bell size={15} className="text-teal-600" />
+                Firebase FCM Notifications
+              </h3>
+
+              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
+                Naye jobs aur community posts par automatic user notifications bhejne ke liye Firebase Cloud Messaging (FCM) configure karein.
+              </p>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4">
+                {/* Auto notify check */}
+                <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl">
+                  <div className="space-y-0.5">
+                    <span className="text-xs font-bold text-gray-800 font-display">Auto-Send FCM Notifications</span>
+                    <p className="text-[9px] text-gray-400 font-medium">Naye posts ya jobs live hone par automatic notification trigger karein.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFcmAutoNotify(!fcmAutoNotify)}
+                    className="text-teal-600 focus:outline-none"
+                  >
+                    {fcmAutoNotify ? (
+                      <ToggleRight size={32} className="text-teal-600 transition-colors" />
+                    ) : (
+                      <ToggleLeft size={32} className="text-gray-300 transition-colors" />
+                    )}
+                  </button>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">FCM Server Key (Legacy Key)</label>
+                  <input
+                    type={showSecret ? 'text' : 'password'}
+                    placeholder="e.g., AAAAxxxxxx..."
+                    value={fcmServerKey}
+                    onChange={(e) => setFcmServerKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                  <p className="text-[8px] text-gray-400 mt-1">Firebase Console &gt; Project Settings &gt; Cloud Messaging me Cloud Messaging API (Legacy) ko enable karein aur Server Key paste karein.</p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">FCM Public VAPID Key</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., BAn... (Web Push certificates Key)"
+                    value={fcmVapidKey}
+                    onChange={(e) => setFcmVapidKey(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
+                  />
+                  <p className="text-[8px] text-gray-400 mt-1">Firebase Console &gt; Cloud Messaging &gt; Web configuration &gt; Web Push certificates me generate key ko use karein.</p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Firebase Client SDK Config JSON</label>
+                  <textarea
+                    rows={4}
+                    value={fcmConfigJson}
+                    onChange={(e) => setFcmConfigJson(e.target.value)}
+                    placeholder={`e.g.\n{\n  "apiKey": "AIzaSy...",\n  "authDomain": "your-app.firebaseapp.com",\n  "projectId": "your-app",\n  "storageBucket": "your-app.appspot.com",\n  "messagingSenderId": "1234567890",\n  "appId": "1:123:web:abc"\n}`}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono resize-none leading-relaxed"
+                  />
+                  <p className="text-[8px] text-gray-400 mt-0.5">Firebase Project me web app create karke configuration object ko JSON format me copy-paste karein.</p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Firebase Service Account JSON (For Modern HTTP v1 API - Recommended)</label>
+                  <textarea
+                    rows={4}
+                    value={fcmServiceAccountJson}
+                    onChange={(e) => setFcmServiceAccountJson(e.target.value)}
+                    placeholder={`e.g.\n{\n  "type": "service_account",\n  "project_id": "your-project-id",\n  "private_key_id": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----\\n...",\n  "client_email": "..."\n}`}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono resize-none leading-relaxed"
+                  />
+                  <p className="text-[8px] text-gray-400 mt-0.5">Firebase Console &gt; Project Settings &gt; Service Accounts me generate new private key karke poora content yahan paste karein. Isse modern, secure notifications bhej sakte hain.</p>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingSettings}
+                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                  }`}
+                >
+                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                  <span>{isSavingSettings ? 'Saving...' : 'Save Firebase FCM Settings'}</span>
+                </button>
+              </form>
+            </div>
           </div>
 
           {/* Transactions Table Log */}
@@ -3754,6 +3870,8 @@ ON CONFLICT (id) DO NOTHING;`;
           </div>
         </div>
       )}
+
+
 
     </div>
   );

@@ -103,6 +103,11 @@ export interface AdminSettings {
   oneSignalAppId?: string;
   oneSignalRestApiKey?: string;
   oneSignalAutoNotify?: boolean;
+  fcmConfigJson?: string;
+  fcmVapidKey?: string;
+  fcmServerKey?: string;
+  fcmServiceAccountJson?: string;
+  fcmAutoNotify?: boolean;
   communityMindPlaceholder?: string;
   communityReviewNotice?: string;
   loginTitle?: string;

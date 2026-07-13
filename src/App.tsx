@@ -19,6 +19,7 @@ import { X, Settings, LogOut, FileText, ChevronRight } from 'lucide-react';
 import { getUserBadge } from './lib/badgeUtils';
 import Toast from './components/Toast';
 import { ContactForm } from './components/ContactForm';
+import { registerFcm } from './lib/firebaseFcm';
 
 export default function App() {
   // Global States
@@ -142,6 +143,11 @@ export default function App() {
         }
         linkTag.href = settings.faviconUrl;
       }
+
+      // Initialize FCM Client
+      registerFcm(settings).catch(err => {
+        console.error('[FCM Client Error]:', err);
+      });
     }
   }, [settings]);
 

@@ -9,6 +9,7 @@ import fs from 'fs';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
+import { GoogleAuth } from 'google-auth-library';
 import crypto from 'crypto';
 // Firebase initialization completely removed in favor of Supabase
 
@@ -1023,6 +1024,155 @@ async function triggerOneSignalNotification(newJob: any, host: string) {
   }
 }
 
+async function triggerFcmNotification(title: string, body: string, url: string) {
+  try {
+    const db = readDB();
+    const settings = db.adminSettings || {};
+    const autoNotify = settings.fcmAutoNotify !== false;
+
+    if (!autoNotify) {
+      console.log('[FCM] Auto notify is disabled in settings.');
+      return;
+    }
+
+    const tokens: string[] = db.fcmTokens || [];
+    if (tokens.length === 0) {
+      console.log('[FCM] No registered client tokens to send notification to.');
+      return;
+    }
+
+    const serviceAccountJsonStr = settings.fcmServiceAccountJson;
+    const serverKey = settings.fcmServerKey;
+    const iconUrl = settings.logoUrl || '/favicon.ico';
+
+    // 1. Try FCM HTTP v1 (Modern Authorized API via Service Account)
+    if (serviceAccountJsonStr && serviceAccountJsonStr.trim()) {
+      console.log('[FCM] Attempting notification delivery via modern HTTP v1 with Service Account credentials.');
+      try {
+        const credentials = JSON.parse(serviceAccountJsonStr.trim());
+        const projectId = credentials.project_id;
+        if (!projectId) {
+          throw new Error('Missing project_id inside the provided service account JSON.');
+        }
+
+        const auth = new GoogleAuth({
+          credentials,
+          scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+        });
+        const client = await auth.getClient();
+        const tokenResponse = await client.getAccessToken();
+        const accessToken = tokenResponse.token;
+        if (!accessToken) {
+          throw new Error('Failed to retrieve OAuth2 access token from service account credentials.');
+        }
+
+        console.log(`[FCM HTTP v1] Sending notifications to ${tokens.length} tokens.`);
+        
+        const promises = tokens.map(async (token) => {
+          try {
+            const payload = {
+              message: {
+                token: token,
+                notification: {
+                  title: title,
+                  body: body
+                },
+                webpush: {
+                  notification: {
+                    title: title,
+                    body: body,
+                    icon: iconUrl,
+                    click_action: url
+                  },
+                  fcm_options: {
+                    link: url
+                  }
+                },
+                data: {
+                  url: url,
+                  title: title,
+                  body: body
+                }
+              }
+            };
+
+            const response = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${accessToken}`
+              },
+              body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+              console.warn(`[FCM HTTP v1] Error sending to token ${token.substring(0, 10)}... :`, result);
+            }
+          } catch (tokenErr: any) {
+            console.error(`[FCM HTTP v1] Token delivery failed:`, tokenErr.message || tokenErr);
+          }
+        });
+
+        await Promise.all(promises);
+        console.log('[FCM HTTP v1] Delivery finished.');
+        return; // Success!
+      } catch (serviceAccountErr: any) {
+        console.error('[FCM] Failed using Service Account. Falling back to legacy API if available.', serviceAccountErr.message || serviceAccountErr);
+      }
+    }
+
+    // 2. Fall back to FCM Legacy API (using Server Key)
+    if (serverKey && serverKey.trim()) {
+      console.log('[FCM] Attempting notification delivery via Legacy API using FCM Server Key.');
+      const payload = {
+        registration_ids: tokens,
+        notification: {
+          title: title,
+          body: body,
+          icon: iconUrl,
+          click_action: url
+        },
+        data: {
+          url: url,
+          title: title,
+          body: body
+        },
+        priority: 'high'
+      };
+
+      const response = await fetch('https://fcm.googleapis.com/fcm/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `key=${serverKey}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const result = await response.json();
+      console.log('[FCM Legacy API] Response:', result);
+      return;
+    }
+
+    console.warn('[FCM] No configured FCM credentials found (neither Service Account JSON nor FCM Server Key).');
+  } catch (error: any) {
+    console.error('[FCM Global Error] Failed to trigger notification:', error.message || error);
+  }
+}
+
+app.post('/api/fcm/register', (req, res) => {
+  const { token } = req.body;
+  if (!token) return res.status(400).json({ error: 'Token is required' });
+  const db = readDB();
+  if (!db.fcmTokens) db.fcmTokens = [];
+  if (!db.fcmTokens.includes(token)) {
+    db.fcmTokens.push(token);
+    writeDB(db);
+  }
+  res.json({ success: true });
+});
+
 app.post('/api/jobs', async (req, res) => {
   const db = readDB();
   const newJobId = 'job-' + Date.now();
@@ -1038,6 +1188,16 @@ app.post('/api/jobs', async (req, res) => {
   // Trigger push notification asynchronously in the background
   triggerOneSignalNotification(newJob, req.headers.host || 'localhost:3000').catch(err => {
     console.error('[OneSignal Background Error]:', err);
+  });
+
+  // Trigger FCM push notification asynchronously in the background
+  const fcmTitle = `New Job Alert! 🔔`;
+  const fcmBody = `${newJob.title || 'New Job'} at ${newJob.companyName || 'Company'}`;
+  const protocol = (req.headers.host || 'localhost:3000').includes('localhost') ? 'http' : 'https';
+  const jobTargetUrl = `${protocol}://${req.headers.host || 'localhost:3000'}/job/${newJob.id}`;
+  
+  triggerFcmNotification(fcmTitle, fcmBody, jobTargetUrl).catch(err => {
+    console.error('[FCM Background Error]:', err);
   });
 
   try {
@@ -1227,6 +1387,19 @@ app.post('/api/posts', async (req, res) => {
     console.log('[Supabase Info] Local post created successfully, but Supabase insert was skipped. Details:', err.message || String(err));
   }
 
+  // Trigger FCM Notification asynchronously in the background if the post is immediately Live (e.g. from Admin or postApprovalMode is off)
+  if (newPost.status === 'Live') {
+    const protocol = (req.headers.host || 'localhost:3000').includes('localhost') ? 'http' : 'https';
+    const postTargetUrl = `${protocol}://${req.headers.host || 'localhost:3000'}/community`;
+    const title = `New Post Alert! 💬`;
+    const captionText = newPost.caption && newPost.caption.length > 50 ? `${newPost.caption.slice(0, 50)}...` : (newPost.caption || '');
+    const body = `${newPost.userName || 'Admin'} shared: ${captionText}`;
+    
+    triggerFcmNotification(title, body, postTargetUrl).catch(err => {
+      console.error('[FCM Background Error]:', err);
+    });
+  }
+
   res.json({ success: true, post: newPost });
 });
 
@@ -1251,6 +1424,17 @@ app.put('/api/posts/:id/approve', async (req, res) => {
     } catch (err: any) {
       console.log('[Supabase Info] Post approved locally, but Supabase sync was skipped. Details:', err.message || String(err));
     }
+
+    // Trigger FCM Notification asynchronously in the background when a post is approved
+    const protocol = (req.headers.host || 'localhost:3000').includes('localhost') ? 'http' : 'https';
+    const postTargetUrl = `${protocol}://${req.headers.host || 'localhost:3000'}/community`;
+    const title = `New Post Approved! 💬`;
+    const captionText = post.caption && post.caption.length > 50 ? `${post.caption.slice(0, 50)}...` : (post.caption || '');
+    const body = `${post.userName || 'Someone'} shared: ${captionText}`;
+    
+    triggerFcmNotification(title, body, postTargetUrl).catch(err => {
+      console.error('[FCM Background Error]:', err);
+    });
 
     res.json({ success: true, post });
   } else {
