@@ -19,7 +19,6 @@ import { X, Settings, LogOut, FileText, ChevronRight } from 'lucide-react';
 import { getUserBadge } from './lib/badgeUtils';
 import Toast from './components/Toast';
 import { ContactForm } from './components/ContactForm';
-import { registerFcm } from './lib/firebaseFcm';
 
 export default function App() {
   // Global States
@@ -142,13 +141,6 @@ export default function App() {
           document.head.appendChild(linkTag);
         }
         linkTag.href = settings.faviconUrl;
-      }
-
-      // Initialize FCM Client only if permission is already granted
-      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-        registerFcm(settings).catch(err => {
-          console.error('[FCM Client Error]:', err);
-        });
       }
     }
   }, [settings]);

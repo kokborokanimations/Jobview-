@@ -96,24 +96,17 @@ export default function AdminPanel({
   const [oneSignalAppId, setOneSignalAppId] = useState(settings.oneSignalAppId || '');
   const [oneSignalRestApiKey, setOneSignalRestApiKey] = useState(settings.oneSignalRestApiKey || '');
   const [oneSignalAutoNotify, setOneSignalAutoNotify] = useState(settings.oneSignalAutoNotify !== false);
-  const [fcmConfigJson, setFcmConfigJson] = useState(settings.fcmConfigJson || '');
-  const [fcmVapidKey, setFcmVapidKey] = useState(settings.fcmVapidKey || '');
-  const [fcmServerKey, setFcmServerKey] = useState(settings.fcmServerKey || '');
-  const [fcmServiceAccountJson, setFcmServiceAccountJson] = useState(settings.fcmServiceAccountJson || '');
-  const [fcmAutoNotify, setFcmAutoNotify] = useState(settings.fcmAutoNotify !== false);
   const [communityMindPlaceholder, setCommunityMindPlaceholder] = useState(settings.communityMindPlaceholder || '');
   const [communityReviewNotice, setCommunityReviewNotice] = useState(settings.communityReviewNotice || '');
   const [loginTitle, setLoginTitle] = useState(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
   const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
   const [googleOnly, setGoogleOnly] = useState(settings.googleOnly || false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-  
-  // FCM Diagnostic State
-  const [fcmStatus, setFcmStatus] = useState<{ totalTokens: number; fcmConfigured: boolean; serviceAccountConfigured: boolean; serverKeyConfigured: boolean } | null>(null);
-  const [isLoadingFcmStatus, setIsLoadingFcmStatus] = useState(false);
-  const [isTestingFcm, setIsTestingFcm] = useState(false);
-  const [fcmTestMessage, setFcmTestMessage] = useState('');
-  const [fcmTestSuccess, setFcmTestSuccess] = useState<boolean | null>(null);
+
+  // OneSignal Test State
+  const [isTestingOneSignal, setIsTestingOneSignal] = useState(false);
+  const [oneSignalTestMessage, setOneSignalTestMessage] = useState('');
+  const [oneSignalTestSuccess, setOneSignalTestSuccess] = useState<boolean | null>(null);
 
   // Secret Keys visibility toggle
   const [showSecret, setShowSecret] = useState(false);
@@ -308,11 +301,6 @@ export default function AdminPanel({
     setOneSignalAppId(settings.oneSignalAppId || '');
     setOneSignalRestApiKey(settings.oneSignalRestApiKey || '');
     setOneSignalAutoNotify(settings.oneSignalAutoNotify !== false);
-    setFcmConfigJson(settings.fcmConfigJson || '');
-    setFcmVapidKey(settings.fcmVapidKey || '');
-    setFcmServerKey(settings.fcmServerKey || '');
-    setFcmServiceAccountJson(settings.fcmServiceAccountJson || '');
-    setFcmAutoNotify(settings.fcmAutoNotify !== false);
     setCommunityMindPlaceholder(settings.communityMindPlaceholder || '');
     setCommunityReviewNotice(settings.communityReviewNotice || '');
     setLoginTitle(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
@@ -466,56 +454,39 @@ export default function AdminPanel({
     setEditingPageId(null);
   };
 
-  useEffect(() => {
-    fetchPaymentLogs();
-    fetchFcmStatus();
-  }, []);
-
-  const fetchFcmStatus = async () => {
-    setIsLoadingFcmStatus(true);
+  const handleTestOneSignalNotification = async () => {
+    setIsTestingOneSignal(true);
+    setOneSignalTestMessage('');
+    setOneSignalTestSuccess(null);
     try {
-      const res = await fetch('/api/fcm/status');
-      if (res.ok) {
-        const data = await res.json();
-        setFcmStatus(data);
-      }
-    } catch (e) {
-      console.error('[FCM Status Error]', e);
-    } finally {
-      setIsLoadingFcmStatus(false);
-    }
-  };
-
-  const handleTestFcmNotification = async () => {
-    setIsTestingFcm(true);
-    setFcmTestMessage('');
-    setFcmTestSuccess(null);
-    try {
-      const res = await fetch('/api/fcm/test', {
+      const res = await fetch('/api/onesignal/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: 'Admin Test 🔔',
-          body: 'This is a live test notification sent from your Admin Panel!',
+          title: 'OneSignal Live Test 🔔',
+          body: 'Mubarak ho! Aapka push notification configuration sahi kaam kar raha hai.',
           url: '/community'
         })
       });
       const data = await res.json();
       if (res.ok) {
-        setFcmTestSuccess(true);
-        setFcmTestMessage(data.message || 'Notification triggered successfully!');
-        fetchFcmStatus(); // update token count
+        setOneSignalTestSuccess(true);
+        setOneSignalTestMessage(data.message || 'Notification triggered successfully!');
       } else {
-        setFcmTestSuccess(false);
-        setFcmTestMessage(data.error || 'Failed to trigger test notification.');
+        setOneSignalTestSuccess(false);
+        setOneSignalTestMessage(data.error || 'Failed to trigger test notification.');
       }
     } catch (err: any) {
-      setFcmTestSuccess(false);
-      setFcmTestMessage(err.message || String(err));
+      setOneSignalTestSuccess(false);
+      setOneSignalTestMessage(err.message || String(err));
     } finally {
-      setIsTestingFcm(false);
+      setIsTestingOneSignal(false);
     }
   };
+
+  useEffect(() => {
+    fetchPaymentLogs();
+  }, []);
 
   const fetchPaymentLogs = async () => {
     setIsLoadingLogs(true);
@@ -577,11 +548,6 @@ export default function AdminPanel({
       oneSignalAppId !== (settings.oneSignalAppId || '') ||
       oneSignalRestApiKey !== (settings.oneSignalRestApiKey || '') ||
       oneSignalAutoNotify !== (settings.oneSignalAutoNotify !== false) ||
-      fcmConfigJson !== (settings.fcmConfigJson || '') ||
-      fcmVapidKey !== (settings.fcmVapidKey || '') ||
-      fcmServerKey !== (settings.fcmServerKey || '') ||
-      fcmServiceAccountJson !== (settings.fcmServiceAccountJson || '') ||
-      fcmAutoNotify !== (settings.fcmAutoNotify !== false) ||
       communityMindPlaceholder !== (settings.communityMindPlaceholder || '') ||
       communityReviewNotice !== (settings.communityReviewNotice || '') ||
       loginTitle !== (settings.loginTitle || '') ||
@@ -637,11 +603,6 @@ export default function AdminPanel({
         oneSignalAppId,
         oneSignalRestApiKey,
         oneSignalAutoNotify,
-        fcmConfigJson,
-        fcmVapidKey,
-        fcmServerKey,
-        fcmServiceAccountJson,
-        fcmAutoNotify,
         communityMindPlaceholder,
         communityReviewNotice,
         loginTitle,
@@ -3129,173 +3090,68 @@ ON CONFLICT (id) DO NOTHING;`;
                   <span>{isSavingSettings ? 'Saving...' : 'Save OneSignal Settings'}</span>
                 </button>
               </form>
-            </div>
 
-            {/* Firebase FCM Push Notification Integration Card */}
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-              <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
-                <Bell size={15} className="text-teal-600" />
-                Firebase FCM Notifications
-              </h3>
-
-              <p className="text-[10px] text-gray-500 leading-normal font-semibold">
-                Naye jobs aur community posts par automatic user notifications bhejne ke liye Firebase Cloud Messaging (FCM) configure karein.
-              </p>
-
-              <form onSubmit={handleSaveSettings} className="space-y-4">
-                {/* Auto notify check */}
-                <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-bold text-gray-800 font-display">Auto-Send FCM Notifications</span>
-                    <p className="text-[9px] text-gray-400 font-medium">Naye posts ya jobs live hone par automatic notification trigger karein.</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setFcmAutoNotify(!fcmAutoNotify)}
-                    className="text-teal-600 focus:outline-none"
-                  >
-                    {fcmAutoNotify ? (
-                      <ToggleRight size={32} className="text-teal-600 transition-colors" />
-                    ) : (
-                      <ToggleLeft size={32} className="text-gray-300 transition-colors" />
-                    )}
-                  </button>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">FCM Server Key (Legacy Key)</label>
-                  <input
-                    type={showSecret ? 'text' : 'password'}
-                    placeholder="e.g., AAAAxxxxxx..."
-                    value={fcmServerKey}
-                    onChange={(e) => setFcmServerKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
-                  />
-                  <p className="text-[8px] text-gray-400 mt-1">Firebase Console &gt; Project Settings &gt; Cloud Messaging me Cloud Messaging API (Legacy) ko enable karein aur Server Key paste karein.</p>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">FCM Public VAPID Key</label>
-                  <input
-                    type="text"
-                    placeholder="e.g., BAn... (Web Push certificates Key)"
-                    value={fcmVapidKey}
-                    onChange={(e) => setFcmVapidKey(e.target.value)}
-                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono"
-                  />
-                  <p className="text-[8px] text-gray-400 mt-1">Firebase Console &gt; Cloud Messaging &gt; Web configuration &gt; Web Push certificates me generate key ko use karein.</p>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Firebase Client SDK Config JSON</label>
-                  <textarea
-                    rows={4}
-                    value={fcmConfigJson}
-                    onChange={(e) => setFcmConfigJson(e.target.value)}
-                    placeholder={`e.g.\n{\n  "apiKey": "AIzaSy...",\n  "authDomain": "your-app.firebaseapp.com",\n  "projectId": "your-app",\n  "storageBucket": "your-app.appspot.com",\n  "messagingSenderId": "1234567890",\n  "appId": "1:123:web:abc"\n}`}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono resize-none leading-relaxed"
-                  />
-                  <p className="text-[8px] text-gray-400 mt-0.5">Firebase Project me web app create karke configuration object ko JSON format me copy-paste karein.</p>
-                </div>
-
-                <div>
-                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Firebase Service Account JSON (For Modern HTTP v1 API - Recommended)</label>
-                  <textarea
-                    rows={4}
-                    value={fcmServiceAccountJson}
-                    onChange={(e) => setFcmServiceAccountJson(e.target.value)}
-                    placeholder={`e.g.\n{\n  "type": "service_account",\n  "project_id": "your-project-id",\n  "private_key_id": "...",\n  "private_key": "-----BEGIN PRIVATE KEY-----\\n...",\n  "client_email": "..."\n}`}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono resize-none leading-relaxed"
-                  />
-                  <p className="text-[8px] text-gray-400 mt-0.5">Firebase Console &gt; Project Settings &gt; Service Accounts me generate new private key karke poora content yahan paste karein. Isse modern, secure notifications bhej sakte hain.</p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSavingSettings}
-                  className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
-                    isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                  }`}
-                >
-                  <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
-                  <span>{isSavingSettings ? 'Saving...' : 'Save Firebase FCM Settings'}</span>
-                </button>
-              </form>
-
-              {/* FCM Connection Diagnostics Section */}
+              {/* OneSignal Connection Diagnostics Section */}
               <div className="mt-6 pt-5 border-t border-slate-100 space-y-4">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider font-display flex items-center gap-1.5">
-                    <RefreshCw size={12} className={isLoadingFcmStatus ? 'animate-spin' : ''} />
-                    FCM Connection Diagnostics
+                    <RefreshCw size={12} className={isTestingOneSignal ? 'animate-spin' : ''} />
+                    OneSignal Connection Diagnostics
                   </h4>
-                  <button
-                    type="button"
-                    onClick={fetchFcmStatus}
-                    className="text-[9px] font-bold text-teal-600 hover:text-teal-700 cursor-pointer"
-                  >
-                    Refresh Status
-                  </button>
                 </div>
 
-                {fcmStatus ? (
-                  <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200/50">
-                    <div className="space-y-0.5">
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Registered Devices</span>
-                      <span className="text-xs font-black text-slate-800 font-mono">{fcmStatus.totalTokens} device(s)</span>
-                    </div>
-                    <div className="space-y-0.5">
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">SDK Config</span>
-                      <span className={`text-[10px] font-bold ${fcmStatus.fcmConfigured ? 'text-teal-600' : 'text-rose-500'}`}>
-                        {fcmStatus.fcmConfigured ? '✓ Configured' : '✗ Empty'}
-                      </span>
-                    </div>
-                    <div className="space-y-0.5">
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Service Account</span>
-                      <span className={`text-[10px] font-bold ${fcmStatus.serviceAccountConfigured ? 'text-teal-600' : 'text-amber-500'}`}>
-                        {fcmStatus.serviceAccountConfigured ? '✓ Loaded' : '✗ Missing'}
-                      </span>
-                    </div>
-                    <div className="space-y-0.5">
-                      <span className="text-[9px] text-gray-400 font-bold uppercase block">Legacy Server Key</span>
-                      <span className={`text-[10px] font-bold ${fcmStatus.serverKeyConfigured ? 'text-teal-600' : 'text-gray-400'}`}>
-                        {fcmStatus.serverKeyConfigured ? '✓ Available' : 'Not Set'}
-                      </span>
-                    </div>
+                <div className="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded-xl border border-slate-200/50">
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] text-gray-400 font-bold uppercase block">App ID Configured</span>
+                    <span className={`text-[10px] font-bold ${oneSignalAppId ? 'text-teal-600' : 'text-rose-500'}`}>
+                      {oneSignalAppId ? '✓ Configured' : '✗ Empty'}
+                    </span>
                   </div>
-                ) : (
-                  <p className="text-[10px] text-gray-400 italic">Retrieving FCM database status...</p>
-                )}
+                  <div className="space-y-0.5">
+                    <span className="text-[9px] text-gray-400 font-bold uppercase block">REST API Key</span>
+                    <span className={`text-[10px] font-bold ${oneSignalRestApiKey ? 'text-teal-600' : 'text-rose-500'}`}>
+                      {oneSignalRestApiKey ? '✓ Configured' : '✗ Empty'}
+                    </span>
+                  </div>
+                  <div className="space-y-0.5 col-span-2">
+                    <span className="text-[9px] text-gray-400 font-bold uppercase block">SDK Script Code</span>
+                    <span className={`text-[10px] font-bold ${oneSignalCode ? 'text-teal-600' : 'text-rose-500'}`}>
+                      {oneSignalCode ? '✓ Present (Injected in Head)' : '✗ Missing Script tag'}
+                    </span>
+                  </div>
+                </div>
 
-                <div className="bg-amber-50/50 border border-amber-200/50 p-3 rounded-xl space-y-1.5">
-                  <span className="text-[10px] font-black text-amber-800 uppercase block font-display">Testing FCM Notifications</span>
-                  <p className="text-[9px] text-amber-700 font-medium leading-relaxed">
-                    Test notification bhejne ke liye, pehle aap is app ko direct browser me open karein (AI Studio iframe me nahi), Header me <strong>Bell Icon 🔔</strong> par click karke request <strong>Allow</strong> karein. Tabhi aapka device register hoga.
+                <div className="bg-teal-50/40 border border-teal-200/50 p-3 rounded-xl space-y-1.5">
+                  <span className="text-[10px] font-black text-teal-800 uppercase block font-display">Testing OneSignal Notifications</span>
+                  <p className="text-[9px] text-teal-700 font-medium leading-relaxed">
+                    Test notification send karne ke liye settings ko pehle Save karein, tab Test button click karein. Aap apne phone ya laptop par direct preview open karke, OneSignal prompts me permissions allow karein.
                   </p>
                   
                   <button
                     type="button"
-                    onClick={handleTestFcmNotification}
-                    disabled={isTestingFcm || (fcmStatus && fcmStatus.totalTokens === 0)}
+                    onClick={handleTestOneSignalNotification}
+                    disabled={isTestingOneSignal || !oneSignalAppId || !oneSignalRestApiKey}
                     className={`w-full py-2 rounded-lg text-[10px] font-extrabold font-display border transition-all mt-2 flex items-center justify-center gap-1.5 ${
-                      fcmStatus && fcmStatus.totalTokens === 0
+                      !oneSignalAppId || !oneSignalRestApiKey
                         ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 cursor-pointer shadow-xs'
+                        : 'bg-teal-600 hover:bg-teal-700 text-white border-teal-600 cursor-pointer shadow-xs'
                     }`}
                   >
-                    {isTestingFcm ? 'Sending Test Push...' : 'Send Live Test Push Alert 🔔'}
+                    {isTestingOneSignal ? 'Sending Test Push...' : 'Send Live Test Push Alert 🔔'}
                   </button>
 
-                  {fcmTestMessage && (
+                  {oneSignalTestMessage && (
                     <div className={`p-2 rounded-lg text-[9px] font-mono leading-relaxed mt-2 ${
-                      fcmTestSuccess ? 'bg-teal-50 text-teal-700 border border-teal-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      oneSignalTestSuccess ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-rose-50 text-rose-700 border border-rose-200'
                     }`}>
-                      {fcmTestMessage}
+                      {oneSignalTestMessage}
                     </div>
                   )}
                 </div>
               </div>
             </div>
+
+            {/* FCM settings card removed */}
           </div>
 
           {/* Transactions Table Log */}

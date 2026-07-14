@@ -5,9 +5,8 @@
 
 import { useState, useEffect } from 'react';
 import { User, AdminSettings } from '../types';
-import { Briefcase, LogOut, User as UserIcon, ShieldAlert, Settings, FileText, Bell, BellOff } from 'lucide-react';
+import { Briefcase, LogOut, User as UserIcon, ShieldAlert, Settings, FileText } from 'lucide-react';
 import { getUserBadge } from '../lib/badgeUtils';
-import { registerFcm } from '../lib/firebaseFcm';
 
 interface HeaderProps {
   user: User | null;
@@ -20,52 +19,6 @@ interface HeaderProps {
 
 export default function Header({ user, settings, onLogout, onLoginClick, onUpgradeClick, onChangeTab }: HeaderProps) {
   const isAdmin = user && user.role === 'admin' && user.email.toLowerCase() === 'kokborokanimations@gmail.com';
-  const [permission, setPermission] = useState<NotificationPermission>('default');
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setPermission(Notification.permission);
-    }
-  }, []);
-
-  const handleNotificationClick = async () => {
-    if (typeof window === 'undefined') return;
-    
-    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
-      alert('Aapka browser Notifications support nahi karta hai. Kripya Chrome ya Edge use karein.');
-      return;
-    }
-
-    try {
-      const currentStatus = Notification.permission;
-      if (currentStatus === 'denied') {
-        alert('Notification permission pehle se block hai. Kripya URL bar ke pass lage "Lock 🔒" icon par click karke Permission ko "Allow" karein.');
-        return;
-      }
-
-      const requestedPermission = await Notification.requestPermission();
-      setPermission(requestedPermission);
-
-      if (requestedPermission === 'granted') {
-        // Now register FCM since we have the user gesture and permission
-        const result = await registerFcm(settings);
-        if (result.success) {
-          if (typeof (window as any).showJobSavedToast === 'function') {
-            (window as any).showJobSavedToast('Notifications successfully enabled! 🔔');
-          } else {
-            alert('Notifications successfully enabled! 🔔');
-          }
-        } else {
-          alert(`Notification Registration failed: ${result.error || 'Unknown error'}`);
-        }
-      } else {
-        alert('Notification permission denied by user.');
-      }
-    } catch (err: any) {
-      console.error('[FCM Bell Error]:', err);
-      alert('Notification setup error: ' + (err.message || err));
-    }
-  };
 
   return (
     <header className="sticky top-0 z-40 bg-white border-b border-slate-100 shadow-xs">
@@ -114,29 +67,6 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
 
         {/* User Profile / Action Section */}
         <div className="flex items-center gap-3">
-          {/* Notification Subscription Bell */}
-          {settings.fcmConfigJson && settings.fcmConfigJson.trim() && (
-            <button
-              onClick={handleNotificationClick}
-              title={
-                permission === 'granted'
-                  ? 'Notifications enabled'
-                  : permission === 'denied'
-                  ? 'Notifications blocked'
-                  : 'Enable job alerts'
-              }
-              aria-label="Toggle Push Notifications"
-              className={`w-8 h-8 flex items-center justify-center rounded-full border transition-all hover:scale-110 cursor-pointer ${
-                permission === 'granted'
-                  ? 'bg-teal-50 border-teal-200 text-teal-600 hover:bg-teal-100'
-                  : permission === 'denied'
-                  ? 'bg-rose-50 border-rose-200 text-rose-500 hover:bg-rose-100'
-                  : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-700'
-              }`}
-            >
-              {permission === 'denied' ? <BellOff size={15} /> : <Bell size={15} className={permission === 'default' ? 'animate-bounce' : ''} />}
-            </button>
-          )}
 
           {user ? (
             <div className="flex items-center gap-2.5">
