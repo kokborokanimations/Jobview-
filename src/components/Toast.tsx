@@ -13,8 +13,17 @@ interface ToastMessage {
   type: 'success' | 'warning';
 }
 
+interface SystemPushNotification {
+  id: string;
+  title: string;
+  body: string;
+  icon?: string;
+  time?: string;
+}
+
 export default function Toast() {
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [pushNotifications, setPushNotifications] = useState<SystemPushNotification[]>([]);
   const [jobToast, setJobToast] = useState<{ active: boolean; message: string }>({ active: false, message: '' });
 
   useEffect(() => {
@@ -66,6 +75,24 @@ export default function Toast() {
       }, 1800);
     };
 
+    const handlePushTrigger = (event: CustomEvent<{ title: string; body: string; icon?: string; time?: string }>) => {
+      const id = Math.random().toString(36).substring(2, 9);
+      const newPush: SystemPushNotification = {
+        id,
+        title: event.detail.title || 'Notification',
+        body: event.detail.body || '',
+        icon: event.detail.icon,
+        time: event.detail.time || 'Just now',
+      };
+      
+      setPushNotifications((prev) => [...prev, newPush]);
+
+      // Auto-dismiss after 6 seconds
+      setTimeout(() => {
+        setPushNotifications((prev) => prev.filter((p) => p.id !== id));
+      }, 6000);
+    };
+
     // Attach to window object for pure JS trigger
     window.showSuccessToast = (message?: string) => {
       window.dispatchEvent(
@@ -91,23 +118,38 @@ export default function Toast() {
       );
     };
 
+    window.showNativeNotificationBanner = (title: string, body: string, icon?: string, time?: string) => {
+      window.dispatchEvent(
+        new CustomEvent('show-native-push-notification', {
+          detail: { title, body, icon, time },
+        })
+      );
+    };
+
     window.addEventListener('show-success-toast-notification' as any, handleSuccessTrigger);
     window.addEventListener('show-warning-toast-notification' as any, handleWarningTrigger);
     window.addEventListener('show-job-saved-toast-notification' as any, handleJobSavedTrigger);
+    window.addEventListener('show-native-push-notification' as any, handlePushTrigger);
 
     return () => {
       window.removeEventListener('show-success-toast-notification' as any, handleSuccessTrigger);
       window.removeEventListener('show-warning-toast-notification' as any, handleWarningTrigger);
       window.removeEventListener('show-job-saved-toast-notification' as any, handleJobSavedTrigger);
+      window.removeEventListener('show-native-push-notification' as any, handlePushTrigger);
       if (jobTimeout) clearTimeout(jobTimeout);
       delete (window as any).showSuccessToast;
       delete (window as any).showWarningToast;
       delete (window as any).showJobSavedToast;
+      delete (window as any).showNativeNotificationBanner;
     };
   }, []);
 
   const removeToast = (id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const removePush = (id: string) => {
+    setPushNotifications((prev) => prev.filter((p) => p.id !== id));
   };
 
   return (
@@ -196,6 +238,61 @@ export default function Toast() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 3. Immersive Mobile System-Style Push Notifications (Directly resembles native OS push alerts) */}
+      <div className="fixed top-4 left-4 right-4 md:left-auto md:right-5 md:w-[410px] z-[50000] pointer-events-none flex flex-col gap-3">
+        <AnimatePresence>
+          {pushNotifications.map((push) => (
+            <motion.div
+              key={push.id}
+              initial={{ opacity: 0, y: -70, scale: 0.92 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -30, scale: 0.94, transition: { duration: 0.2 } }}
+              transition={{ type: 'spring', damping: 21, stiffness: 290 }}
+              layout
+              className="pointer-events-auto w-full bg-[#2c2c2c]/96 backdrop-blur-xl border border-neutral-700/35 rounded-[24px] p-3.5 flex items-center gap-3.5 shadow-[0_18px_45px_rgba(0,0,0,0.5)] relative overflow-hidden group select-none text-left"
+            >
+              {/* Native App Icon Left */}
+              <div className="flex-shrink-0 w-11 h-11 rounded-[11px] overflow-hidden bg-gradient-to-tr from-rose-500 via-pink-500 to-amber-400 flex items-center justify-center border border-white/10 shadow-md">
+                {push.icon ? (
+                  <img src={push.icon} className="w-full h-full object-cover" referrerPolicy="no-referrer" alt="" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-tr from-[#FF3040] via-[#E10098] to-[#FF8C00] text-white">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-5.5 h-5.5 text-white stroke-white filter drop-shadow-sm">
+                      <rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect>
+                      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path>
+                      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line>
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              {/* Text Information Column */}
+              <div className="flex-1 min-w-0 pr-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-[13px] font-bold font-sans text-white/95 leading-none tracking-normal">
+                    {push.title}
+                  </span>
+                  <span className="text-[10px] text-white/40 font-medium font-sans whitespace-nowrap">
+                    {push.time}
+                  </span>
+                </div>
+                <p className="text-[12px] text-white/75 font-normal font-sans leading-normal mt-1 line-clamp-2">
+                  {push.body}
+                </p>
+              </div>
+
+              {/* Close Hover Dismiss Button */}
+              <button
+                onClick={() => removePush(push.id)}
+                className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 p-1 bg-white/10 hover:bg-white/20 text-white/50 hover:text-white rounded-full transition-all cursor-pointer"
+              >
+                <X size={9} />
+              </button>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
     </>
   );
 }
@@ -206,5 +303,6 @@ declare global {
     showSuccessToast?: (message?: string) => void;
     showWarningToast?: (message?: string) => void;
     showJobSavedToast?: (message?: string) => void;
+    showNativeNotificationBanner?: (title: string, body: string, icon?: string, time?: string) => void;
   }
 }

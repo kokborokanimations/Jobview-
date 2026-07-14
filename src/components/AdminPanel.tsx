@@ -472,6 +472,16 @@ export default function AdminPanel({
       if (res.ok) {
         setOneSignalTestSuccess(true);
         setOneSignalTestMessage(data.message || 'Notification triggered successfully!');
+        
+        // Show our beautiful native-style UI banner to the user as requested
+        if (typeof window !== 'undefined' && window.showNativeNotificationBanner) {
+          window.showNativeNotificationBanner(
+            'OneSignal Live Test 🔔',
+            'Mubarak ho! Aapka push notification configuration sahi kaam kar raha hai.',
+            undefined,
+            'Just now'
+          );
+        }
       } else {
         setOneSignalTestSuccess(false);
         setOneSignalTestMessage(data.error || 'Failed to trigger test notification.');
@@ -684,6 +694,16 @@ export default function AdminPanel({
 
     // Trigger the minimal centered success popup
     window.showJobSavedToast?.(isEdit ? 'Job Saved!' : 'Job Published!');
+
+    // Trigger a live native push notification preview on screen for newly published jobs
+    if (!isEdit && typeof window !== 'undefined' && window.showNativeNotificationBanner) {
+      window.showNativeNotificationBanner(
+        'New Job Alert! 💼',
+        `${jobTitle || 'Nayi job opening'} - ${jobCompany || 'Hiring company'} par abhi publish hui hai. Check out immediately!`,
+        undefined,
+        'now'
+      );
+    }
 
     // Reset Job creation form
     setJobTitle('');

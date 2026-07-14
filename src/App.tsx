@@ -19,6 +19,7 @@ import { X, Settings, LogOut, FileText, ChevronRight } from 'lucide-react';
 import { getUserBadge } from './lib/badgeUtils';
 import Toast from './components/Toast';
 import { ContactForm } from './components/ContactForm';
+import OneSignalPrompt from './components/OneSignalPrompt';
 
 export default function App() {
   // Global States
@@ -469,6 +470,16 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setPosts(prev => [data.post, ...prev]);
+
+        // Show our beautiful native-style UI banner to the user as requested
+        if (typeof window !== 'undefined' && window.showNativeNotificationBanner) {
+          window.showNativeNotificationBanner(
+            'Community Update! 📢',
+            `${user.name || 'A user'} ne ek naya post share kiya hai: "${postData.caption || 'No caption'}"`,
+            user.avatar || undefined,
+            'now'
+          );
+        }
       }
     } catch (e) {
       console.error(e);
@@ -1068,6 +1079,9 @@ export default function App() {
 
       {/* Global Success/Error Toast notification center */}
       <Toast />
+
+      {/* Beautiful custom OneSignal push notification prompt popup */}
+      <OneSignalPrompt />
 
     </div>
   );
