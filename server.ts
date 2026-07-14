@@ -1044,6 +1044,12 @@ async function triggerOneSignalNotification(newJob: any, host: string) {
 
 // FCM notification endpoints and functions have been completely removed.
 
+app.get('/OneSignalSDKWorker.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.send(`importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js');`);
+});
+
 app.post('/api/onesignal/test', async (req, res) => {
   try {
     const db = readDB();
