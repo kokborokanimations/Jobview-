@@ -38,6 +38,20 @@ interface ResumeData {
     location: string;
     summary: string;
     photo?: string;
+    fatherName?: string;
+    gender?: string;
+    dob?: string;
+    maritalStatus?: string;
+    religion?: string;
+    nationality?: string;
+    languagesKnown?: string;
+    teachingSkills?: string;
+    computerKnowledge?: string;
+    address?: string;
+    declaration?: string;
+    place?: string;
+    date?: string;
+    signature?: string;
   };
   experience: {
     id: string;
@@ -172,10 +186,107 @@ const DEFAULT_RESUME_DATA: ResumeData = {
   ]
 };
 
-type TemplateType = 'donna-elegant' | 'lorna-minimalist' | 'olivia-modern';
+type TemplateType = 'donna-elegant' | 'lorna-minimalist' | 'olivia-modern' | 'indian-biodata' | 'classic-blue-biodata';
 
 // Persistent cache for converted oklch stylesheets to prevent freezing during multiple PDF downloads
 const patchedStylesCache = new Map<HTMLStyleElement, string>();
+
+interface InlineEditProps {
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+  className?: string;
+  multiline?: boolean;
+  children?: React.ReactNode;
+}
+
+function InlineEdit({
+  value,
+  onChange,
+  placeholder = '',
+  className = '',
+  multiline = false,
+  children
+}: InlineEditProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(value);
+  const inputRef = React.useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (isEditing) {
+      setTempValue(value);
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          if (!multiline && inputRef.current instanceof HTMLInputElement) {
+            inputRef.current.select();
+          }
+        }
+      }, 30);
+    }
+  }, [isEditing]);
+
+  const handleBlur = () => {
+    setIsEditing(false);
+    onChange(tempValue);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !multiline) {
+      setIsEditing(false);
+      onChange(tempValue);
+    }
+    if (e.key === 'Escape') {
+      setTempValue(value);
+      setIsEditing(false);
+    }
+  };
+
+  if (isEditing) {
+    if (multiline) {
+      return (
+        <textarea
+          ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+          value={tempValue}
+          onChange={(e) => setTempValue(e.target.value)}
+          onBlur={handleBlur}
+          onKeyDown={handleKeyDown}
+          className={`w-full bg-amber-50/70 text-slate-950 border border-amber-400 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans text-[11px] font-normal leading-normal`}
+          placeholder={placeholder}
+          rows={3}
+        />
+      );
+    }
+    return (
+      <input
+        ref={inputRef as React.RefObject<HTMLInputElement>}
+        type="text"
+        value={tempValue}
+        onChange={(e) => setTempValue(e.target.value)}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        className={`w-full bg-amber-50/70 text-slate-950 border border-amber-400 rounded px-1.5 py-0.5 focus:outline-none focus:ring-1 focus:ring-amber-500 font-sans text-[11px] font-normal leading-normal`}
+        placeholder={placeholder}
+      />
+    );
+  }
+
+  return (
+    <span
+      onClick={() => setIsEditing(true)}
+      className={`cursor-pointer hover:bg-amber-100/50 hover:ring-1 hover:ring-amber-400/50 rounded px-1 py-0.5 transition-all inline-block group relative ${className}`}
+      title="Click to edit directly"
+    >
+      {children ? children : (value || <span className="text-slate-400 italic font-normal">{placeholder || 'Click to enter...'}</span>)}
+      {/* Small Edit icon badge on hover */}
+      <span className="absolute -top-3 -right-3 bg-amber-600 text-white rounded-full p-0.5 shadow-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 hidden sm:inline-flex items-center justify-center">
+        <svg xmlns="http://www.w3.org/2000/svg" width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+        </svg>
+      </span>
+    </span>
+  );
+}
 
 export default function ResumeBuilder({ user, settings, onLoginTrigger }: ResumeBuilderProps) {
   // Persistence key
@@ -200,7 +311,7 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     return data;
   });
 
-  const [activeTemplate, setActiveTemplate] = useState<TemplateType>('donna-elegant');
+  const [activeTemplate, setActiveTemplate] = useState<TemplateType>('indian-biodata');
   const [zoomScale, setZoomScale] = useState<number>(100);
   const [activeMode, setActiveMode] = useState<'edit' | 'preview'>('edit'); // Mode toggle for mobile
   const [copied, setCopied] = useState(false);
@@ -216,6 +327,7 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
   const [saveTitle, setSaveTitle] = useState('');
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showSavedList, setShowSavedList] = useState(false);
+  const [showPdfGuideModal, setShowPdfGuideModal] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // Sync saved resumes list with localStorage
@@ -239,7 +351,7 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
               year: 'numeric'
             }),
             data: row.data,
-            template: row.template || 'donna-elegant'
+            template: row.template || 'indian-biodata'
           }));
           setSavedResumes(formatted);
         } else {
@@ -628,6 +740,11 @@ ${(resume.references || []).map(ref => `
       const previousZoom = zoomScale;
       setZoomScale(100);
 
+      // Temporarily override resume-print-area properties to match exact standard A4 layout dimensions
+      element.style.setProperty('padding', '0px', 'important');
+      element.style.setProperty('width', '794px', 'important');
+      element.style.setProperty('max-width', '794px', 'important');
+
       // Arrays to store original style states for perfect restoration
       const restoredStyles: { element: HTMLElement; originalContent?: string; href?: string }[] = [];
       const originalInlineStyles = new Map<Element, string>();
@@ -726,6 +843,11 @@ ${(resume.references || []).map(ref => `
       // Cleanup and restore function
       const restoreStyles = () => {
         try {
+          // Restore original resume-print-area properties
+          element.style.removeProperty('padding');
+          element.style.removeProperty('width');
+          element.style.removeProperty('max-width');
+
           // Remove temp disable transitions stylesheet
           const disableStyle = document.getElementById('temp-disable-transitions');
           if (disableStyle) disableStyle.remove();
@@ -1037,7 +1159,7 @@ ${(resume.references || []).map(ref => `
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
                 <span>👤</span>
-                Personal Details
+                Personal Details (Bio-Data)
               </h2>
             </div>
 
@@ -1086,94 +1208,218 @@ ${(resume.references || []).map(ref => `
                 </div>
               </div>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Full Name</label>
+
+            {/* Traditional Aligned Key-Value Form Fields */}
+            <div className="space-y-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Full Name</span>
                 <input
                   type="text"
                   value={resume.personal.fullName}
                   onChange={(e) => handlePersonalChange('fullName', e.target.value)}
-                  placeholder="Shyamchan Roy"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
+                  placeholder="Manasa Vaddadhi"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Professional Title</label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Father's Name</span>
                 <input
                   type="text"
-                  value={resume.personal.title}
-                  onChange={(e) => handlePersonalChange('title', e.target.value)}
-                  placeholder="Senior React Developer"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
+                  value={resume.personal.fatherName ?? ''}
+                  onChange={(e) => handlePersonalChange('fatherName', e.target.value)}
+                  placeholder="Raghuram"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Email Address</label>
-                <input
-                  type="email"
-                  value={resume.personal.email}
-                  onChange={(e) => handlePersonalChange('email', e.target.value)}
-                  placeholder="shyamchan25@gmail.com"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Phone Number</label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Mobile</span>
                 <input
                   type="text"
                   value={resume.personal.phone}
                   onChange={(e) => handlePersonalChange('phone', e.target.value)}
-                  placeholder="+91 98765 43210"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
+                  placeholder="9425XXXX70"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Portfolio or Website</label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Email ID</span>
                 <input
-                  type="text"
-                  value={resume.personal.website}
-                  onChange={(e) => handlePersonalChange('website', e.target.value)}
-                  placeholder="https://shyamchan.dev"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
+                  type="email"
+                  value={resume.personal.email}
+                  onChange={(e) => handlePersonalChange('email', e.target.value)}
+                  placeholder="manasavdxx@gmail.com"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
                 />
               </div>
-              <div>
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mb-1">Location</label>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Gender</span>
                 <input
                   type="text"
-                  value={resume.personal.location}
-                  onChange={(e) => handlePersonalChange('location', e.target.value)}
-                  placeholder="Kolkata, India"
-                  className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
+                  value={resume.personal.gender ?? ''}
+                  onChange={(e) => handlePersonalChange('gender', e.target.value)}
+                  placeholder="Female"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Date of Birth</span>
+                <input
+                  type="text"
+                  value={resume.personal.dob ?? ''}
+                  onChange={(e) => handlePersonalChange('dob', e.target.value)}
+                  placeholder="15 March 1999"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Marital Status</span>
+                <input
+                  type="text"
+                  value={resume.personal.maritalStatus ?? ''}
+                  onChange={(e) => handlePersonalChange('maritalStatus', e.target.value)}
+                  placeholder="Married"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Religion</span>
+                <input
+                  type="text"
+                  value={resume.personal.religion ?? ''}
+                  onChange={(e) => handlePersonalChange('religion', e.target.value)}
+                  placeholder="Hindu"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Nationality</span>
+                <input
+                  type="text"
+                  value={resume.personal.nationality ?? ''}
+                  onChange={(e) => handlePersonalChange('nationality', e.target.value)}
+                  placeholder="India"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Languages Known</span>
+                <input
+                  type="text"
+                  value={resume.personal.languagesKnown ?? ''}
+                  onChange={(e) => handlePersonalChange('languagesKnown', e.target.value)}
+                  placeholder="English, Hindi & Telugu"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Computer Knowledge</span>
+                <input
+                  type="text"
+                  value={resume.personal.computerKnowledge ?? ''}
+                  onChange={(e) => handlePersonalChange('computerKnowledge', e.target.value)}
+                  placeholder="MS Office, PowerPoint"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-start pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700 pt-1">Permanent Address</span>
+                <textarea
+                  value={resume.personal.address ?? ''}
+                  onChange={(e) => handlePersonalChange('address', e.target.value)}
+                  placeholder="PM Palem, Madhurawada, Visakhapatnam 530045"
+                  rows={2}
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white resize-none"
                 />
               </div>
             </div>
 
-            {/* Summary with AI enhancer */}
-            <div className="space-y-1.5 pt-2">
-              <div className="flex items-center justify-between">
-                <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Professional Summary</label>
-                <button
-                  onClick={() => callGeminiEnhance('summary', resume.personal.summary)}
-                  disabled={aiLoading !== null}
-                  className="text-[9px] font-extrabold text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 bg-teal-50/50 hover:bg-teal-50 px-2 py-1 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {aiLoading === 'summary' ? (
-                    <div className="w-2.5 h-2.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                  ) : (
-                    <Sparkles size={10} className="stroke-[2.5]" />
-                  )}
-                  <span>AI Polish</span>
-                </button>
+            {/* Section: Declaration Details */}
+            <div className="border-t border-slate-100 pt-4 mt-4 space-y-3.5">
+              <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Declaration Details</span>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-start pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700 pt-1">Declaration Text</span>
+                <textarea
+                  value={resume.personal.declaration ?? ''}
+                  onChange={(e) => handlePersonalChange('declaration', e.target.value)}
+                  placeholder="I do hereby declare that the above information is true to the best of my knowledge"
+                  rows={2}
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white resize-none"
+                />
               </div>
-              <textarea
-                value={resume.personal.summary}
-                onChange={(e) => handlePersonalChange('summary', e.target.value)}
-                placeholder="Brief summary of your professional expertise..."
-                rows={4}
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800 leading-relaxed"
-              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Place</span>
+                <input
+                  type="text"
+                  value={resume.personal.place ?? ''}
+                  onChange={(e) => handlePersonalChange('place', e.target.value)}
+                  placeholder="Visakhapatnam"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-1.5 items-center pb-2 border-b border-slate-50">
+                <span className="text-xs font-bold text-slate-700">Date</span>
+                <input
+                  type="text"
+                  value={resume.personal.date ?? ''}
+                  onChange={(e) => handlePersonalChange('date', e.target.value)}
+                  placeholder="07 Feb 2026"
+                  className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-xl focus:border-amber-500 focus:outline-none transition-all font-medium text-slate-800 bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-[140px_1fr] gap-x-4 gap-y-2 items-center pt-1.5">
+                <span className="text-xs font-bold text-slate-700">Signature</span>
+                <div className="flex items-center gap-4 flex-wrap">
+                  {resume.personal.signature ? (
+                    <div className="relative group/form-sig w-28 h-12 border border-slate-200 bg-slate-50 rounded-xl flex items-center justify-center p-1 overflow-hidden shadow-sm">
+                      <img src={resume.personal.signature} alt="Signature" className="max-h-full max-w-full object-contain" />
+                      <button
+                        type="button"
+                        onClick={() => handlePersonalChange('signature', '')}
+                        className="absolute top-1 right-1 p-1 bg-white hover:bg-rose-50 text-rose-500 rounded-lg shadow-sm border border-slate-100 transition-all cursor-pointer"
+                        title="Remove Signature"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label className="px-3.5 py-2 bg-slate-950 hover:bg-slate-850 text-white rounded-xl text-[10px] font-black uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1 shadow-sm">
+                      <Plus size={12} className="stroke-[2.5]" />
+                      <span>Upload Signature Image</span>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              handlePersonalChange('signature', reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="hidden" 
+                      />
+                    </label>
+                  )}
+                  <p className="text-[9.5px] text-slate-400 font-medium">Attach an image of your handwritten signature (PNG/JPG).</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1393,212 +1639,7 @@ ${(resume.references || []).map(ref => `
             )}
           </div>
 
-          {/* Section: Skills */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
-                <Award size={14} className="text-teal-600" />
-                Technical Skills
-              </h2>
-              <button
-                onClick={() => callGeminiEnhance('skills', resume.skills)}
-                disabled={aiLoading !== null}
-                className="text-[9px] font-extrabold text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 bg-teal-50/50 hover:bg-teal-50 px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
-              >
-                {aiLoading === 'skills' ? (
-                  <div className="w-2.5 h-2.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Sparkles size={10} className="stroke-[2.5]" />
-                )}
-                <span>Refine Keywords</span>
-              </button>
-            </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Skills (Comma-separated)</label>
-              <textarea
-                value={resume.skills}
-                onChange={(e) => setResume(prev => ({ ...prev, skills: e.target.value }))}
-                placeholder="React, TypeScript, CSS, UI Design..."
-                rows={3}
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800 leading-relaxed"
-              />
-              <p className="text-[9px] text-slate-400">Separate each skill keyword with a comma so they render as gorgeous tags.</p>
-            </div>
-
-            <div className="space-y-1.5 pt-2 border-t border-slate-100">
-              <label className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Languages (Comma-separated)</label>
-              <input
-                type="text"
-                value={resume.languages || ''}
-                onChange={(e) => setResume(prev => ({ ...prev, languages: e.target.value }))}
-                placeholder="English (Fluent), Spanish, French..."
-                className="w-full px-3 py-2 text-xs border border-slate-200 rounded-xl focus:border-teal-500 focus:outline-none transition-all font-medium text-slate-800"
-              />
-              <p className="text-[9px] text-slate-400">List the languages you speak, separated by commas.</p>
-            </div>
-          </div>
-
-          {/* Section: Projects */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
-                <Terminal size={14} className="text-teal-600" />
-                Personal Projects
-              </h2>
-              <button
-                onClick={addProject}
-                className="text-[9px] font-black uppercase tracking-wider text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 px-2.5 py-1.5 rounded-lg bg-teal-50/20 hover:bg-teal-50/50 transition-all cursor-pointer"
-              >
-                <Plus size={11} className="stroke-[3]" />
-                <span>Add Project</span>
-              </button>
-            </div>
-
-            {resume.projects.length === 0 ? (
-              <p className="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">No projects added yet.</p>
-            ) : (
-              <div className="space-y-4 divide-y divide-slate-100">
-                {resume.projects.map((proj, idx) => (
-                  <div key={proj.id} className={`space-y-3 ${idx > 0 ? 'pt-4' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Project #{idx + 1}</span>
-                      <button
-                        onClick={() => deleteProject(proj.id)}
-                        className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Project Name</label>
-                        <input
-                          type="text"
-                          value={proj.name}
-                          onChange={(e) => handleProjectChange(proj.id, 'name', e.target.value)}
-                          placeholder="e.g. DeFi Payment Gateway"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Technologies Used</label>
-                        <input
-                          type="text"
-                          value={proj.technologies}
-                          onChange={(e) => handleProjectChange(proj.id, 'technologies', e.target.value)}
-                          placeholder="e.g. Solidity, React, Ethers"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div className="sm:col-span-2">
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Project Link / URL</label>
-                        <input
-                          type="text"
-                          value={proj.link}
-                          onChange={(e) => handleProjectChange(proj.id, 'link', e.target.value)}
-                          placeholder="e.g. https://github.com/myusername/myproject"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Brief Description</label>
-                      <textarea
-                        value={proj.description}
-                        onChange={(e) => handleProjectChange(proj.id, 'description', e.target.value)}
-                        placeholder="Explain what you built and the core challenges you solved..."
-                        rows={2}
-                        className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800 leading-relaxed"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Section: References */}
-          <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-xs space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
-                <span>🤝</span>
-                Professional References
-              </h2>
-              <button
-                onClick={addReference}
-                className="text-[9px] font-black uppercase tracking-wider text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 px-2.5 py-1.5 rounded-lg bg-teal-50/20 hover:bg-teal-50/50 transition-all cursor-pointer"
-              >
-                <Plus size={11} className="stroke-[3]" />
-                <span>Add Reference</span>
-              </button>
-            </div>
-
-            {(!resume.references || resume.references.length === 0) ? (
-              <p className="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">No references added yet.</p>
-            ) : (
-              <div className="space-y-4 divide-y divide-slate-100">
-                {resume.references.map((ref, idx) => (
-                  <div key={ref.id} className={`space-y-3 ${idx > 0 ? 'pt-4' : ''}`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Reference #{idx + 1}</span>
-                      <button
-                        onClick={() => deleteReference(ref.id)}
-                        className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Reference Name</label>
-                        <input
-                          type="text"
-                          value={ref.name}
-                          onChange={(e) => handleReferenceChange(ref.id, 'name', e.target.value)}
-                          placeholder="e.g. Estelle Darcy"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Company & Role</label>
-                        <input
-                          type="text"
-                          value={ref.position}
-                          onChange={(e) => handleReferenceChange(ref.id, 'position', e.target.value)}
-                          placeholder="e.g. Wardiere Inc. / CEO"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Phone Number</label>
-                        <input
-                          type="text"
-                          value={ref.phone}
-                          onChange={(e) => handleReferenceChange(ref.id, 'phone', e.target.value)}
-                          placeholder="e.g. +123-456-7890"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Email Address</label>
-                        <input
-                          type="email"
-                          value={ref.email}
-                          onChange={(e) => handleReferenceChange(ref.id, 'email', e.target.value)}
-                          placeholder="e.g. hello@reallygreatsite.com"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Right Column: Style Selector & Live Preview Sheet */}
@@ -1607,65 +1648,45 @@ ${(resume.references || []).map(ref => `
           {/* Template Style Switcher */}
           <div className="bg-white border border-slate-200/80 rounded-2xl p-4 shadow-xs print-hide">
             <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400 mb-3">Choose Sheet Design Style</span>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 onClick={() => {
-                  setActiveTemplate('donna-elegant');
+                  setActiveTemplate('indian-biodata');
                   if (!resume.personal.photo) {
-                    handlePersonalChange('photo', 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=400');
+                    handlePersonalChange('photo', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400');
                   }
                 }}
                 className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
-                  activeTemplate === 'donna-elegant'
-                    ? 'border-teal-600 bg-teal-50/50 text-teal-800 shadow-xs'
+                  activeTemplate === 'indian-biodata'
+                    ? 'border-amber-500 bg-amber-50/50 text-amber-900 shadow-xs'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                 }`}
               >
                 <div>
-                  <span className="block text-xs font-black">Donna Elegant</span>
-                  <span className="block text-[9px] font-medium text-teal-600">Premium split layout style</span>
+                  <span className="block text-xs font-black">Indian Bio Data (Amber)</span>
+                  <span className="block text-[9px] font-medium text-amber-600">Traditional aligned key-value</span>
                 </div>
-                {activeTemplate === 'donna-elegant' && <div className="w-2.5 h-2.5 rounded-full bg-teal-600 shrink-0 ml-2" />}
+                {activeTemplate === 'indian-biodata' && <div className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 ml-2" />}
               </button>
 
               <button
                 onClick={() => {
-                  setActiveTemplate('lorna-minimalist');
+                  setActiveTemplate('classic-blue-biodata');
                   if (!resume.personal.photo) {
-                    handlePersonalChange('photo', 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400');
+                    handlePersonalChange('photo', 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400');
                   }
                 }}
                 className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
-                  activeTemplate === 'lorna-minimalist'
-                    ? 'border-slate-900 bg-slate-50 text-slate-900 shadow-xs'
+                  activeTemplate === 'classic-blue-biodata'
+                    ? 'border-blue-500 bg-blue-50/50 text-blue-900 shadow-xs'
                     : 'border-slate-200 hover:bg-slate-50 text-slate-700'
                 }`}
               >
                 <div>
-                  <span className="block text-xs font-black">Lorna Minimalist</span>
-                  <span className="block text-[9px] font-medium text-slate-500">Elegant centered circle layout</span>
+                  <span className="block text-xs font-black">Classic Blue Bio Data</span>
+                  <span className="block text-[9px] font-medium text-blue-600">Top blue header band with aligned grid</span>
                 </div>
-                {activeTemplate === 'lorna-minimalist' && <div className="w-2.5 h-2.5 rounded-full bg-slate-900 shrink-0 ml-2" />}
-              </button>
-
-              <button
-                onClick={() => {
-                  setActiveTemplate('olivia-modern');
-                  if (!resume.personal.photo) {
-                    handlePersonalChange('photo', 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=400');
-                  }
-                }}
-                className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all text-left flex items-center justify-between cursor-pointer ${
-                  activeTemplate === 'olivia-modern'
-                    ? 'border-amber-700 bg-amber-50/55 text-amber-900 shadow-xs'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-700'
-                }`}
-              >
-                <div>
-                  <span className="block text-xs font-black">Olivia Modern</span>
-                  <span className="block text-[9px] font-medium text-amber-700">Modern grey sidebar style</span>
-                </div>
-                {activeTemplate === 'olivia-modern' && <div className="w-2.5 h-2.5 rounded-full bg-amber-700 shrink-0 ml-2" />}
+                {activeTemplate === 'classic-blue-biodata' && <div className="w-2.5 h-2.5 rounded-full bg-blue-500 shrink-0 ml-2" />}
               </button>
             </div>
           </div>
@@ -1723,23 +1744,19 @@ ${(resume.references || []).map(ref => `
                   {/* Integrated Download PDF Button */}
                   <button
                     type="button"
-                    onClick={downloadPDF}
+                    onClick={() => setShowPdfGuideModal(true)}
                     disabled={pdfDownloading}
-                    title={pdfDownloading ? 'Downloading PDF...' : 'Download PDF'}
-                    className={`p-1 px-2.5 hover:bg-teal-600 hover:text-white dark:hover:bg-teal-600 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-current transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
-                      pdfDownloading ? 'cursor-not-allowed opacity-80 animate-pulse' : ''
-                    }`}
+                    title="Download PDF Options"
+                    className="p-1 px-2.5 hover:bg-teal-600 hover:text-white dark:hover:bg-teal-600 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400 transition-all cursor-pointer flex items-center gap-1 shrink-0"
                   >
-                    {pdfDownloading ? (
-                      <RefreshCw size={13} className="animate-spin" />
-                    ) : (
-                      <Download size={13} className="stroke-[2.5]" />
-                    )}
+                    <Download size={13} className="stroke-[2.5]" />
                     <span className="text-[10px] font-black uppercase tracking-wider">PDF</span>
                   </button>
                 </div>
               </div>
             </div>
+
+
 
             {/* Scroll wrapper */}
             <div className="w-full overflow-x-auto pb-2 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-slate-200 print:overflow-visible print:pb-0">
@@ -1755,603 +1772,755 @@ ${(resume.references || []).map(ref => `
                     id="resume-print-area" 
                     className="w-full p-8 bg-white font-sans transition-all duration-300 print:p-0"
                   >
-            {/* Donna Elegant Template */}
-            {activeTemplate === 'donna-elegant' && (
-              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-6 print:p-0">
-                {/* Header layout: Donna Elegant Custom Crescent-Masked Banner */}
-                <div className="relative flex items-stretch h-[140px] w-full mb-8 select-none print:mb-6">
-                  {/* Background light blue-gray banner */}
-                  <div className="absolute right-0 top-0 bottom-0 left-[18%] bg-[#dae1e7] rounded-r-2xl z-0 print:rounded-none" />
-                  
-                  {/* Elegant Crescent Cutting Circle (White Mask) */}
-                  <div className="absolute left-[8%] top-1/2 -translate-y-1/2 w-36 h-36 rounded-full bg-white z-10 shadow-xs flex items-center justify-center">
-                    {/* Inner Circular Portrait */}
-                    <div className="w-28 h-28 rounded-full overflow-hidden bg-slate-100 border border-slate-200">
-                      {resume.personal.photo ? (
-                        <img src={resume.personal.photo} alt="Profile" className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-slate-200 text-slate-400 font-bold text-2xl">👤</div>
-                      )}
+            {/* Indian Bio Data Template */}
+            {activeTemplate === 'indian-biodata' && (
+              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-8 print:p-0">
+                {/* Centered Heading */}
+                <div className="text-center mb-8 select-none">
+                  <h1 className="text-3xl font-black tracking-[0.12em] text-slate-900 uppercase border-b-2 border-slate-900 pb-1.5 inline-block font-serif">
+                    BIO DATA
+                  </h1>
+                </div>
+
+                {/* Top Section: Aligned Details + Photo */}
+                <div className="flex justify-between items-start gap-6 mb-8">
+                  {/* Key-Value Details */}
+                  <div className="flex-1 grid grid-cols-[180px_20px_1fr] gap-y-2.5 text-[12px] text-slate-800 font-medium font-sans">
+                    <div className="font-bold text-slate-900 font-sans">Name</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.fullName}
+                        onChange={(val) => handlePersonalChange('fullName', val)}
+                        placeholder="Manasa Vaddadhi"
+                        className="font-bold text-slate-950 w-full font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Father's Name</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.fatherName ?? 'Raghuram'}
+                        onChange={(val) => handlePersonalChange('fatherName', val)}
+                        placeholder="Raghuram"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Mobile</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.phone}
+                        onChange={(val) => handlePersonalChange('phone', val)}
+                        placeholder="9425XXXX70"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Email ID</div>
+                    <div>:</div>
+                    <div className="break-all font-sans">
+                      <InlineEdit
+                        value={resume.personal.email}
+                        onChange={(val) => handlePersonalChange('email', val)}
+                        placeholder="manasavdxx@gmail.com"
+                        className="w-full text-slate-800 break-all font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Gender</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.gender ?? 'Female'}
+                        onChange={(val) => handlePersonalChange('gender', val)}
+                        placeholder="Female"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Date of Birth</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.dob ?? '15 March 1999'}
+                        onChange={(val) => handlePersonalChange('dob', val)}
+                        placeholder="15 March 1999"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Marital Status</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.maritalStatus ?? 'Married'}
+                        onChange={(val) => handlePersonalChange('maritalStatus', val)}
+                        placeholder="Married"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Religion</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.religion ?? 'Hindu'}
+                        onChange={(val) => handlePersonalChange('religion', val)}
+                        placeholder="Hindu"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Nationality</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.nationality ?? 'India'}
+                        onChange={(val) => handlePersonalChange('nationality', val)}
+                        placeholder="India"
+                        className="w-full text-slate-800 font-sans"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-900 font-sans">Languages Known</div>
+                    <div>:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.languagesKnown ?? 'English, Hindi & Telugu'}
+                        onChange={(val) => handlePersonalChange('languagesKnown', val)}
+                        placeholder="English, Hindi & Telugu"
+                        className="w-full text-slate-800 font-sans"
+                      />
                     </div>
                   </div>
 
-                  {/* Name & Title text block inside the banner */}
-                  <div className="relative z-20 ml-[32%] flex flex-col justify-center pl-4 py-4">
-                    <h1 className="text-2xl font-black tracking-[0.15em] text-slate-900 leading-none uppercase">
-                      {resume.personal.fullName || 'DONNA STROUPE'}
-                    </h1>
-                    <p className="text-[11.5px] font-bold tracking-widest text-slate-600 uppercase mt-2.5">
-                      {resume.personal.title || 'Sales Representative'}
+                  {/* Photo Frame */}
+                  <div className="w-[125px] h-[155px] shrink-0 border-2 border-slate-300 bg-amber-50/10 p-1 rounded shadow-sm flex items-center justify-center relative select-none">
+                    {resume.personal.photo ? (
+                      <img 
+                        src={resume.personal.photo} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover animate-fade-in rounded-xs" 
+                        referrerPolicy="no-referrer" 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-350 font-bold text-3xl font-sans">👤</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Education Section */}
+                <div className="mb-6">
+                  <h3 className="text-[13px] font-bold text-slate-900 mb-2 font-sans">Education:</h3>
+                  <table className="w-full border-collapse border border-slate-300 text-[11px] text-slate-800">
+                    <thead>
+                      <tr className="bg-amber-300/95 font-bold text-slate-900">
+                        <th className="border border-slate-300 px-3 py-1.5 text-left w-[30%]">Qualification</th>
+                        <th className="border border-slate-300 px-3 py-1.5 text-center w-[15%]">Year</th>
+                        <th className="border border-slate-300 px-3 py-1.5 text-left w-[40%]">Institution Name</th>
+                        <th className="border border-slate-300 px-3 py-1.5 text-center w-[15%]">Marks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resume.education.map((edu) => (
+                        <tr key={edu.id} className="relative group/edu">
+                          <td className="border border-slate-300 px-3 py-1.5">
+                            <InlineEdit
+                              value={edu.degree}
+                              onChange={(val) => handleEducationChange(edu.id, 'degree', val)}
+                              placeholder="B.Sc (Mathematics & Physics)"
+                              className="w-full font-medium font-sans"
+                            />
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5 text-center">
+                            <InlineEdit
+                              value={edu.endDate}
+                              onChange={(val) => handleEducationChange(edu.id, 'endDate', val)}
+                              placeholder="2020"
+                              className="w-full text-center font-sans"
+                            />
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5">
+                            <InlineEdit
+                              value={edu.school}
+                              onChange={(val) => handleEducationChange(edu.id, 'school', val)}
+                              placeholder="Andhra University"
+                              className="w-full font-sans"
+                            />
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5 text-center font-semibold">
+                            <InlineEdit
+                              value={edu.description}
+                              onChange={(val) => handleEducationChange(edu.id, 'description', val)}
+                              placeholder="73%"
+                              className="w-full text-center font-sans"
+                            />
+                          </td>
+                          {/* Row delete button */}
+                          <td className="absolute -right-6 top-1/2 -translate-y-1/2 select-none print:hidden border-none p-0">
+                            <button
+                              onClick={() => deleteEducation(edu.id)}
+                              className="p-1 bg-red-50 hover:bg-red-100 text-red-600 rounded opacity-0 group-hover/edu:opacity-100 transition-opacity cursor-pointer"
+                              title="Delete qualification row"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button
+                    onClick={addEducation}
+                    className="mt-2 text-[9.5px] font-extrabold text-teal-800 hover:text-teal-950 flex items-center gap-1 cursor-pointer select-none print:hidden opacity-50 hover:opacity-100 transition-opacity"
+                  >
+                    <Plus size={11} /> Add Education
+                  </button>
+                </div>
+
+                {/* Work Experience Section */}
+                {resume.experience.length > 0 && (
+                  <div className="mb-6">
+                    <h3 className="text-[13px] font-bold text-slate-900 mb-2 font-sans">Work Experience:</h3>
+                    <table className="w-full border-collapse border border-slate-300 text-[11px] text-slate-800 font-sans">
+                      <thead>
+                        <tr className="bg-amber-300/95 font-bold text-slate-900">
+                          <th className="border border-slate-300 px-3 py-1.5 text-left w-[25%]">Designation</th>
+                          <th className="border border-slate-300 px-3 py-1.5 text-left w-[25%]">Organization</th>
+                          <th className="border border-slate-300 px-3 py-1.5 text-center w-[20%]">Job Period</th>
+                          <th className="border border-slate-300 px-3 py-1.5 text-left w-[30%]">Responsibilities</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {resume.experience.map((exp) => (
+                          <tr key={exp.id} className="relative group/exp">
+                            <td className="border border-slate-300 px-3 py-1.5">
+                              <InlineEdit
+                                value={exp.position}
+                                onChange={(val) => handleExperienceChange(exp.id, 'position', val)}
+                                placeholder="High School Teacher"
+                                className="w-full font-medium font-sans"
+                              />
+                            </td>
+                            <td className="border border-slate-300 px-3 py-1.5">
+                              <InlineEdit
+                                value={exp.company}
+                                onChange={(val) => handleExperienceChange(exp.id, 'company', val)}
+                                placeholder="Sri Venkateswara High School"
+                                className="w-full font-sans"
+                              />
+                            </td>
+                            <td className="border border-slate-300 px-3 py-1.5 text-center">
+                              <div className="flex flex-col items-center justify-center gap-0.5">
+                                <InlineEdit
+                                  value={exp.startDate}
+                                  onChange={(val) => handleExperienceChange(exp.id, 'startDate', val)}
+                                  placeholder="01 Mar 2023"
+                                  className="w-full text-center font-sans"
+                                />
+                                <span className="text-[9px] text-slate-400">to</span>
+                                <InlineEdit
+                                  value={exp.endDate}
+                                  onChange={(val) => handleExperienceChange(exp.id, 'endDate', val)}
+                                  placeholder="31 Jan 2026"
+                                  className="w-full text-center font-sans"
+                                />
+                              </div>
+                            </td>
+                            <td className="border border-slate-300 px-3 py-1.5">
+                              <InlineEdit
+                                value={exp.description}
+                                onChange={(val) => handleExperienceChange(exp.id, 'description', val)}
+                                placeholder="- Teaching Maths & Physics&#10;- Preparing lesson plans"
+                                multiline
+                                className="w-full font-sans"
+                              >
+                                {exp.description ? (
+                                  <ul className="list-disc pl-4 space-y-0.5 text-left font-sans">
+                                    {exp.description.split('\n').map((bullet, bIdx) => {
+                                      const cleaned = bullet.replace(/^[•\-\s*]+/, '').trim();
+                                      if (!cleaned) return null;
+                                      return <li key={bIdx}>{cleaned}</li>;
+                                    })}
+                                  </ul>
+                                ) : (
+                                  <span className="text-slate-400 italic">Click to enter responsibilities...</span>
+                                )}
+                              </InlineEdit>
+                            </td>
+                            {/* Row delete button */}
+                            <td className="absolute -right-6 top-1/2 -translate-y-1/2 select-none print:hidden border-none p-0">
+                              <button
+                                onClick={() => deleteExperience(exp.id)}
+                                className="p-1 bg-red-50 hover:bg-red-100 text-red-600 rounded opacity-0 group-hover/exp:opacity-100 transition-opacity cursor-pointer"
+                                title="Delete experience row"
+                              >
+                                <Trash2 size={10} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <button
+                      onClick={addExperience}
+                      className="mt-2 text-[9.5px] font-extrabold text-teal-800 hover:text-teal-950 flex items-center gap-1 cursor-pointer select-none print:hidden opacity-50 hover:opacity-100 transition-opacity"
+                    >
+                      <Plus size={11} /> Add Experience
+                    </button>
+                  </div>
+                )}
+
+                {/* Additional Skills, Address Key-Value Grid */}
+                <div className="grid grid-cols-[180px_20px_1fr] gap-y-2.5 text-[12px] text-slate-800 font-medium font-sans mb-6">
+                  <div className="font-bold text-slate-900 font-sans">Computer Knowledge</div>
+                  <div>:</div>
+                  <div>
+                    <InlineEdit
+                      value={resume.personal.computerKnowledge ?? 'MS Office, PowerPoint'}
+                      onChange={(val) => handlePersonalChange('computerKnowledge', val)}
+                      placeholder="MS Office, PowerPoint"
+                      className="w-full text-slate-800 animate-fade-in font-sans"
+                    />
+                  </div>
+
+                  <div className="font-bold text-slate-900 font-sans">Address</div>
+                  <div>:</div>
+                  <div>
+                    <InlineEdit
+                      value={resume.personal.address ?? 'PM Palem, Madhurawada, Visakhapatnam 530045'}
+                      onChange={(val) => handlePersonalChange('address', val)}
+                      placeholder="PM Palem, Madhurawada, Visakhapatnam 530045"
+                      multiline
+                      className="w-full text-slate-800 animate-fade-in font-sans"
+                    />
+                  </div>
+                </div>
+
+                {/* Declaration Block */}
+                <div className="mb-8 font-sans">
+                  <h4 className="text-[12px] font-bold text-slate-900 underline mb-2 font-sans">Declaration</h4>
+                  <p className="text-[11.5px] text-slate-800 leading-relaxed font-medium font-sans">
+                    <InlineEdit
+                      value={resume.personal.declaration ?? 'I do hereby declare that the above information is true to the best of my knowledge'}
+                      onChange={(val) => handlePersonalChange('declaration', val)}
+                      placeholder="I do hereby declare that the above information is true to the best of my knowledge"
+                      multiline
+                      className="w-full font-sans"
+                    />
+                  </p>
+                </div>
+
+                {/* Footer Section: Place, Date, Signature */}
+                <div className="flex justify-between items-end text-[12px] text-slate-800 font-medium font-sans pt-4">
+                  <div className="space-y-1 font-sans">
+                    <p className="flex items-center gap-1 font-sans">
+                      <span>Place:</span>
+                      <InlineEdit
+                        value={resume.personal.place ?? 'Visakhapatnam'}
+                        onChange={(val) => handlePersonalChange('place', val)}
+                        placeholder="Visakhapatnam"
+                        className="font-bold text-slate-900 font-sans animate-fade-in"
+                      />
+                    </p>
+                    <p className="flex items-center gap-1 font-sans">
+                      <span>Date:</span>
+                      <InlineEdit
+                        value={resume.personal.date ?? '07 Feb 2026'}
+                        onChange={(val) => handlePersonalChange('date', val)}
+                        placeholder="07 Feb 2026"
+                        className="font-bold text-slate-900 font-sans animate-fade-in"
+                      />
+                    </p>
+                  </div>
+                  <div className="text-right pr-4 font-sans flex flex-col items-center select-none">
+                    {resume.personal.signature ? (
+                      <div className="relative group/sig mb-1 h-12 w-28 flex items-center justify-center">
+                        <img src={resume.personal.signature} alt="Signature" className="max-h-full max-w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => handlePersonalChange('signature', '')}
+                          className="absolute -top-1 -right-4 p-1 bg-rose-50 text-rose-600 rounded opacity-0 group-hover/sig:opacity-100 transition-opacity print:hidden cursor-pointer"
+                          title="Delete signature"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="print:hidden mb-2">
+                        <label className="text-[10px] text-teal-700 font-extrabold cursor-pointer hover:underline uppercase tracking-wider flex items-center gap-1">
+                          <Plus size={10} className="stroke-[3]" />
+                          <span>Add Signature</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  handlePersonalChange('signature', reader.result as string);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden" 
+                          />
+                        </label>
+                      </div>
+                    )}
+                    <p className={`font-bold border-t border-slate-400 pt-1 px-4 inline-block text-slate-900 font-sans ${resume.personal.signature ? 'mt-1' : 'mt-8'}`}>
+                      Signature
                     </p>
                   </div>
                 </div>
-
-                {/* Body Columns layout */}
-                <div className="grid grid-cols-12 gap-8 w-full">
-                  {/* Left Sidebar Column - 33% (col-span-4) */}
-                  <div className="col-span-4 bg-[#dae1e7] rounded-t-[40px] rounded-b-[24px] p-6 pt-8 space-y-6 flex flex-col self-start min-h-[620px] print:rounded-t-[40px] print:rounded-b-none">
-                    {/* Contact details */}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3 text-slate-800 text-[10px] font-semibold">
-                        <Phone size={13} className="text-slate-800 stroke-[2] shrink-0" />
-                        <span>{resume.personal.phone || '+123-456-7890'}</span>
-                      </div>
-                      <div className="flex items-center gap-3 text-slate-800 text-[10px] font-semibold">
-                        <Mail size={13} className="text-slate-800 stroke-[2] shrink-0" />
-                        <span className="break-all">{resume.personal.email || 'hello@reallygreatsite.com'}</span>
-                      </div>
-                      {resume.personal.website && (
-                        <div className="flex items-center gap-3 text-slate-800 text-[10px] font-semibold">
-                          <Globe size={13} className="text-slate-800 stroke-[2] shrink-0" />
-                          <span className="break-all">{resume.personal.website}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-3 text-slate-800 text-[10px] font-semibold">
-                        <MapPin size={13} className="text-slate-800 stroke-[2] shrink-0" />
-                        <span className="leading-tight">{resume.personal.location || '123 Anywhere St., Any City'}</span>
-                      </div>
-                    </div>
-
-                    {/* Education section */}
-                    {resume.education.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">EDUCATION</h3>
-                          <div className="border-t border-slate-400 mt-1 mb-3" />
-                        </div>
-                        <div className="space-y-4">
-                          {resume.education.map((edu) => (
-                            <div key={edu.id} className="space-y-1">
-                              <p className="font-extrabold text-slate-900 leading-tight text-[10.5px]">{edu.degree || 'BA Sales and Commerce'}</p>
-                              <p className="text-[10px] font-bold text-slate-700">{edu.school || 'Wardiere University'}</p>
-                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{edu.startDate && `${edu.startDate} - `}{edu.endDate || '20XX - 20XX'}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Skills section */}
-                    {parsedSkills.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">SKILLS</h3>
-                          <div className="border-t border-slate-400 mt-1 mb-3" />
-                        </div>
-                        <ul className="space-y-2 text-slate-800 font-semibold text-[10px]">
-                          {parsedSkills.map((skill, sIdx) => (
-                            <li key={sIdx} className="flex items-start gap-2">
-                              <span className="text-slate-900 text-xs leading-none mt-0.5">•</span>
-                              <span className="leading-tight">{skill}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Languages section */}
-                    {resume.languages && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">LANGUAGE</h3>
-                          <div className="border-t border-slate-400 mt-1 mb-3" />
-                        </div>
-                        <ul className="space-y-2 text-slate-800 font-semibold text-[10.5px]">
-                          {resume.languages.split(',').map((lang, lIdx) => (
-                            <li key={lIdx} className="leading-tight">{lang.trim()}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Main Content Column - 67% (col-span-8) */}
-                  <div className="col-span-8 bg-white space-y-6 pl-2">
-                    {/* About me / Profile summary */}
-                    {resume.personal.summary && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">About Me</h3>
-                          <div className="border-t border-slate-300 mt-1 mb-3" />
-                        </div>
-                        <p className="text-slate-700 leading-relaxed text-[10.5px] text-justify font-medium">
-                          {resume.personal.summary}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Work Experience */}
-                    {resume.experience.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">WORK EXPERIENCE</h3>
-                          <div className="border-t border-slate-300 mt-1 mb-3" />
-                        </div>
-                        <div className="space-y-4">
-                          {resume.experience.map((exp) => (
-                            <div key={exp.id} className="space-y-1">
-                              <p className="text-[9px] text-slate-500 font-extrabold uppercase tracking-wider">
-                                {exp.startDate || 'Aug 20XX'} — {exp.endDate || 'present'}
-                              </p>
-                              <p className="text-[10px] font-bold text-slate-500 italic">{exp.company || 'Timmerman Industries'}</p>
-                              <h4 className="text-[11px] font-black text-slate-900 leading-snug">{exp.position || 'Consumer Goods Seller'}</h4>
-                              {exp.description && (
-                                <ul className="space-y-1 text-[10px] text-slate-700 leading-relaxed font-medium mt-1.5 pl-1.5">
-                                  {exp.description.split('\n').map((bullet, bIdx) => {
-                                    const cleaned = bullet.replace(/^[•\-\s*]+/, '').trim();
-                                    if (!cleaned) return null;
-                                    return (
-                                      <li key={bIdx} className="flex items-start gap-2">
-                                        <span className="text-slate-800 text-[10px] mt-0.5">•</span>
-                                        <span>{cleaned}</span>
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Featured Projects (if any) */}
-                    {resume.projects.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">Featured Projects</h3>
-                          <div className="border-t border-slate-300 mt-1 mb-3" />
-                        </div>
-                        <div className="space-y-4">
-                          {resume.projects.map((proj) => (
-                            <div key={proj.id} className="space-y-1">
-                              <div className="flex justify-between items-baseline">
-                                <h4 className="text-[10.5px] font-extrabold text-slate-900">{proj.name || 'Project Name'}</h4>
-                                {proj.link && <span className="text-[9px] text-slate-400 font-mono">{proj.link}</span>}
-                              </div>
-                              {proj.technologies && <p className="text-[9px] text-slate-400 font-mono font-bold">Tech: {proj.technologies}</p>}
-                              {proj.description && <p className="text-slate-700 text-[10px] leading-relaxed font-medium">{proj.description}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* References section */}
-                    {resume.references && resume.references.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-slate-900">REFERENCES</h3>
-                          <div className="border-t border-slate-300 mt-1 mb-3" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-6 mt-3">
-                          {resume.references.map((ref) => (
-                            <div key={ref.id} className="space-y-1 font-medium text-[10px] text-slate-700">
-                              <p className="font-extrabold text-slate-900 text-[11px]">{ref.name}</p>
-                              <p className="text-slate-500 font-bold text-[9px] uppercase tracking-wider">{ref.position}</p>
-                              <p className="text-slate-600 mt-1">
-                                <span className="text-slate-400 font-bold uppercase tracking-wider text-[8px] mr-1">Phone:</span>
-                                {ref.phone}
-                              </p>
-                              <p className="text-slate-600 break-all">
-                                <span className="text-slate-400 font-bold uppercase tracking-wider text-[8px] mr-1">Email:</span>
-                                {ref.email}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
             )}
 
-            {/* Lorna Minimalist Template */}
-            {activeTemplate === 'lorna-minimalist' && (
-              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-6 print:p-0">
-                <div className="flex items-center w-full mb-8">
-                  {/* Left line */}
-                  <div className="w-12 h-[1px] bg-slate-300 shrink-0" />
-                  {/* Photo with thin border/ring */}
-                  <div className="w-24 h-24 rounded-full border border-slate-900 overflow-hidden shrink-0 mx-4 shadow-xs flex items-center justify-center bg-slate-50">
+            {/* Classic Blue Bio Data Template */}
+            {activeTemplate === 'classic-blue-biodata' && (
+              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white pb-8">
+                {/* Header Blue Band */}
+                <div className="bg-[#2c75b8] text-white p-6 text-center select-none mb-8 rounded-t-lg print:rounded-none">
+                  <h1 className="text-2xl font-black tracking-[0.1em] uppercase font-sans mb-1.5">
+                    <InlineEdit
+                      value={resume.personal.fullName}
+                      onChange={(val) => handlePersonalChange('fullName', val)}
+                      placeholder="Manasa Vaddadhi"
+                      className="text-white text-center font-sans block mx-auto text-2xl font-black bg-transparent"
+                    />
+                  </h1>
+                  <p className="text-[12px] font-semibold font-sans mb-0.5">
+                    Mobile No: <InlineEdit
+                      value={resume.personal.phone}
+                      onChange={(val) => handlePersonalChange('phone', val)}
+                      placeholder="9425XXXX70"
+                      className="text-white inline-block text-left bg-transparent"
+                    />
+                  </p>
+                  <p className="text-[12px] font-semibold font-sans">
+                    Email id: <InlineEdit
+                      value={resume.personal.email}
+                      onChange={(val) => handlePersonalChange('email', val)}
+                      placeholder="manasavdxx@gmail.com"
+                      className="text-white inline-block text-left bg-transparent break-all"
+                    />
+                  </p>
+                </div>
+
+                {/* Top Section: Aligned Details + Photo */}
+                <div className="flex justify-between items-start gap-6 mb-8 px-6">
+                  {/* Key-Value Details */}
+                  <div className="flex-1 grid grid-cols-[160px_20px_1fr] gap-y-2.5 text-[12px] text-slate-800 font-medium font-sans">
+                    <div className="font-bold text-slate-950 font-sans">Date of Birth</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.dob ?? '12 March 2005'}
+                        onChange={(val) => handlePersonalChange('dob', val)}
+                        placeholder="12 March 2005"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-950 font-sans">Gender</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.gender ?? 'Male'}
+                        onChange={(val) => handlePersonalChange('gender', val)}
+                        placeholder="Male"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-950 font-sans">Father's Name</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.fatherName ?? 'Aarnav Kumar'}
+                        onChange={(val) => handlePersonalChange('fatherName', val)}
+                        placeholder="Aarnav Kumar"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-950 font-sans">Religion</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.religion ?? 'Hindu'}
+                        onChange={(val) => handlePersonalChange('religion', val)}
+                        placeholder="Hindu"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-950 font-sans">Nationality</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.nationality ?? 'Indian'}
+                        onChange={(val) => handlePersonalChange('nationality', val)}
+                        placeholder="Indian"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-950 font-sans">Marital Status</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.maritalStatus ?? 'Unmarried'}
+                        onChange={(val) => handlePersonalChange('maritalStatus', val)}
+                        placeholder="Unmarried"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+
+                    <div className="font-bold text-slate-950 font-sans">Languages Known</div>
+                    <div className="font-sans">:</div>
+                    <div>
+                      <InlineEdit
+                        value={resume.personal.languagesKnown ?? 'English & Telugu'}
+                        onChange={(val) => handlePersonalChange('languagesKnown', val)}
+                        placeholder="English & Telugu"
+                        className="w-full text-slate-800 font-sans bg-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Photo Frame */}
+                  <div className="w-[125px] h-[155px] shrink-0 border border-slate-300 p-1 bg-white rounded-xs shadow-xs flex items-center justify-center relative select-none">
                     {resume.personal.photo ? (
-                      <img src={resume.personal.photo} alt="Profile" className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
+                      <img 
+                        src={resume.personal.photo} 
+                        alt="Profile" 
+                        className="w-full h-full object-cover rounded-xs" 
+                        referrerPolicy="no-referrer" 
+                      />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-350 font-bold text-xl">👤</div>
-                    )}
-                  </div>
-                  {/* Name, Title, and the right line */}
-                  <div className="flex-1 flex flex-col justify-end pr-2 relative">
-                    <div className="pb-2.5 pl-4">
-                      <h1 className="text-2xl font-bold tracking-[0.1em] text-slate-950 uppercase leading-none">
-                        {resume.personal.fullName || 'LORNA ALVARADO'}
-                      </h1>
-                      <p className="text-[10.5px] font-medium text-slate-600 uppercase tracking-widest mt-1.5">
-                        {resume.personal.title || 'Sales Representative'}
-                      </p>
-                    </div>
-                    {/* The line going right */}
-                    <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-slate-300" />
-                  </div>
-                </div>
-
-                {/* Two-column layout */}
-                <div className="grid grid-cols-12 gap-8 pt-4">
-                  {/* Left Sidebar (35% equivalent) */}
-                  <div className="col-span-4 space-y-6 pr-2">
-                    {/* Contact */}
-                    <div className="space-y-2">
-                      <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">CONTACT</h3>
-                      <div className="space-y-2 text-[9.5px] text-slate-600 font-semibold">
-                        {resume.personal.phone && (
-                          <p className="flex items-center gap-2">
-                            <Phone size={11} className="text-slate-500 shrink-0" />
-                            <span>{resume.personal.phone}</span>
-                          </p>
-                        )}
-                        {resume.personal.email && (
-                          <p className="flex items-center gap-2">
-                            <Mail size={11} className="text-slate-500 shrink-0" />
-                            <span className="break-all">{resume.personal.email}</span>
-                          </p>
-                        )}
-                        {resume.personal.website && (
-                          <p className="flex items-center gap-2">
-                            <Globe size={11} className="text-slate-500 shrink-0" />
-                            <span className="break-all">{resume.personal.website}</span>
-                          </p>
-                        )}
-                        {resume.personal.location && (
-                          <p className="flex items-center gap-2">
-                            <MapPin size={11} className="text-slate-500 shrink-0" />
-                            <span>{resume.personal.location}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Education */}
-                    {resume.education.length > 0 && (
-                      <div className="space-y-3">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">EDUCATION</h3>
-                        <div className="space-y-3.5 text-[9.5px]">
-                          {resume.education.map((edu) => (
-                            <div key={edu.id} className="space-y-0.5">
-                              <p className="font-extrabold text-slate-900 leading-snug">{edu.school || 'Borcelle University'}</p>
-                              <p className="text-slate-600 font-bold">{edu.degree || 'Bachelor of Business Management'}</p>
-                              <p className="text-slate-400 font-bold text-[8.5px] tracking-wide">{edu.startDate || '2020'} - {edu.endDate || '2023'}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Skills */}
-                    {parsedSkills.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">SKILLS</h3>
-                        <ul className="list-disc pl-3.5 space-y-1.5 text-[9.5px] text-slate-600 font-semibold">
-                          {parsedSkills.map((skill, sIdx) => (
-                            <li key={sIdx} className="leading-tight">{skill}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-
-                    {/* Language */}
-                    {resume.languages && (
-                      <div className="space-y-2">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">LANGUAGE</h3>
-                        <ul className="list-disc pl-3.5 space-y-1.5 text-[9.5px] text-slate-600 font-semibold">
-                          {resume.languages.split(',').map((lang, lIdx) => (
-                            <li key={lIdx} className="leading-tight">{lang.trim()}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Right Main Content Column (65% equivalent) */}
-                  <div className="col-span-8 space-y-6 pl-2">
-                    {/* Summary */}
-                    {resume.personal.summary && (
-                      <div className="space-y-1.5">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-1.5">SUMMARY</h3>
-                        <p className="text-slate-700 leading-relaxed text-[10px] text-justify font-medium">
-                          {resume.personal.summary}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Work Experience */}
-                    {resume.experience.length > 0 && (
-                      <div className="space-y-3">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">WORK EXPERIENCE</h3>
-                        <div className="space-y-4">
-                          {resume.experience.map((exp) => (
-                            <div key={exp.id} className="space-y-1">
-                              <p className="text-[9px] text-slate-400 font-bold">
-                                ({exp.startDate || '2020'} – {exp.endDate || '2023'})
-                              </p>
-                              <h4 className="text-[10.5px] font-black text-slate-900 leading-snug">
-                                {exp.position || 'Sales Representative'} <span className="text-slate-350 font-normal mx-1">|</span> <span className="text-slate-700 font-bold">{exp.company || 'Timmerman Industries'}</span>
-                              </h4>
-                              {exp.description && (
-                                <ul className="list-disc pl-3.5 space-y-1 text-[9.5px] text-slate-600 leading-relaxed font-semibold mt-1">
-                                  {exp.description.split('\n').map((bullet, bIdx) => {
-                                    const cleaned = bullet.replace(/^[•\-\s*]+/, '').trim();
-                                    if (!cleaned) return null;
-                                    return (
-                                      <li key={bIdx}>
-                                        {cleaned}
-                                      </li>
-                                    );
-                                  })}
-                                </ul>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Featured Projects (if any) */}
-                    {resume.projects.length > 0 && (
-                      <div className="space-y-3">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">KEY INITIATIVES & PROJECTS</h3>
-                        <div className="space-y-3.5">
-                          {resume.projects.map((proj) => (
-                            <div key={proj.id} className="space-y-0.5">
-                              <div className="flex justify-between items-baseline">
-                                <h4 className="text-[10.5px] font-black text-slate-900">{proj.name || 'Project Name'}</h4>
-                                {proj.link && <span className="text-[9px] text-slate-400 font-mono">{proj.link}</span>}
-                              </div>
-                              {proj.technologies && <p className="text-[9px] text-slate-400 font-mono font-bold">Stack: {proj.technologies}</p>}
-                              {proj.description && <p className="text-slate-700 text-[9.5px] leading-relaxed font-semibold">{proj.description}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* References */}
-                    {resume.references && resume.references.length > 0 && (
-                      <div className="space-y-3">
-                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-900 mb-2">REFERENCES</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                          {resume.references.map((ref) => (
-                            <div key={ref.id} className="space-y-0.5 text-[9.5px] text-slate-600 font-semibold">
-                              <p className="font-extrabold text-slate-900 text-[10.5px]">{ref.name}</p>
-                              <p className="text-slate-500 font-bold text-[8.5px] uppercase tracking-wider">{ref.position}</p>
-                              <p className="text-slate-500 mt-1">
-                                <span className="font-black text-slate-400 uppercase tracking-wider text-[7.5px] mr-1">Phone:</span>
-                                {ref.phone}
-                              </p>
-                              <p className="text-slate-500 break-all">
-                                <span className="font-black text-slate-400 uppercase tracking-wider text-[7.5px] mr-1">Email:</span>
-                                {ref.email}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-350 font-bold text-3xl font-sans">👤</div>
                     )}
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Olivia Modern Template */}
-            {activeTemplate === 'olivia-modern' && (
-              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-0 print:p-0">
-                <div className="grid grid-cols-12 items-stretch min-h-[960px]">
-                  {/* Left Sidebar Column - 33.3% (col-span-4) */}
-                  <div className="col-span-4 bg-slate-50/90 border-r border-slate-100 p-5 pt-8 pb-8 space-y-6 flex flex-col">
-                    {/* Circle Photo */}
-                    <div className="flex justify-center mb-2">
-                      <div className="w-24 h-24 rounded-full border-2 border-slate-300 overflow-hidden bg-white shadow-xs">
-                        {resume.personal.photo ? (
-                          <img src={resume.personal.photo} alt="Profile" className="w-full h-full object-cover animate-fade-in" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center bg-slate-100 text-slate-350 font-bold text-2xl">👤</div>
-                        )}
+                {/* Education Section */}
+                <div className="mb-6 px-6">
+                  <h3 className="text-[13px] font-bold text-slate-900 mb-2 font-sans">Education Details:</h3>
+                  <table className="w-full border-collapse border border-slate-300 text-[11px] text-slate-800">
+                    <thead>
+                      <tr className="bg-slate-50 font-bold text-slate-900 border-b border-slate-300">
+                        <th className="border border-slate-300 px-3 py-1.5 text-left w-[30%]">Education</th>
+                        <th className="border border-slate-300 px-3 py-1.5 text-left w-[40%]">University/College</th>
+                        <th className="border border-slate-300 px-3 py-1.5 text-center w-[15%]">Year of Pass</th>
+                        <th className="border border-slate-300 px-3 py-1.5 text-center w-[15%]">Marks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {resume.education.map((edu) => (
+                        <tr key={edu.id} className="relative group/edu">
+                          <td className="border border-slate-300 px-3 py-1.5">
+                            <InlineEdit
+                              value={edu.degree}
+                              onChange={(val) => handleEducationChange(edu.id, 'degree', val)}
+                              placeholder="B. Com Computers"
+                              className="w-full font-medium font-sans"
+                            />
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5">
+                            <InlineEdit
+                              value={edu.school}
+                              onChange={(val) => handleEducationChange(edu.id, 'school', val)}
+                              placeholder="Nizam Degree College"
+                              className="w-full font-sans"
+                            />
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5 text-center">
+                            <InlineEdit
+                              value={edu.endDate}
+                              onChange={(val) => handleEducationChange(edu.id, 'endDate', val)}
+                              placeholder="2022"
+                              className="w-full text-center font-sans"
+                            />
+                          </td>
+                          <td className="border border-slate-300 px-3 py-1.5 text-center font-semibold">
+                            <InlineEdit
+                              value={edu.description}
+                              onChange={(val) => handleEducationChange(edu.id, 'description', val)}
+                              placeholder="8 GPA"
+                              className="w-full text-center font-sans"
+                            />
+                          </td>
+                          {/* Row delete button */}
+                          <td className="absolute -right-6 top-1/2 -translate-y-1/2 select-none print:hidden border-none p-0">
+                            <button
+                              onClick={() => deleteEducation(edu.id)}
+                              className="p-1 bg-red-50 hover:bg-red-100 text-red-600 rounded opacity-0 group-hover/edu:opacity-100 transition-opacity cursor-pointer"
+                              title="Delete qualification row"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button
+                    onClick={addEducation}
+                    className="mt-2 text-[9.5px] font-extrabold text-teal-800 hover:text-teal-950 flex items-center gap-1 cursor-pointer select-none print:hidden opacity-50 hover:opacity-100 transition-opacity"
+                  >
+                    <Plus size={11} /> Add Education
+                  </button>
+                </div>
+
+                {/* Experience & Address Details Section */}
+                <div className="grid grid-cols-[160px_20px_1fr] gap-y-3 text-[12px] text-slate-800 font-medium font-sans mb-8 px-6">
+                  <div className="font-bold text-slate-900 font-sans">Experience</div>
+                  <div className="font-sans">:</div>
+                  <div className="font-sans">
+                    {resume.experience && resume.experience.length > 0 ? (
+                      <div className="space-y-1">
+                        {resume.experience.map((exp) => (
+                          <div key={exp.id} className="relative group/exp text-slate-800 font-sans">
+                            <span className="font-bold text-slate-900">{exp.position}</span> at {exp.company} ({exp.startDate} - {exp.endDate})
+                            <InlineEdit
+                              value={exp.description}
+                              onChange={(val) => handleExperienceChange(exp.id, 'description', val)}
+                              placeholder="- Responsibilities"
+                              multiline
+                              className="w-full text-slate-600 pl-2 text-[11px] font-sans"
+                            />
+                            <button
+                              onClick={() => deleteExperience(exp.id)}
+                              className="absolute -right-6 top-0 p-1 bg-red-50 text-red-600 rounded opacity-0 group-hover/exp:opacity-100 transition-opacity print:hidden cursor-pointer"
+                            >
+                              <Trash2 size={10} />
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={addExperience}
+                          className="text-[9.5px] font-extrabold text-teal-800 hover:text-teal-950 flex items-center gap-1 cursor-pointer select-none print:hidden opacity-50 hover:opacity-100 transition-opacity mt-1"
+                        >
+                          <Plus size={11} /> Add Experience
+                        </button>
                       </div>
-                    </div>
-
-                    {/* Contact */}
-                    <div className="space-y-2">
-                      <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-800 pb-1 border-b border-slate-300/80">Contact</h3>
-                      <div className="space-y-2.5 text-[9.5px] text-slate-600 font-semibold pt-1">
-                        {resume.personal.phone && (
-                          <p className="flex items-center gap-2">
-                            <Phone size={10} className="text-slate-500 shrink-0" />
-                            <span>{resume.personal.phone}</span>
-                          </p>
-                        )}
-                        {resume.personal.email && (
-                          <p className="flex items-center gap-2">
-                            <Mail size={10} className="text-slate-500 shrink-0" />
-                            <span className="break-all">{resume.personal.email}</span>
-                          </p>
-                        )}
-                        {resume.personal.website && (
-                          <p className="flex items-center gap-2">
-                            <Globe size={10} className="text-slate-500 shrink-0" />
-                            <span className="break-all">{resume.personal.website}</span>
-                          </p>
-                        )}
-                        {resume.personal.location && (
-                          <p className="flex items-center gap-2">
-                            <MapPin size={10} className="text-slate-500 shrink-0" />
-                            <span>{resume.personal.location}</span>
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Education */}
-                    {resume.education.length > 0 && (
-                      <div className="space-y-3">
-                        <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-800 pb-1 border-b border-slate-300/80">Education</h3>
-                        <div className="space-y-3.5 text-[9.5px] pt-1">
-                          {resume.education.map((edu) => (
-                            <div key={edu.id} className="space-y-1">
-                              <span className="px-2 py-0.5 rounded-sm bg-amber-100/70 text-amber-900 text-[8.5px] font-black tracking-wide inline-block">
-                                {edu.startDate || '2020'} - {edu.endDate || '2023'}
-                              </span>
-                              <p className="font-extrabold text-slate-900 leading-snug">{edu.school || 'Borcelle University'}</p>
-                              <p className="text-slate-600 font-bold text-[9px]">{edu.degree || 'Bachelor of Business Management'}</p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Skills */}
-                    {parsedSkills.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-800 pb-1 border-b border-slate-300/80">Skills</h3>
-                        <div className="space-y-1.5 text-[9.5px] text-slate-600 font-bold pl-0.5 pt-1">
-                          {parsedSkills.map((skill, sIdx) => (
-                            <p key={sIdx} className="leading-tight">{skill}</p>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Languages */}
-                    {resume.languages && (
-                      <div className="space-y-2">
-                        <h3 className="text-[11px] font-extrabold uppercase tracking-widest text-slate-800 pb-1 border-b border-slate-300/80">Language</h3>
-                        <div className="space-y-1.5 text-[9.5px] text-slate-600 font-bold pl-0.5 pt-1">
-                          {resume.languages.split(',').map((lang, lIdx) => (
-                            <p key={lIdx} className="leading-tight">{lang.trim()}</p>
-                          ))}
-                        </div>
+                    ) : (
+                      <div className="font-sans text-slate-800 flex items-center gap-2">
+                        <span>Fresher</span>
+                        <button
+                          onClick={addExperience}
+                          className="text-[9.5px] font-extrabold text-teal-800 hover:text-teal-950 flex items-center gap-1 cursor-pointer select-none print:hidden opacity-50 hover:opacity-100 transition-opacity"
+                        >
+                          <Plus size={11} /> Switch to Experienced
+                        </button>
                       </div>
                     )}
                   </div>
 
-                  {/* Right Column - 66.7% (col-span-8) */}
-                  <div className="col-span-8 bg-white p-6 pt-8 pb-8 space-y-6 pl-5 flex flex-col">
-                    {/* Header: Name and Title */}
-                    <div className="mb-2 select-none">
-                      <h1 className="text-2xl tracking-[0.1em] text-slate-900 uppercase">
-                        <span className="font-light">{(resume.personal.fullName || 'OLIVIA SANCHEZ').split(' ')[0]}</span>{' '}
-                        <span className="font-black">{(resume.personal.fullName || 'OLIVIA SANCHEZ').split(' ').slice(1).join(' ')}</span>
-                      </h1>
-                      <p className="text-[10.5px] font-extrabold text-slate-500 uppercase tracking-[0.2em] mt-1.5">
-                        {resume.personal.title || 'Product Designer'}
-                      </p>
-                    </div>
+                  <div className="font-bold text-slate-900 font-sans">Computer Knowledge</div>
+                  <div className="font-sans">:</div>
+                  <div className="font-sans">
+                    <InlineEdit
+                      value={resume.personal.computerKnowledge ?? 'MS Office, PowerPoint'}
+                      onChange={(val) => handlePersonalChange('computerKnowledge', val)}
+                      placeholder="MS Office, PowerPoint"
+                      className="w-full text-slate-800 font-sans bg-transparent"
+                    />
+                  </div>
 
-                    {/* About me */}
-                    {resume.personal.summary && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-900">About Me</h3>
-                          <div className="border-t border-slate-300/80 mt-1 mb-2.5" />
-                        </div>
-                        <p className="text-slate-700 leading-relaxed text-[10px] text-justify font-medium">
-                          {resume.personal.summary}
-                        </p>
+                  <div className="font-bold text-slate-900 font-sans">Address</div>
+                  <div className="font-sans">:</div>
+                  <div className="font-sans">
+                    <InlineEdit
+                      value={resume.personal.address ?? '5-7-168, Krish Nagar, Vellon Main Road, Vellore, Tamil Nadu 500012.'}
+                      onChange={(val) => handlePersonalChange('address', val)}
+                      placeholder="5-7-168, Krish Nagar, Vellon Main Road, Vellore, Tamil Nadu 500012."
+                      multiline
+                      className="w-full text-slate-800 leading-relaxed font-sans bg-transparent"
+                    />
+                  </div>
+                </div>
+
+                {/* Declaration Section */}
+                <div className="mb-10 font-sans px-6">
+                  <p className="text-[11.5px] text-slate-800 leading-relaxed font-sans">
+                    <strong className="font-bold text-slate-900 font-sans">Declaration: </strong>
+                    <span className="italic font-sans">
+                      <InlineEdit
+                        value={resume.personal.declaration ?? 'I hereby declare that all the above information is true to the best of my knowledge and belief.'}
+                        onChange={(val) => handlePersonalChange('declaration', val)}
+                        placeholder="I hereby declare that all the above information is true to the best of my knowledge and belief."
+                        multiline
+                        className="inline font-sans bg-transparent"
+                      />
+                    </span>
+                  </p>
+                </div>
+
+                {/* Footer Section: Place, Date, Signature */}
+                <div className="flex justify-between items-end text-[12px] text-slate-800 font-medium font-sans pt-4 px-6">
+                  <div className="space-y-1.5 font-sans">
+                    <p className="flex items-center gap-1 font-sans">
+                      <span className="font-bold text-slate-900 font-sans">Place:</span>
+                      <InlineEdit
+                        value={resume.personal.place ?? 'Vellore'}
+                        onChange={(val) => handlePersonalChange('place', val)}
+                        placeholder="Vellore"
+                        className="font-bold text-slate-900 font-sans bg-transparent"
+                      />
+                    </p>
+                    <p className="flex items-center gap-1 font-sans">
+                      <span className="font-bold text-slate-900 font-sans">Date:</span>
+                      <InlineEdit
+                        value={resume.personal.date ?? '08 March 2023'}
+                        onChange={(val) => handlePersonalChange('date', val)}
+                        placeholder="08 March 2023"
+                        className="font-bold text-slate-900 font-sans bg-transparent"
+                      />
+                    </p>
+                  </div>
+                  <div className="text-right font-sans flex flex-col items-center select-none">
+                    {resume.personal.signature ? (
+                      <div className="relative group/sig mb-1 h-12 w-28 flex items-center justify-center">
+                        <img src={resume.personal.signature} alt="Signature" className="max-h-full max-w-full object-contain" />
+                        <button
+                          type="button"
+                          onClick={() => handlePersonalChange('signature', '')}
+                          className="absolute -top-1 -right-4 p-1 bg-rose-50 text-rose-600 rounded opacity-0 group-hover/sig:opacity-100 transition-opacity print:hidden cursor-pointer"
+                          title="Delete signature"
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="print:hidden mb-2">
+                        <label className="text-[10px] text-teal-700 font-extrabold cursor-pointer hover:underline uppercase tracking-wider flex items-center gap-1">
+                          <Plus size={10} className="stroke-[3]" />
+                          <span>Add Signature</span>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  handlePersonalChange('signature', reader.result as string);
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                            className="hidden" 
+                          />
+                        </label>
                       </div>
                     )}
-
-                    {/* Experience */}
-                    {resume.experience.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-900">Experience</h3>
-                          <div className="border-t border-slate-300/80 mt-1 mb-2.5" />
-                        </div>
-                        <div className="space-y-4">
-                          {resume.experience.map((exp) => (
-                            <div key={exp.id} className="space-y-1">
-                              <div className="flex justify-between items-baseline">
-                                <h4 className="text-[11px] font-black text-slate-900 leading-snug">{exp.company || 'Arowwai Industries'}</h4>
-                                <span className="text-[9.5px] font-bold text-slate-400">{exp.startDate} — {exp.endDate}</span>
-                              </div>
-                              <p className="text-[9px] font-bold text-slate-400 italic">{exp.position || 'Product Designer'} {exp.location ? `| ${exp.location}` : ''}</p>
-                              {exp.description && (
-                                <p className="text-slate-600 text-[9.5px] leading-relaxed font-semibold mt-1">
-                                  {exp.description}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Featured Projects */}
-                    {resume.projects.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-900">Featured Projects</h3>
-                          <div className="border-t border-slate-300/80 mt-1 mb-2.5" />
-                        </div>
-                        <div className="space-y-3.5">
-                          {resume.projects.map((proj) => (
-                            <div key={proj.id} className="space-y-0.5">
-                              <div className="flex justify-between items-baseline">
-                                <h4 className="text-[10.5px] font-black text-slate-900">{proj.name || 'Project Name'}</h4>
-                                {proj.link && <span className="text-[9px] text-slate-400 font-mono">{proj.link}</span>}
-                              </div>
-                              {proj.technologies && <p className="text-[9px] text-slate-400 font-mono font-bold">Tech: {proj.technologies}</p>}
-                              {proj.description && <p className="text-slate-700 text-[9.5px] leading-relaxed font-semibold">{proj.description}</p>}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* References */}
-                    {resume.references && resume.references.length > 0 && (
-                      <div className="space-y-2">
-                        <div>
-                          <h3 className="text-[11px] font-black uppercase tracking-[0.15em] text-slate-900">References</h3>
-                          <div className="border-t border-slate-300/80 mt-1 mb-2.5" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4 mt-1">
-                          {resume.references.map((ref) => (
-                            <div key={ref.id} className="space-y-0.5 text-[9.5px] text-slate-600 font-semibold">
-                              <p className="font-extrabold text-slate-900 text-[10.5px]">{ref.name}</p>
-                              <p className="text-slate-500 font-bold text-[8.5px] uppercase tracking-wider">{ref.position}</p>
-                              <p className="text-slate-500 mt-1">
-                                <span className="font-black text-slate-400 uppercase tracking-wider text-[7.5px] mr-1">Phone:</span>
-                                {ref.phone}
-                              </p>
-                              <p className="text-slate-500 break-all">
-                                <span className="font-black text-slate-400 uppercase tracking-wider text-[7.5px] mr-1">Email:</span>
-                                {ref.email}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    <p className={`font-bold text-slate-900 font-sans text-[13px] ${resume.personal.signature ? 'mt-1' : 'mt-8'}`}>Signature</p>
                   </div>
                 </div>
               </div>
@@ -2551,6 +2720,94 @@ ${(resume.references || []).map(ref => `
 
               <div className="border-t border-slate-100 dark:border-slate-800 pt-3 text-[10px] text-slate-400 text-center font-bold uppercase tracking-wider">
                 Resumes are saved securely to your browser storage
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 3. High Quality PDF Download Guide Modal */}
+      <AnimatePresence>
+        {showPdfGuideModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[11000] flex items-center justify-center bg-slate-950/50 backdrop-blur-[2px] p-4 print-hide"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+              className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-teal-50 dark:bg-teal-950/30 text-teal-600 dark:text-teal-400 rounded-xl">
+                    <FileText size={18} />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Download High-Quality PDF</h3>
+                    <p className="text-[10px] text-teal-600 dark:text-teal-400 font-bold uppercase tracking-wider">Vector/Text Format — Fully Selectable & Editable</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowPdfGuideModal(false)}
+                  className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-150 dark:hover:bg-slate-800 rounded-lg transition-all cursor-pointer text-xs font-bold"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-teal-50/60 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900/30 rounded-xl p-4 space-y-3">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
+                    💡 High-Quality Selection Method (उच्च गुणवत्ता विधि)
+                  </h4>
+                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                    Vector/Text format PDF download karne ke liye please system print dialog me <strong>"Save as PDF"</strong> (या "Microsoft Print to PDF") option select karein. Isse PDF bilkul crisp download hoga, aur text ko baad me edit ya copy kiya ja sakega.
+                  </p>
+                  
+                  <div className="bg-white/80 dark:bg-slate-950/80 rounded-lg p-3 text-[11px] font-semibold text-slate-600 dark:text-slate-400 border border-teal-100/40 dark:border-teal-900/10 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <span className="bg-teal-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">1</span>
+                      <span>Niche <strong>"Open High-Quality Print to PDF"</strong> button par click karein.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-teal-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">2</span>
+                      <span>Aapke device ka Print window open hoga. Wahan <strong>Destination (डेस्टिनेशन)</strong> ko badal kar <strong>"Save as PDF"</strong> choose karein.</span>
+                    </div>
+                    <div className="flex items-start gap-2">
+                      <span className="bg-teal-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">3</span>
+                      <span><strong>Save</strong> button par click karke High-Quality PDF apne computer/phone me download karein!</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                  <button
+                    onClick={() => {
+                      setShowPdfGuideModal(false);
+                      triggerPrint();
+                    }}
+                    className="flex-1 px-5 py-3 text-xs font-extrabold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-xl shadow-lg shadow-teal-950/10 transition-all cursor-pointer flex items-center justify-center gap-2 border border-teal-500"
+                  >
+                    <Printer size={15} className="stroke-[2.5]" />
+                    Open High-Quality Print to PDF
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowPdfGuideModal(false);
+                      downloadPDF();
+                    }}
+                    className="px-4 py-3 text-xs font-bold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-150 dark:hover:bg-slate-750 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                  >
+                    <Download size={13} className="stroke-[2.5]" />
+                    Direct Image PDF
+                  </button>
+                </div>
               </div>
             </motion.div>
           </motion.div>
