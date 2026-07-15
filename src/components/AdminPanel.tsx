@@ -9,7 +9,7 @@ import {
   Settings, Briefcase, Users, CreditCard, Shield, Plus, 
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
   Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail, LogIn,
-  ArrowUp, ArrowDown, Bell
+  ArrowUp, ArrowDown, Bell, Share2
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
@@ -72,6 +72,7 @@ export default function AdminPanel({
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
+  const [isUploadingShareImg, setIsUploadingShareImg] = useState(false);
   const [premiumMode, setPremiumMode] = useState(settings.premiumMode);
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
   const [currency, setCurrency] = useState(settings.currency || 'INR');
@@ -96,7 +97,16 @@ export default function AdminPanel({
   const [oneSignalAppId, setOneSignalAppId] = useState(settings.oneSignalAppId || '');
   const [oneSignalRestApiKey, setOneSignalRestApiKey] = useState(settings.oneSignalRestApiKey || '');
   const [oneSignalAutoNotify, setOneSignalAutoNotify] = useState(settings.oneSignalAutoNotify !== false);
+  const [oneSignalCommunityNotify, setOneSignalCommunityNotify] = useState(settings.oneSignalCommunityNotify !== false);
+  const [oneSignalPromptTitle, setOneSignalPromptTitle] = useState(settings.oneSignalPromptTitle || '');
+  const [oneSignalPromptSubtitle, setOneSignalPromptSubtitle] = useState(settings.oneSignalPromptSubtitle || '');
+  const [oneSignalPromptDesc, setOneSignalPromptDesc] = useState(settings.oneSignalPromptDesc || '');
+  const [oneSignalPromptBtnDismiss, setOneSignalPromptBtnDismiss] = useState(settings.oneSignalPromptBtnDismiss || '');
+  const [oneSignalPromptBtnAllow, setOneSignalPromptBtnAllow] = useState(settings.oneSignalPromptBtnAllow || '');
   const [communityMindPlaceholder, setCommunityMindPlaceholder] = useState(settings.communityMindPlaceholder || '');
+  const [shareTitle, setShareTitle] = useState(settings.shareTitle || '');
+  const [shareDesc, setShareDesc] = useState(settings.shareDesc || '');
+  const [shareImg, setShareImg] = useState(settings.shareImg || '');
   const [communityReviewNotice, setCommunityReviewNotice] = useState(settings.communityReviewNotice || '');
   const [loginTitle, setLoginTitle] = useState(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
   const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
@@ -301,7 +311,16 @@ export default function AdminPanel({
     setOneSignalAppId(settings.oneSignalAppId || '');
     setOneSignalRestApiKey(settings.oneSignalRestApiKey || '');
     setOneSignalAutoNotify(settings.oneSignalAutoNotify !== false);
+    setOneSignalCommunityNotify(settings.oneSignalCommunityNotify !== false);
+    setOneSignalPromptTitle(settings.oneSignalPromptTitle || '');
+    setOneSignalPromptSubtitle(settings.oneSignalPromptSubtitle || '');
+    setOneSignalPromptDesc(settings.oneSignalPromptDesc || '');
+    setOneSignalPromptBtnDismiss(settings.oneSignalPromptBtnDismiss || '');
+    setOneSignalPromptBtnAllow(settings.oneSignalPromptBtnAllow || '');
     setCommunityMindPlaceholder(settings.communityMindPlaceholder || '');
+    setShareTitle(settings.shareTitle || '');
+    setShareDesc(settings.shareDesc || '');
+    setShareImg(settings.shareImg || '');
     setCommunityReviewNotice(settings.communityReviewNotice || '');
     setLoginTitle(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
     setLoginSubtitle(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
@@ -472,16 +491,6 @@ export default function AdminPanel({
       if (res.ok) {
         setOneSignalTestSuccess(true);
         setOneSignalTestMessage(data.message || 'Notification triggered successfully!');
-        
-        // Show our beautiful native-style UI banner to the user as requested
-        if (typeof window !== 'undefined' && window.showNativeNotificationBanner) {
-          window.showNativeNotificationBanner(
-            'OneSignal Live Test 🔔',
-            'Mubarak ho! Aapka push notification configuration sahi kaam kar raha hai.',
-            undefined,
-            'Just now'
-          );
-        }
       } else {
         setOneSignalTestSuccess(false);
         setOneSignalTestMessage(data.error || 'Failed to trigger test notification.');
@@ -558,6 +567,15 @@ export default function AdminPanel({
       oneSignalAppId !== (settings.oneSignalAppId || '') ||
       oneSignalRestApiKey !== (settings.oneSignalRestApiKey || '') ||
       oneSignalAutoNotify !== (settings.oneSignalAutoNotify !== false) ||
+      oneSignalCommunityNotify !== (settings.oneSignalCommunityNotify !== false) ||
+      oneSignalPromptTitle !== (settings.oneSignalPromptTitle || '') ||
+      oneSignalPromptSubtitle !== (settings.oneSignalPromptSubtitle || '') ||
+      oneSignalPromptDesc !== (settings.oneSignalPromptDesc || '') ||
+      oneSignalPromptBtnDismiss !== (settings.oneSignalPromptBtnDismiss || '') ||
+      oneSignalPromptBtnAllow !== (settings.oneSignalPromptBtnAllow || '') ||
+      shareTitle !== (settings.shareTitle || '') ||
+      shareDesc !== (settings.shareDesc || '') ||
+      shareImg !== (settings.shareImg || '') ||
       communityMindPlaceholder !== (settings.communityMindPlaceholder || '') ||
       communityReviewNotice !== (settings.communityReviewNotice || '') ||
       loginTitle !== (settings.loginTitle || '') ||
@@ -613,6 +631,15 @@ export default function AdminPanel({
         oneSignalAppId,
         oneSignalRestApiKey,
         oneSignalAutoNotify,
+        oneSignalCommunityNotify,
+        oneSignalPromptTitle,
+        oneSignalPromptSubtitle,
+        oneSignalPromptDesc,
+        oneSignalPromptBtnDismiss,
+        oneSignalPromptBtnAllow,
+        shareTitle,
+        shareDesc,
+        shareImg,
         communityMindPlaceholder,
         communityReviewNotice,
         loginTitle,
@@ -694,16 +721,6 @@ export default function AdminPanel({
 
     // Trigger the minimal centered success popup
     window.showJobSavedToast?.(isEdit ? 'Job Saved!' : 'Job Published!');
-
-    // Trigger a live native push notification preview on screen for newly published jobs
-    if (!isEdit && typeof window !== 'undefined' && window.showNativeNotificationBanner) {
-      window.showNativeNotificationBanner(
-        'New Job Alert! 💼',
-        `${jobTitle || 'Nayi job opening'} - ${jobCompany || 'Hiring company'} par abhi publish hui hai. Check out immediately!`,
-        undefined,
-        'now'
-      );
-    }
 
     // Reset Job creation form
     setJobTitle('');
@@ -865,6 +882,15 @@ export default function AdminPanel({
       oneSignalAppId,
       oneSignalRestApiKey,
       oneSignalAutoNotify,
+      oneSignalCommunityNotify,
+      oneSignalPromptTitle,
+      oneSignalPromptSubtitle,
+      oneSignalPromptDesc,
+      oneSignalPromptBtnDismiss,
+      oneSignalPromptBtnAllow,
+      shareTitle,
+      shareDesc,
+      shareImg,
       communityMindPlaceholder,
       communityReviewNotice,
       loginTitle,
@@ -908,6 +934,18 @@ export default function AdminPanel({
       if (url) {
         setBannerUrl(url);
         await saveSettingsWithUpdatedField('bannerUrl', url);
+      }
+    }
+  };
+
+  const handleShareImgChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setIsUploadingShareImg(true);
+      const url = await handleFileUpload(e.target.files[0], 'share_preview_image');
+      setIsUploadingShareImg(false);
+      if (url) {
+        setShareImg(url);
+        await saveSettingsWithUpdatedField('shareImg', url);
       }
     }
   };
@@ -1549,6 +1587,153 @@ export default function AdminPanel({
               >
                 <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
                 <span>{isSavingSettings ? 'Saving Config...' : 'Save General Config'}</span>
+              </button>
+            </form>
+          </div>
+
+          {/* Social Media Sharing & Preview Settings */}
+          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+            <h3 className="font-extrabold text-sm text-slate-800 uppercase tracking-widest border-b border-gray-50 pb-2 flex items-center gap-1.5 font-display">
+              <Share2 size={15} className="text-teal-600" />
+              Social Media Sharing Customization 🔗
+            </h3>
+
+            <p className="text-[10px] text-gray-400 leading-normal font-semibold">
+              Apne website link ko WhatsApp, Facebook ya Twitter par share karne par default aane wale image, title, aur description ko customize karein.
+            </p>
+
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Custom Share Title</label>
+                  <input
+                    type="text"
+                    placeholder={`Default: ${brandName || 'Sebok'} - ${tagline || 'Tripura jobs'}`}
+                    value={shareTitle}
+                    onChange={(e) => setShareTitle(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                  />
+                  <p className="text-[8px] text-gray-400 mt-1">Social networks par dynamic header ke roop me show hoga.</p>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Custom Share Image URL</label>
+                  <input
+                    type="text"
+                    placeholder="Past link manually or upload below..."
+                    value={shareImg}
+                    onChange={(e) => setShareImg(e.target.value)}
+                    className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                  />
+                  <p className="text-[8px] text-gray-400 mt-1">Aap direct image address paste kar sakte hain ya niche upload kar sakte hain.</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Custom Share Description</label>
+                <textarea
+                  rows={2}
+                  placeholder={`Default tagline: ${tagline}`}
+                  value={shareDesc}
+                  onChange={(e) => setShareDesc(e.target.value)}
+                  className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 leading-relaxed resize-none"
+                />
+                <p className="text-[8px] text-gray-400 mt-1">Preview text jo link ke niche show hota hai (Recommended: under 120 characters).</p>
+              </div>
+
+              {/* Share Image Upload Box */}
+              <div>
+                <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Upload Custom Preview Image</label>
+                <div className="mt-1 flex flex-col items-center gap-3 p-4 border border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-50/80 transition-colors">
+                  {shareImg ? (
+                    <div className="relative group w-full h-32 rounded-xl overflow-hidden border border-slate-100 shadow-sm bg-white">
+                      <img 
+                        src={shareImg} 
+                        alt="Share Preview" 
+                        className="w-full h-full object-contain bg-slate-50" 
+                        onError={(e) => {
+                          const currentSrc = e.currentTarget.src;
+                          if (currentSrc && currentSrc.includes('/storage/v1/object/public/') && !currentSrc.includes('/uploads/')) {
+                            const parts = currentSrc.split('/');
+                            const filename = parts[parts.length - 1];
+                            e.currentTarget.src = `/uploads/${filename}`;
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShareImg('')}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity cursor-pointer"
+                      >
+                        Remove Preview Image
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-center p-2">
+                      <UploadCloud className="mx-auto h-8 w-8 text-gray-400" />
+                      <span className="text-[10px] font-bold text-teal-600 mt-1 cursor-pointer hover:underline">
+                        Upload Share Image
+                      </span>
+                      <p className="text-[8px] text-gray-400 mt-0.5">Recommended: 1200x630px (Landscape PNG/JPG)</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleShareImgChange}
+                    className="hidden"
+                    id="share-img-file-input"
+                    disabled={isUploadingShareImg}
+                  />
+                  {!shareImg && (
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('share-img-file-input')?.click()}
+                      className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-[10px] font-bold text-slate-700 transition-colors cursor-pointer"
+                    >
+                      {isUploadingShareImg ? 'Uploading...' : 'Browse File'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Real-time Social Sharing Mock Preview Card */}
+              <div className="border border-slate-100 rounded-xl p-4 bg-slate-50/50 space-y-2">
+                <span className="text-[9px] uppercase font-extrabold tracking-widest text-gray-400 font-display block">
+                  WhatsApp Share Card Live Preview 📱
+                </span>
+                
+                <div className="bg-[#0b141a] text-slate-200 border border-slate-800 rounded-xl p-3.5 flex gap-3 max-w-lg shadow-md">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg overflow-hidden border border-slate-800 bg-[#1e2a30] flex items-center justify-center">
+                    <img 
+                      src={shareImg || bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop'} 
+                      alt="WhatsApp Preview" 
+                      className="w-full h-full object-cover" 
+                    />
+                  </div>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <h4 className="text-xs sm:text-sm font-bold text-slate-100 truncate font-display">
+                      {shareTitle || `${brandName || 'Sebok'} - ${tagline || 'Tripura jobs in your finger'}`}
+                    </h4>
+                    <p className="text-[10px] text-slate-400 line-clamp-2 mt-0.5 leading-normal">
+                      {shareDesc || tagline || 'Sebok is a mobile-responsive premium job feed and community platform...'}
+                    </p>
+                    <span className="text-[8px] sm:text-[9px] text-slate-500 mt-1 font-semibold tracking-wide">
+                      sebok.in
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={isSavingSettings}
+                className={`w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-teal-600/10 flex items-center justify-center gap-1.5 font-display ${
+                  isSavingSettings ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                }`}
+              >
+                <Save size={14} className={isSavingSettings ? 'animate-spin' : ''} />
+                <span>{isSavingSettings ? 'Saving Preview Config...' : 'Save Social Sharing Config'}</span>
               </button>
             </form>
           </div>
@@ -3038,22 +3223,42 @@ ON CONFLICT (id) DO NOTHING;`;
 
               <form onSubmit={handleSaveSettings} className="space-y-4">
                 {/* Auto notify check */}
-                <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl">
-                  <div className="space-y-0.5">
-                    <span className="text-xs font-bold text-gray-800 font-display">Auto-Send Notifications</span>
-                    <p className="text-[9px] text-gray-400 font-medium">Naya job post live hote hi auto-send push notification.</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-gray-800 font-display">Auto-Send Job Alerts</span>
+                      <p className="text-[9px] text-gray-400 font-medium">Naya job post live hote hi auto push alerts.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOneSignalAutoNotify(!oneSignalAutoNotify)}
+                      className="text-teal-600 focus:outline-none"
+                    >
+                      {oneSignalAutoNotify ? (
+                        <ToggleRight size={32} className="text-teal-600 transition-colors" />
+                      ) : (
+                        <ToggleLeft size={32} className="text-gray-300 transition-colors" />
+                      )}
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setOneSignalAutoNotify(!oneSignalAutoNotify)}
-                    className="text-teal-600 focus:outline-none"
-                  >
-                    {oneSignalAutoNotify ? (
-                      <ToggleRight size={32} className="text-teal-600 transition-colors" />
-                    ) : (
-                      <ToggleLeft size={32} className="text-gray-300 transition-colors" />
-                    )}
-                  </button>
+
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/60 rounded-xl">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-bold text-gray-800 font-display">Community Post Notifications</span>
+                      <p className="text-[9px] text-gray-400 font-medium">Naya community feed post live hone par push alert.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setOneSignalCommunityNotify(!oneSignalCommunityNotify)}
+                      className="text-teal-600 focus:outline-none"
+                    >
+                      {oneSignalCommunityNotify ? (
+                        <ToggleRight size={32} className="text-teal-600 transition-colors" />
+                      ) : (
+                        <ToggleLeft size={32} className="text-gray-300 transition-colors" />
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -3097,6 +3302,73 @@ ON CONFLICT (id) DO NOTHING;`;
                     placeholder={`e.g.\n<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>\n<script>\n  window.OneSignal = window.OneSignal || [];\n  OneSignal.push(function() {\n    OneSignal.init({\n      appId: "your-onesignal-app-id",\n    });\n  });\n</script>`}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 font-mono resize-none leading-relaxed"
                   />
+                </div>
+
+                {/* Custom OneSignal Permission Prompt Settings */}
+                <div className="border-t border-slate-100 pt-4 space-y-4">
+                  <h4 className="text-[10px] font-extrabold text-teal-700 uppercase tracking-wider font-display">
+                    Permission Prompt Appearance Customization 🎨
+                  </h4>
+                  <p className="text-[9px] text-gray-400 leading-normal font-semibold">
+                    Permissions allow notification prompt ke visuals ko customize karein jo screen par automatic active user ko show hota hai.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Prompt Title</label>
+                      <input
+                        type="text"
+                        placeholder="Default: JOB ALERTS DIRECT CHAHIYE? 🔔"
+                        value={oneSignalPromptTitle}
+                        onChange={(e) => setOneSignalPromptTitle(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Prompt Subtitle</label>
+                      <input
+                        type="text"
+                        placeholder="Default: NEVER MISS A HIRING UPDATE"
+                        value={oneSignalPromptSubtitle}
+                        onChange={(e) => setOneSignalPromptSubtitle(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Prompt Description Text</label>
+                    <textarea
+                      rows={2}
+                      placeholder="Default: Naye job alerts aur community postings direct apne mobile ya computer screen par instant receive karne ke liye notifications Subscribe karein!"
+                      value={oneSignalPromptDesc}
+                      onChange={(e) => setOneSignalPromptDesc(e.target.value)}
+                      className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-950 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10 leading-relaxed resize-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Dismiss Button Text</label>
+                      <input
+                        type="text"
+                        placeholder="Default: BAAD MEIN"
+                        value={oneSignalPromptBtnDismiss}
+                        onChange={(e) => setOneSignalPromptBtnDismiss(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Allow Button Text</label>
+                      <input
+                        type="text"
+                        placeholder="Default: HAAN, ALLOW KAREIN 🔔"
+                        value={oneSignalPromptBtnAllow}
+                        onChange={(e) => setOneSignalPromptBtnAllow(e.target.value)}
+                        className="w-full bg-slate-50 border border-gray-200 rounded-xl p-2.5 text-xs text-gray-900 mt-1 focus:outline-none focus:ring-2 focus:ring-teal-500/10"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <button

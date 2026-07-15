@@ -605,6 +605,9 @@ function mapSettingsFromSupabase(s: any, currentSettings: any = {}) {
   return {
     brandName: getStr(s.brand_name, currentSettings.brandName, 'Sebok'),
     tagline: getStr(s.tagline, currentSettings.tagline, 'Your Premium Portal to Verified Careers & Networking'),
+    shareTitle: getStr(s.share_title, currentSettings.shareTitle, ''),
+    shareDesc: getStr(s.share_desc, currentSettings.shareDesc, ''),
+    shareImg: getStr(s.share_img, currentSettings.shareImg, ''),
     logoUrl: getStr(s.logo_url, currentSettings.logoUrl, ''),
     faviconUrl: getStr(s.favicon_url, currentSettings.faviconUrl, ''),
     bannerUrl: getStr(s.banner_url, currentSettings.bannerUrl, ''),
@@ -634,6 +637,12 @@ function mapSettingsFromSupabase(s: any, currentSettings: any = {}) {
     oneSignalAppId: getStr(s.one_signal_app_id, currentSettings.oneSignalAppId, ''),
     oneSignalRestApiKey: getStr(s.one_signal_rest_api_key, currentSettings.oneSignalRestApiKey, ''),
     oneSignalAutoNotify: getBool(s.one_signal_auto_notify, currentSettings.oneSignalAutoNotify, true),
+    oneSignalCommunityNotify: getBool(s.one_signal_community_notify, currentSettings.oneSignalCommunityNotify, true),
+    oneSignalPromptTitle: getStr(s.one_signal_prompt_title, currentSettings.oneSignalPromptTitle, 'JOB ALERTS DIRECT CHAHIYE? 🔔'),
+    oneSignalPromptSubtitle: getStr(s.one_signal_prompt_subtitle, currentSettings.oneSignalPromptSubtitle, 'NEVER MISS A HIRING UPDATE'),
+    oneSignalPromptDesc: getStr(s.one_signal_prompt_desc, currentSettings.oneSignalPromptDesc, 'Naye job alerts aur community postings direct apne mobile ya computer screen par instant receive karne ke liye notifications Subscribe karein!'),
+    oneSignalPromptBtnDismiss: getStr(s.one_signal_prompt_btn_dismiss, currentSettings.oneSignalPromptBtnDismiss, 'BAAD MEIN'),
+    oneSignalPromptBtnAllow: getStr(s.one_signal_prompt_btn_allow, currentSettings.oneSignalPromptBtnAllow, 'HAAN, ALLOW KAREIN 🔔'),
     communityMindPlaceholder: getStr(s.community_mind_placeholder, currentSettings.communityMindPlaceholder, ''),
     communityReviewNotice: getStr(s.community_review_notice, currentSettings.communityReviewNotice, ''),
     loginTitle: getStr(s.login_title, currentSettings.loginTitle, ''),
@@ -652,6 +661,9 @@ function mapSettingsToSupabase(s: any) {
     id: 'global_settings',
     brand_name: s.brandName,
     tagline: s.tagline,
+    share_title: s.shareTitle || '',
+    share_desc: s.shareDesc || '',
+    share_img: s.shareImg || '',
     logo_url: s.logoUrl,
     favicon_url: s.faviconUrl || '',
     banner_url: s.bannerUrl,
@@ -679,6 +691,12 @@ function mapSettingsToSupabase(s: any) {
     one_signal_app_id: s.oneSignalAppId || '',
     one_signal_rest_api_key: s.oneSignalRestApiKey || '',
     one_signal_auto_notify: s.oneSignalAutoNotify !== false,
+    one_signal_community_notify: s.oneSignalCommunityNotify !== false,
+    one_signal_prompt_title: s.oneSignalPromptTitle || '',
+    one_signal_prompt_subtitle: s.oneSignalPromptSubtitle || '',
+    one_signal_prompt_desc: s.oneSignalPromptDesc || '',
+    one_signal_prompt_btn_dismiss: s.oneSignalPromptBtnDismiss || '',
+    one_signal_prompt_btn_allow: s.oneSignalPromptBtnAllow || '',
     community_mind_placeholder: s.communityMindPlaceholder,
     community_review_notice: s.communityReviewNotice,
     login_title: s.loginTitle,
@@ -1292,8 +1310,8 @@ app.post('/api/posts', async (req, res) => {
     console.log('[Supabase Info] Local post created successfully, but Supabase insert was skipped. Details:', err.message || String(err));
   }
 
-  // Trigger OneSignal Push Notification asynchronously in the background if the post is immediately Live
-  if (newPost.status === 'Live') {
+  // Trigger OneSignal Push Notification asynchronously in the background if the post is immediately Live and notification is enabled
+  if (newPost.status === 'Live' && db.adminSettings?.oneSignalCommunityNotify !== false) {
     const protocol = (req.headers.host || 'localhost:3000').includes('localhost') ? 'http' : 'https';
     const postTargetUrl = `${protocol}://${req.headers.host || 'localhost:3000'}/community`;
     const title = `New Community Post! 💬`;
@@ -1330,16 +1348,18 @@ app.put('/api/posts/:id/approve', async (req, res) => {
       console.log('[Supabase Info] Post approved locally, but Supabase sync was skipped. Details:', err.message || String(err));
     }
 
-    // Trigger OneSignal Push Notification asynchronously in the background when approved
-    const protocol = (req.headers.host || 'localhost:3000').includes('localhost') ? 'http' : 'https';
-    const postTargetUrl = `${protocol}://${req.headers.host || 'localhost:3000'}/community`;
-    const title = `Post Approved! 💬`;
-    const captionText = post.caption && post.caption.length > 50 ? `${post.caption.slice(0, 50)}...` : (post.caption || '');
-    const body = `${post.userName || 'Someone'} shared: ${captionText}`;
-    
-    sendOneSignalPush(title, body, postTargetUrl).catch(err => {
-      console.error('[OneSignal Community Approved Notification Error]:', err);
-    });
+    // Trigger OneSignal Push Notification asynchronously in the background when approved and notification is enabled
+    if (db.adminSettings?.oneSignalCommunityNotify !== false) {
+      const protocol = (req.headers.host || 'localhost:3000').includes('localhost') ? 'http' : 'https';
+      const postTargetUrl = `${protocol}://${req.headers.host || 'localhost:3000'}/community`;
+      const title = `Post Approved! 💬`;
+      const captionText = post.caption && post.caption.length > 50 ? `${post.caption.slice(0, 50)}...` : (post.caption || '');
+      const body = `${post.userName || 'Someone'} shared: ${captionText}`;
+      
+      sendOneSignalPush(title, body, postTargetUrl).catch(err => {
+        console.error('[OneSignal Community Approved Notification Error]:', err);
+      });
+    }
 
     res.json({ success: true, post });
   } else {
@@ -3045,12 +3065,12 @@ async function startServer() {
       delete clientSettings.oneSignalCode;
       delete clientSettings.googleSiteVerification;
 
-      let title = brand;
-      if (tagline) {
+      let title = settings.shareTitle && settings.shareTitle.trim() ? settings.shareTitle : brand;
+      if (!settings.shareTitle && tagline) {
         title = `${brand} - ${tagline}`;
       }
-      let description = tagline;
-      let imageUrl = bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop';
+      let description = settings.shareDesc && settings.shareDesc.trim() ? settings.shareDesc : tagline;
+      let imageUrl = settings.shareImg && settings.shareImg.trim() ? settings.shareImg : (bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop');
 
       // Detect specific job preview
       let jobId = req.query.job_id;

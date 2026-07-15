@@ -470,16 +470,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setPosts(prev => [data.post, ...prev]);
-
-        // Show our beautiful native-style UI banner to the user as requested
-        if (typeof window !== 'undefined' && window.showNativeNotificationBanner) {
-          window.showNativeNotificationBanner(
-            'Community Update! 📢',
-            `${user.name || 'A user'} ne ek naya post share kiya hai: "${postData.caption || 'No caption'}"`,
-            user.avatar || undefined,
-            'now'
-          );
-        }
       }
     } catch (e) {
       console.error(e);
@@ -1081,7 +1071,13 @@ export default function App() {
       <Toast />
 
       {/* Beautiful custom OneSignal push notification prompt popup */}
-      <OneSignalPrompt />
+      <OneSignalPrompt
+        title={settings.oneSignalPromptTitle}
+        subtitle={settings.oneSignalPromptSubtitle}
+        desc={settings.oneSignalPromptDesc}
+        btnDismiss={settings.oneSignalPromptBtnDismiss}
+        btnAllow={settings.oneSignalPromptBtnAllow}
+      />
 
     </div>
   );

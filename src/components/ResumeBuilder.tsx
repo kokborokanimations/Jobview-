@@ -174,6 +174,9 @@ const DEFAULT_RESUME_DATA: ResumeData = {
 
 type TemplateType = 'donna-elegant' | 'lorna-minimalist' | 'olivia-modern';
 
+// Persistent cache for converted oklch stylesheets to prevent freezing during multiple PDF downloads
+const patchedStylesCache = new Map<HTMLStyleElement, string>();
+
 export default function ResumeBuilder({ user, settings, onLoginTrigger }: ResumeBuilderProps) {
   // Persistence key
   const storageKey = user ? `sebok_resume_${user.id}` : 'sebok_resume_guest';
@@ -629,14 +632,35 @@ ${(resume.references || []).map(ref => `
       const restoredStyles: { element: HTMLElement; originalContent?: string; href?: string }[] = [];
       const originalInlineStyles = new Map<Element, string>();
 
+      // Temporarily disable all transition animations to prevent layout-thrashing and freezing during PDF rendering
+      const disableTransitionsStyle = document.createElement('style');
+      disableTransitionsStyle.id = 'temp-disable-transitions';
+      disableTransitionsStyle.innerHTML = `
+        * {
+          transition: none !important;
+          transition-duration: 0s !important;
+          animation: none !important;
+          animation-duration: 0s !important;
+        }
+      `;
+      document.head.appendChild(disableTransitionsStyle);
+
       try {
         // 1. Convert all inline <style> tags containing oklch or oklab
         const styleTags = Array.from(document.querySelectorAll('style'));
         for (const tag of styleTags) {
+          if (tag.id === 'temp-disable-transitions') continue;
           const css = tag.innerHTML;
           if (css.includes('oklch') || css.includes('oklab')) {
             restoredStyles.push({ element: tag, originalContent: css });
-            tag.innerHTML = replaceOklabWithRgb(replaceOklchWithRgb(css));
+            
+            // Check cache to avoid extremely heavy regex computation which stalls/freezes the browser
+            let patched = patchedStylesCache.get(tag);
+            if (!patched) {
+              patched = replaceOklabWithRgb(replaceOklchWithRgb(css));
+              patchedStylesCache.set(tag, patched);
+            }
+            tag.innerHTML = patched;
           }
         }
 
@@ -702,6 +726,10 @@ ${(resume.references || []).map(ref => `
       // Cleanup and restore function
       const restoreStyles = () => {
         try {
+          // Remove temp disable transitions stylesheet
+          const disableStyle = document.getElementById('temp-disable-transitions');
+          if (disableStyle) disableStyle.remove();
+
           // Restore <style> tag content
           for (const item of restoredStyles) {
             if (item.originalContent !== undefined) {
@@ -724,7 +752,16 @@ ${(resume.references || []).map(ref => `
         }
       };
 
-      // Simple delay to let React process zoom reset state before capturing
+      // Ensure all custom web fonts are fully loaded before rendering to prevent dimension shifts or line wrapping issues
+      try {
+        if (document.fonts && document.fonts.ready) {
+          await document.fonts.ready;
+        }
+      } catch (fontErr) {
+        console.warn('Font loading check skipped:', fontErr);
+      }
+
+      // Short delay is sufficient because animations/transitions are disabled immediately
       setTimeout(() => {
         const opt = {
           margin: 0,
@@ -734,7 +771,10 @@ ${(resume.references || []).map(ref => `
             scale: 2, 
             useCORS: true,
             logging: false,
-            letterRendering: true
+            letterRendering: true,
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: 794 // Enforces a fixed simulated viewport width of 794px (Standard A4 width) during capture to guarantee identical mobile & desktop layout dimensions
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
@@ -755,7 +795,7 @@ ${(resume.references || []).map(ref => `
             setZoomScale(previousZoom);
             alert('An error occurred during PDF generation. Please try again or use the browser Print / PDF button.');
           });
-      }, 300);
+      }, 150);
     };
 
     // Dynamically load html2pdf if not available on window

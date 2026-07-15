@@ -67,6 +67,9 @@ export interface CustomPage {
 export interface AdminSettings {
   brandName: string;
   tagline: string;
+  shareTitle?: string;
+  shareDesc?: string;
+  shareImg?: string;
   logoUrl: string; // If empty, we can render a gorgeous Lucide icon
   faviconUrl?: string; // App Favicon Icon URL
   bannerUrl: string; // Job Feed Banner
@@ -103,6 +106,12 @@ export interface AdminSettings {
   oneSignalAppId?: string;
   oneSignalRestApiKey?: string;
   oneSignalAutoNotify?: boolean;
+  oneSignalCommunityNotify?: boolean;
+  oneSignalPromptTitle?: string;
+  oneSignalPromptSubtitle?: string;
+  oneSignalPromptDesc?: string;
+  oneSignalPromptBtnDismiss?: string;
+  oneSignalPromptBtnAllow?: string;
   fcmConfigJson?: string;
   fcmVapidKey?: string;
   fcmServerKey?: string;

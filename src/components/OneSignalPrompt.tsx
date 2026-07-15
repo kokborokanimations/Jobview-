@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Bell, X } from 'lucide-react';
 
-export default function OneSignalPrompt() {
+interface OneSignalPromptProps {
+  title?: string;
+  subtitle?: string;
+  desc?: string;
+  btnDismiss?: string;
+  btnAllow?: string;
+}
+
+export default function OneSignalPrompt({
+  title,
+  subtitle,
+  desc,
+  btnDismiss,
+  btnAllow,
+}: OneSignalPromptProps) {
   const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
@@ -79,6 +93,19 @@ export default function OneSignalPrompt() {
 
   if (!showPrompt) return null;
 
+  const renderDesc = () => {
+    const text = desc || 'Naye job alerts aur community postings direct apne mobile ya computer screen par instant receive karne ke liye notifications Subscribe karein!';
+    if (text.includes('Subscribe')) {
+      const parts = text.split('Subscribe');
+      return (
+        <>
+          {parts[0]}<strong>Subscribe</strong>{parts[1]}
+        </>
+      );
+    }
+    return text;
+  };
+
   return (
     <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-6 md:w-96 bg-white border border-slate-200 rounded-2xl shadow-2xl z-[999] p-4 flex flex-col gap-3 animate-slide-up bg-linear-to-b from-white to-slate-50">
       <div className="flex items-start justify-between gap-2">
@@ -88,10 +115,10 @@ export default function OneSignalPrompt() {
           </div>
           <div>
             <h4 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider font-display">
-              Job Alerts Direct Chahiye? 🔔
+              {title || 'Job Alerts Direct Chahiye? 🔔'}
             </h4>
             <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-tight mt-0.5 font-display">
-              Never Miss a hiring update
+              {subtitle || 'Never Miss a hiring update'}
             </p>
           </div>
         </div>
@@ -105,7 +132,7 @@ export default function OneSignalPrompt() {
 
       <div className="space-y-1">
         <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
-          Naye job alerts aur community postings direct apne mobile ya computer screen par instant receive karne ke liye notifications <strong>Subscribe</strong> karein!
+          {renderDesc()}
         </p>
       </div>
 
@@ -114,13 +141,13 @@ export default function OneSignalPrompt() {
           onClick={handleDismiss}
           className="flex-1 py-1.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg transition-all cursor-pointer text-center font-display uppercase tracking-wider"
         >
-          Baad Mein
+          {btnDismiss || 'Baad Mein'}
         </button>
         <button
           onClick={handleSubscribe}
           className="flex-1 py-1.5 px-3 bg-teal-600 hover:bg-teal-700 text-white text-[10px] font-extrabold rounded-lg transition-all cursor-pointer text-center font-display uppercase tracking-wider shadow-sm shadow-teal-600/10"
         >
-          Haan, Allow Karein 🔔
+          {btnAllow || 'Haan, Allow Karein 🔔'}
         </button>
       </div>
     </div>
