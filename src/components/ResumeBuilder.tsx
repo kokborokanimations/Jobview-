@@ -725,7 +725,18 @@ ${(resume.references || []).map(ref => `
 
   // Direct Browser Printing (Formatted to A4 sheet)
   const triggerPrint = () => {
+    const originalTitle = document.title;
+    const userName = resume.personal.fullName || 'Resume';
+    // Format name cleanly, replacing spaces with underscores and keeping only safe characters
+    const cleanName = userName.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
+    document.title = `${cleanName}_Resume`;
+    
     window.print();
+    
+    // Restore original title after print dialog closes
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   // Client-side PDF downloader using html2pdf.js loaded dynamically
@@ -741,7 +752,8 @@ ${(resume.references || []).map(ref => `
       setZoomScale(100);
 
       // Temporarily override resume-print-area properties to match exact standard A4 layout dimensions
-      element.style.setProperty('padding', '0px', 'important');
+      // Maintain the exact 32px (p-8) padding to prevent dimension shift and guarantee screen-to-PDF layout match
+      element.style.setProperty('padding', '32px', 'important');
       element.style.setProperty('width', '794px', 'important');
       element.style.setProperty('max-width', '794px', 'important');
 
@@ -898,7 +910,8 @@ ${(resume.references || []).map(ref => `
             scrollY: 0,
             windowWidth: 794 // Enforces a fixed simulated viewport width of 794px (Standard A4 width) during capture to guarantee identical mobile & desktop layout dimensions
           },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
         };
 
         html2pdfLib()
@@ -1428,14 +1441,14 @@ ${(resume.references || []).map(ref => `
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
                 <Briefcase size={14} className="text-teal-600" />
-                Work Experience
+                Work Experience (कार्य अनुभव)
               </h2>
               <button
                 onClick={addExperience}
                 className="text-[9px] font-black uppercase tracking-wider text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 px-2.5 py-1.5 rounded-lg bg-teal-50/20 hover:bg-teal-50/50 transition-all cursor-pointer"
               >
                 <Plus size={11} className="stroke-[3]" />
-                <span>Add Position</span>
+                <span>Add Experience</span>
               </button>
             </div>
 
@@ -1446,7 +1459,7 @@ ${(resume.references || []).map(ref => `
                 {resume.experience.map((exp, idx) => (
                   <div key={exp.id} className={`space-y-3 ${idx > 0 ? 'pt-4' : ''}`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Position #{idx + 1}</span>
+                      <span className="text-[10px] font-extrabold text-teal-700 uppercase tracking-wider">Experience #{idx + 1}</span>
                       <button
                         onClick={() => deleteExperience(exp.id)}
                         className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
@@ -1457,70 +1470,62 @@ ${(resume.references || []).map(ref => `
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Company Name</label>
-                        <input
-                          type="text"
-                          value={exp.company}
-                          onChange={(e) => handleExperienceChange(exp.id, 'company', e.target.value)}
-                          placeholder="e.g. Google India"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Job Title</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Designation / Job Title (पद)</label>
                         <input
                           type="text"
                           value={exp.position}
                           onChange={(e) => handleExperienceChange(exp.id, 'position', e.target.value)}
-                          placeholder="e.g. Senior Product Designer"
+                          placeholder="e.g. High School Teacher"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Location</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Organization / Company Name (संस्था)</label>
                         <input
                           type="text"
-                          value={exp.location}
-                          onChange={(e) => handleExperienceChange(exp.id, 'location', e.target.value)}
-                          placeholder="e.g. Mumbai, India"
+                          value={exp.company}
+                          onChange={(e) => handleExperienceChange(exp.id, 'company', e.target.value)}
+                          placeholder="e.g. Sri Venkateswara High School"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Start Date</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Start Date / Year (आरंभ तिथि)</label>
                         <input
-                          type="month"
+                          type="text"
                           value={exp.startDate}
                           onChange={(e) => handleExperienceChange(exp.id, 'startDate', e.target.value)}
+                          placeholder="e.g. 01 Mar 2023 or 2023"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">End Date</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">End Date / Year (समाप्ति तिथि)</label>
                         <input
                           type="text"
                           disabled={exp.current}
                           value={exp.current ? 'Present' : exp.endDate}
                           onChange={(e) => handleExperienceChange(exp.id, 'endDate', e.target.value)}
-                          placeholder="YYYY-MM"
+                          placeholder="e.g. 31 Jan 2026 or Present"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800 disabled:opacity-50"
                         />
                       </div>
-                      <div className="flex items-center gap-1.5 pt-4">
-                        <input
-                          type="checkbox"
-                          id={`exp-curr-${exp.id}`}
-                          checked={exp.current}
-                          onChange={(e) => handleExperienceChange(exp.id, 'current', e.target.checked)}
-                          className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
-                        />
-                        <label htmlFor={`exp-curr-${exp.id}`} className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider cursor-pointer">I currently work here</label>
-                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 py-1">
+                      <input
+                        type="checkbox"
+                        id={`exp-curr-${exp.id}`}
+                        checked={exp.current}
+                        onChange={(e) => handleExperienceChange(exp.id, 'current', e.target.checked)}
+                        className="w-3.5 h-3.5 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
+                      />
+                      <label htmlFor={`exp-curr-${exp.id}`} className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider cursor-pointer">I currently work here</label>
                     </div>
 
                     <div className="space-y-1 pt-1">
                       <div className="flex items-center justify-between">
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Achievements / Description</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Responsibilities / Description (दायित्व)</label>
                         <button
                           onClick={() => callGeminiEnhance('experience', exp.description, exp.id)}
                           disabled={aiLoading !== null}
@@ -1537,7 +1542,7 @@ ${(resume.references || []).map(ref => `
                       <textarea
                         value={exp.description}
                         onChange={(e) => handleExperienceChange(exp.id, 'description', e.target.value)}
-                        placeholder="• Highlight key accomplishments with metrics...&#10;• Led design system implementation...&#10;• Handled 20% traffic scale..."
+                        placeholder="e.g. Taught science subjects, managed student activities, graded exams..."
                         rows={3}
                         className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800 leading-relaxed"
                       />
@@ -1553,14 +1558,14 @@ ${(resume.references || []).map(ref => `
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
                 <GraduationCap size={15} className="text-teal-600" />
-                Education
+                Education Details (शैक्षणिक योग्यता)
               </h2>
               <button
                 onClick={addEducation}
                 className="text-[9px] font-black uppercase tracking-wider text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 px-2.5 py-1.5 rounded-lg bg-teal-50/20 hover:bg-teal-50/50 transition-all cursor-pointer"
               >
                 <Plus size={11} className="stroke-[3]" />
-                <span>Add Degree</span>
+                <span>Add Education</span>
               </button>
             </div>
 
@@ -1571,7 +1576,7 @@ ${(resume.references || []).map(ref => `
                 {resume.education.map((edu, idx) => (
                   <div key={edu.id} className={`space-y-3 ${idx > 0 ? 'pt-4' : ''}`}>
                     <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Education #{idx + 1}</span>
+                      <span className="text-[10px] font-extrabold text-teal-700 uppercase tracking-wider">Education #{idx + 1}</span>
                       <button
                         onClick={() => deleteEducation(edu.id)}
                         className="p-1 hover:bg-rose-50 text-slate-400 hover:text-rose-600 rounded-lg transition-all cursor-pointer"
@@ -1582,56 +1587,45 @@ ${(resume.references || []).map(ref => `
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">School / University</label>
-                        <input
-                          type="text"
-                          value={edu.school}
-                          onChange={(e) => handleEducationChange(edu.id, 'school', e.target.value)}
-                          placeholder="e.g. IIT Kharagpur"
-                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Degree / Stream</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Qualification / Degree (डिग्री/कक्षा)</label>
                         <input
                           type="text"
                           value={edu.degree}
                           onChange={(e) => handleEducationChange(edu.id, 'degree', e.target.value)}
-                          placeholder="e.g. Master in Design"
+                          placeholder="e.g. B.Sc (Mathematics & Physics)"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Location</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Institution Name (स्कूल/कॉलेज)</label>
                         <input
                           type="text"
-                          value={edu.location}
-                          onChange={(e) => handleEducationChange(edu.id, 'location', e.target.value)}
-                          placeholder="e.g. West Bengal, India"
+                          value={edu.school}
+                          onChange={(e) => handleEducationChange(edu.id, 'school', e.target.value)}
+                          placeholder="e.g. Andhra University"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Graduation Date</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Passing Year (उत्तीर्ण वर्ष)</label>
                         <input
                           type="text"
                           value={edu.endDate}
                           onChange={(e) => handleEducationChange(edu.id, 'endDate', e.target.value)}
-                          placeholder="e.g. 2021-06"
+                          placeholder="e.g. 2020"
                           className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
                         />
                       </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Additional info (optional)</label>
-                      <input
-                        type="text"
-                        value={edu.description}
-                        onChange={(e) => handleEducationChange(edu.id, 'description', e.target.value)}
-                        placeholder="e.g. CGPA 9.2, President of Tech Club"
-                        className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
-                      />
+                      <div>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Marks / Percentage / CGPA (अंक %)</label>
+                        <input
+                          type="text"
+                          value={edu.description}
+                          onChange={(e) => handleEducationChange(edu.id, 'description', e.target.value)}
+                          placeholder="e.g. 73% or 8.5 CGPA"
+                          className="w-full px-3 py-1.5 text-xs border border-slate-200 rounded-lg focus:outline-none focus:border-teal-500 font-medium text-slate-800"
+                        />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -2785,27 +2779,16 @@ ${(resume.references || []).map(ref => `
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+                <div className="flex flex-col gap-2.5 pt-2">
                   <button
                     onClick={() => {
                       setShowPdfGuideModal(false);
                       triggerPrint();
                     }}
-                    className="flex-1 px-5 py-3 text-xs font-extrabold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-xl shadow-lg shadow-teal-950/10 transition-all cursor-pointer flex items-center justify-center gap-2 border border-teal-500"
+                    className="w-full px-5 py-3 text-xs font-extrabold text-white bg-teal-600 hover:bg-teal-700 active:bg-teal-800 rounded-xl shadow-lg shadow-teal-950/10 transition-all cursor-pointer flex items-center justify-center gap-2 border border-teal-500"
                   >
                     <Printer size={15} className="stroke-[2.5]" />
                     Open High-Quality Print to PDF
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setShowPdfGuideModal(false);
-                      downloadPDF();
-                    }}
-                    className="px-4 py-3 text-xs font-bold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100 bg-slate-100 dark:bg-slate-800 hover:bg-slate-150 dark:hover:bg-slate-750 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
-                  >
-                    <Download size={13} className="stroke-[2.5]" />
-                    Direct Image PDF
                   </button>
                 </div>
               </div>
