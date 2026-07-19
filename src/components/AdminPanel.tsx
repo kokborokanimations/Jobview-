@@ -74,6 +74,7 @@ export default function AdminPanel({
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingShareImg, setIsUploadingShareImg] = useState(false);
   const [premiumMode, setPremiumMode] = useState(settings.premiumMode);
+  const [communityPremiumMode, setCommunityPremiumMode] = useState(settings.communityPremiumMode !== false);
   const [membershipPrice, setMembershipPrice] = useState(settings.membershipPrice || 499);
   const [currency, setCurrency] = useState(settings.currency || 'INR');
   const [paywallFeaturesText, setPaywallFeaturesText] = useState((settings.paywallFeatures || []).join('\n'));
@@ -152,6 +153,7 @@ export default function AdminPanel({
   const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>([]);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [transactionSearchQuery, setTransactionSearchQuery] = useState('');
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<Job | null>(null);
@@ -288,6 +290,7 @@ export default function AdminPanel({
     setBannerUrl(settings.bannerUrl || '');
     setBannerHtml(settings.bannerHtml || '');
     setPremiumMode(settings.premiumMode);
+    setCommunityPremiumMode(settings.communityPremiumMode !== false);
     setMembershipPrice(settings.membershipPrice || 499);
     setCurrency(settings.currency || 'INR');
     setPaywallFeaturesText((settings.paywallFeatures || []).join('\n'));
@@ -545,6 +548,7 @@ export default function AdminPanel({
       bannerObjectFit !== (settings.bannerObjectFit || 'cover') ||
       bannerPosition !== (settings.bannerPosition || 'center') ||
       premiumMode !== settings.premiumMode ||
+      communityPremiumMode !== (settings.communityPremiumMode !== false) ||
       Number(membershipPrice) !== (settings.membershipPrice || 499) ||
       currency !== (settings.currency || 'INR') ||
       paywallTitle !== (settings.paywallTitle || 'Activate Premium') ||
@@ -606,6 +610,7 @@ export default function AdminPanel({
         bannerObjectFit,
         bannerPosition,
         premiumMode,
+        communityPremiumMode,
         membershipPrice: Number(membershipPrice),
         currency,
         paywallFeatures: features,
@@ -1706,7 +1711,7 @@ export default function AdminPanel({
                 <div className="bg-[#0b141a] text-slate-200 border border-slate-800 rounded-xl p-3.5 flex gap-3 max-w-lg shadow-md">
                   <div className="w-16 h-16 sm:w-20 sm:h-20 shrink-0 rounded-lg overflow-hidden border border-slate-800 bg-[#1e2a30] flex items-center justify-center">
                     <img 
-                      src={shareImg || bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop'} 
+                      src={shareImg || logoUrl || bannerUrl || 'https://crdmccidgzknnylyggbf.supabase.co/storage/v1/object/public/branding/app_logo_1783614864312.jpg'} 
                       alt="WhatsApp Preview" 
                       className="w-full h-full object-cover" 
                     />
@@ -2279,7 +2284,7 @@ export default function AdminPanel({
                   
                   <div className="relative">
                     <pre className="p-3 bg-slate-950 text-slate-100 rounded-xl font-mono text-[9px] overflow-x-auto max-h-72 whitespace-pre leading-normal">
-{`-- 1. JOBS TABLE
+{`-- 1. JOBS TABLE (VIEW SCHEMA)
 CREATE TABLE IF NOT EXISTS public.jobs (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -2400,6 +2405,9 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     brand_name TEXT,
     tagline TEXT,
+    share_title TEXT,
+    share_desc TEXT,
+    share_img TEXT,
     logo_url TEXT,
     favicon_url TEXT,
     banner_url TEXT,
@@ -2424,11 +2432,25 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     supabase_service_role_key TEXT,
     google_site_verification TEXT,
     one_signal_code TEXT,
+    one_signal_app_id TEXT,
+    one_signal_rest_api_key TEXT,
+    one_signal_auto_notify BOOLEAN DEFAULT TRUE,
+    one_signal_community_notify BOOLEAN DEFAULT TRUE,
+    one_signal_prompt_title TEXT,
+    one_signal_prompt_subtitle TEXT,
+    one_signal_prompt_desc TEXT,
+    one_signal_prompt_btn_dismiss TEXT,
+    one_signal_prompt_btn_allow TEXT,
     community_mind_placeholder TEXT,
     community_review_notice TEXT,
     login_title TEXT,
     login_subtitle TEXT,
-    google_only BOOLEAN DEFAULT FALSE
+    google_only BOOLEAN DEFAULT FALSE,
+    show_job_filters BOOLEAN DEFAULT TRUE,
+    banner_height_type TEXT DEFAULT 'default',
+    banner_height_custom_value NUMERIC DEFAULT 150,
+    banner_object_fit TEXT DEFAULT 'cover',
+    banner_position TEXT DEFAULT 'center'
 );
 
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
@@ -2504,7 +2526,7 @@ ON CONFLICT (id) DO NOTHING;`}
                     </pre>
                     <button
                       onClick={() => {
-                        const sqlText = `-- 1. JOBS TABLE
+                        const sqlText = `-- 1. JOBS TABLE (COPY SCHEMA)
 CREATE TABLE IF NOT EXISTS public.jobs (
     id TEXT PRIMARY KEY,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -2625,6 +2647,9 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     created_at TIMESTAMPTZ DEFAULT NOW(),
     brand_name TEXT,
     tagline TEXT,
+    share_title TEXT,
+    share_desc TEXT,
+    share_img TEXT,
     logo_url TEXT,
     favicon_url TEXT,
     banner_url TEXT,
@@ -2649,11 +2674,25 @@ CREATE TABLE IF NOT EXISTS public.admin_settings (
     supabase_service_role_key TEXT,
     google_site_verification TEXT,
     one_signal_code TEXT,
+    one_signal_app_id TEXT,
+    one_signal_rest_api_key TEXT,
+    one_signal_auto_notify BOOLEAN DEFAULT TRUE,
+    one_signal_community_notify BOOLEAN DEFAULT TRUE,
+    one_signal_prompt_title TEXT,
+    one_signal_prompt_subtitle TEXT,
+    one_signal_prompt_desc TEXT,
+    one_signal_prompt_btn_dismiss TEXT,
+    one_signal_prompt_btn_allow TEXT,
     community_mind_placeholder TEXT,
     community_review_notice TEXT,
     login_title TEXT,
     login_subtitle TEXT,
-    google_only BOOLEAN DEFAULT FALSE
+    google_only BOOLEAN DEFAULT FALSE,
+    show_job_filters BOOLEAN DEFAULT TRUE,
+    banner_height_type TEXT DEFAULT 'default',
+    banner_height_custom_value NUMERIC DEFAULT 150,
+    banner_object_fit TEXT DEFAULT 'cover',
+    banner_position TEXT DEFAULT 'center'
 );
 
 ALTER TABLE public.admin_settings ENABLE ROW LEVEL SECURITY;
@@ -2779,6 +2818,27 @@ ON CONFLICT (id) DO NOTHING;`;
                 className="text-teal-600 hover:text-teal-800 transition-colors focus:outline-none cursor-pointer"
               >
                 {premiumMode ? <ToggleRight size={44} /> : <ToggleLeft size={44} className="text-gray-400" />}
+              </button>
+            </div>
+
+            {/* Community Feed Access Mode */}
+            <div className="p-4 bg-emerald-50/40 rounded-2xl border border-emerald-100 flex items-center justify-between">
+              <div>
+                <p className="text-xs font-extrabold text-slate-900 font-display">Community Feed Premium Toggle</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Choose whether the Community Feed is <strong>Premium Mode</strong> (locked for expired users) or <strong>Free Mode</strong> (open to all logged-in members).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCommunityPremiumMode(!communityPremiumMode)}
+                className="text-emerald-600 hover:text-emerald-800 transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5"
+              >
+                <span className="text-[10px] font-black uppercase tracking-wider font-display">
+                  {communityPremiumMode ? 'Premium' : 'Free'}
+                </span>
+                {communityPremiumMode ? <ToggleRight size={44} /> : <ToggleLeft size={44} className="text-gray-400" />}
               </button>
             </div>
 
@@ -3413,6 +3473,8 @@ ON CONFLICT (id) DO NOTHING;`;
                   </div>
                 </div>
 
+
+
                 <div className="bg-teal-50/40 border border-teal-200/50 p-3 rounded-xl space-y-1.5">
                   <span className="text-[10px] font-black text-teal-800 uppercase block font-display">Testing OneSignal Notifications</span>
                   <p className="text-[9px] text-teal-700 font-medium leading-relaxed">
@@ -3465,11 +3527,34 @@ ON CONFLICT (id) DO NOTHING;`;
               </button>
             </div>
 
+            {/* Transaction Search Bar */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
+                <Search size={14} />
+              </span>
+              <input
+                type="text"
+                value={transactionSearchQuery}
+                onChange={(e) => setTransactionSearchQuery(e.target.value)}
+                placeholder="Search transaction by User Name, Email, or Tx ID..."
+                className="w-full pl-9 pr-4 py-2 text-xs border border-gray-100 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 transition-all font-display font-medium text-slate-800"
+              />
+              {transactionSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setTransactionSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="border-b border-gray-100 text-gray-400 uppercase tracking-wider font-bold">
-                    <th className="py-2">User Email</th>
+                    <th className="py-2">User / Email</th>
                     <th className="py-2">Amount</th>
                     <th className="py-2">Tx ID</th>
                     <th className="py-2">Date</th>
@@ -3477,32 +3562,73 @@ ON CONFLICT (id) DO NOTHING;`;
                   </tr>
                 </thead>
                 <tbody>
-                  {paymentLogs.map((log) => (
-                    <tr key={log.id} className="border-b border-gray-50 hover:bg-slate-50/50">
-                      <td className="py-3 font-medium text-gray-900">{log.userEmail}</td>
-                      <td className="py-3 font-bold text-gray-900">
-                        {settings.currency} {log.amount}
-                      </td>
-                      <td className="py-3 font-mono text-gray-500 text-[10px]">{log.txId}</td>
-                      <td className="py-3 text-gray-400 font-semibold">
-                        {new Date(log.createdAt).toLocaleDateString(undefined, {
-                          month: 'short',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </td>
-                      <td className="py-3 text-right">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wide ${
-                          log.status === 'SUCCESS'
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : 'bg-rose-50 text-rose-700 border border-rose-100'
-                        }`}>
-                          {log.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const filteredLogs = paymentLogs.filter((log) => {
+                      const foundUser = users.find(u => 
+                        u.id === log.userId || 
+                        u.email.toLowerCase() === log.userEmail.toLowerCase()
+                      );
+                      const userName = foundUser ? foundUser.name.toLowerCase() : 'unknown user';
+                      const userEmail = log.userEmail.toLowerCase();
+                      const txId = (log.txId || '').toLowerCase();
+                      const query = transactionSearchQuery.toLowerCase();
+                      return userName.includes(query) || userEmail.includes(query) || txId.includes(query);
+                    });
+
+                    if (filteredLogs.length === 0) {
+                      return (
+                        <tr>
+                          <td colSpan={5} className="py-8 text-center text-gray-400 font-semibold italic">
+                            {transactionSearchQuery ? `No transactions found matching "${transactionSearchQuery}"` : "No transactions available"}
+                          </td>
+                        </tr>
+                      );
+                    }
+
+                    return filteredLogs.map((log) => {
+                      const foundUser = users.find(u => 
+                        u.id === log.userId || 
+                        u.email.toLowerCase() === log.userEmail.toLowerCase()
+                      );
+                      const userName = foundUser ? foundUser.name : null;
+
+                      return (
+                        <tr key={log.id} className="border-b border-gray-50 hover:bg-slate-50/50">
+                          <td className="py-3">
+                            <div className="flex flex-col">
+                              {userName ? (
+                                <span className="font-bold text-gray-900 text-xs">{userName}</span>
+                              ) : (
+                                <span className="font-semibold text-gray-400 text-[11px] italic">Unknown User</span>
+                              )}
+                              <span className="font-medium text-gray-500 text-[10px]">{log.userEmail}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 font-bold text-gray-900">
+                            {settings.currency} {log.amount}
+                          </td>
+                          <td className="py-3 font-mono text-gray-500 text-[10px]">{log.txId}</td>
+                          <td className="py-3 text-gray-400 font-semibold">
+                            {new Date(log.createdAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </td>
+                          <td className="py-3 text-right">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] uppercase tracking-wide ${
+                              log.status === 'SUCCESS'
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                : 'bg-rose-50 text-rose-700 border border-rose-100'
+                            }`}>
+                              {log.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    });
+                  })()}
                 </tbody>
               </table>
             </div>

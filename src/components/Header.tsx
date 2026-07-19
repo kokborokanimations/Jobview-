@@ -132,7 +132,7 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
                     </div>
                   )}
 
-                  <div className="py-1 border-b border-gray-50 space-y-0.5">
+                  <div className="py-1 space-y-0.5">
                     <button
                       onClick={() => onChangeTab?.('profile')}
                       className="w-full text-left px-3 py-2 text-xs text-slate-700 hover:bg-slate-50 font-semibold flex items-center gap-2 transition-colors cursor-pointer"
@@ -167,14 +167,6 @@ export default function Header({ user, settings, onLogout, onLoginClick, onUpgra
                       </button>
                     )}
                   </div>
-
-                  <button
-                    onClick={onLogout}
-                    className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 font-medium flex items-center gap-2 transition-colors cursor-pointer"
-                  >
-                    <LogOut size={14} />
-                    Switch Account
-                  </button>
                 </div>
               </div>
             </div>

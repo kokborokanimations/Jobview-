@@ -79,6 +79,7 @@ export interface AdminSettings {
   bannerObjectFit?: 'cover' | 'contain' | 'fill';
   bannerPosition?: 'center' | 'top' | 'bottom';
   premiumMode: boolean;
+  communityPremiumMode?: boolean;
   membershipPrice: number;
   currency: string;
   paywallFeatures: string[];

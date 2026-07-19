@@ -29,7 +29,7 @@ export default function App() {
       brandName: '',
       tagline: '',
       logoUrl: '',
-      bannerUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
+      bannerUrl: 'https://crdmccidgzknnylyggbf.supabase.co/storage/v1/object/public/branding/app_logo_1783614864312.jpg',
       bannerHeightType: 'default',
       bannerHeightCustomValue: 150,
       bannerObjectFit: 'cover',
@@ -362,11 +362,17 @@ export default function App() {
         body: JSON.stringify(newSettings)
       });
       if (res.ok) {
+        const data = await res.json();
         setSettings(newSettings);
+        if (data.supabaseError) {
+          console.error('[Supabase Save Error]', data.supabaseError);
+          const errorMsg = `Settings saved locally, but failed to sync to your Supabase Database: "${data.supabaseError}"\n\nSolution: Please copy the SQL code from the 'supabase-onesignal-setup.sql' file in this project and run it in your Supabase SQL Editor to update your tables with the missing columns (OneSignal, Banner, and Community options)!`;
+          alert(errorMsg);
+        }
         return true;
       }
       return false;
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
       return false;
     }
@@ -617,10 +623,14 @@ export default function App() {
       if (!user) {
         setShowLoginModal(true);
       } else if (isExpiredUser) {
-        setShowPaywallPopup(true);
+        if (currentTab === 'community' && settings.communityPremiumMode === false) {
+          // Free mode for community, no paywall
+        } else {
+          setShowPaywallPopup(true);
+        }
       }
     }
-  }, [currentTab, user, isExpiredUser]);
+  }, [currentTab, user, isExpiredUser, settings.communityPremiumMode]);
 
   return (
     <div className="min-h-screen bg-[#fafafa] flex flex-col font-sans text-slate-800">
@@ -724,7 +734,7 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-              ) : isExpiredUser ? (
+              ) : (isExpiredUser && settings.communityPremiumMode !== false) ? (
                 <div className="max-w-md mx-auto px-6 py-12 flex flex-col items-center justify-center text-center">
                   <div className="w-16 h-16 bg-rose-50 dark:bg-rose-950/30 rounded-2xl border border-rose-100 dark:border-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 shadow-sm mb-6 animate-pulse">
                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-lock"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -1005,6 +1015,10 @@ export default function App() {
           }}
           onPaymentSuccess={(updatedUser) => {
             setUser(updatedUser);
+            setDismissedPaywall(true);
+            setForceShowPaywall(false);
+            setShowPaywallPopup(false);
+            setCurrentTab('jobs');
             alert('Membership subscription processed successfully! Thank you for choosing Sebok Premium.');
           }}
         />

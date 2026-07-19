@@ -1,6 +1,6 @@
 {
   "name": "Sebok",
-  "description": "Sebok is a mobile-responsive premium job feed and community platform with integrated paywall control, customizable branding, and Cashfree payments.",
+  "description": "Sebok is a premium, mobile-responsive job feed and community platform designed to connect job seekers with top opportunities and a thriving professional network.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

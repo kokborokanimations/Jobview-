@@ -101,6 +101,38 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='one_signal_prompt_btn_allow') THEN
         ALTER TABLE public.admin_settings ADD COLUMN one_signal_prompt_btn_allow TEXT DEFAULT 'HAAN, ALLOW KAREIN 🔔';
     END IF;
+
+    -- Additional Admin configurations safe checks
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='community_mind_placeholder') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN community_mind_placeholder TEXT DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='community_review_notice') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN community_review_notice TEXT DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='login_title') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN login_title TEXT DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='login_subtitle') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN login_subtitle TEXT DEFAULT '';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='google_only') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN google_only BOOLEAN DEFAULT false;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='show_job_filters') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN show_job_filters BOOLEAN DEFAULT true;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='banner_height_type') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN banner_height_type TEXT DEFAULT 'default';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='banner_height_custom_value') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN banner_height_custom_value INTEGER DEFAULT 150;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='banner_object_fit') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN banner_object_fit TEXT DEFAULT 'cover';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='admin_settings' AND column_name='banner_position') THEN
+        ALTER TABLE public.admin_settings ADD COLUMN banner_position TEXT DEFAULT 'center';
+    END IF;
 END $$;
 
 -- 3. Enable Row Level Security (RLS)

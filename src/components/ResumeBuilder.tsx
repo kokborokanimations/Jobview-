@@ -897,9 +897,12 @@ ${(resume.references || []).map(ref => `
 
       // Short delay is sufficient because animations/transitions are disabled immediately
       setTimeout(() => {
+        const userName = resume.personal.fullName || 'Resume';
+        const cleanName = userName.replace(/[^a-zA-Z0-9\s]/g, '').trim().replace(/\s+/g, '_');
+        
         const opt = {
           margin: 0,
-          filename: `${resume.personal.fullName.replace(/\s+/g, '_') || 'Resume'}.pdf`,
+          filename: `${cleanName}_Resume.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
           html2canvas: { 
             scale: 2, 
@@ -1768,7 +1771,7 @@ ${(resume.references || []).map(ref => `
                   >
             {/* Indian Bio Data Template */}
             {activeTemplate === 'indian-biodata' && (
-              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-8 print:p-0">
+              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-8 print:pt-14 print:px-12 print:pb-12">
                 {/* Centered Heading */}
                 <div className="text-center mb-8 select-none">
                   <h1 className="text-3xl font-black tracking-[0.12em] text-slate-900 uppercase border-b-2 border-slate-900 pb-1.5 inline-block font-serif">
@@ -2755,14 +2758,7 @@ ${(resume.references || []).map(ref => `
               </div>
 
               <div className="space-y-4">
-                <div className="bg-teal-50/60 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900/30 rounded-xl p-4 space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-wider text-teal-800 dark:text-teal-300 flex items-center gap-1.5">
-                    💡 High-Quality Selection Method (उच्च गुणवत्ता विधि)
-                  </h4>
-                  <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
-                    Vector/Text format PDF download karne ke liye please system print dialog me <strong>"Save as PDF"</strong> (या "Microsoft Print to PDF") option select karein. Isse PDF bilkul crisp download hoga, aur text ko baad me edit ya copy kiya ja sakega.
-                  </p>
-                  
+                <div className="bg-teal-50/60 dark:bg-teal-950/20 border border-teal-100 dark:border-teal-900/30 rounded-xl p-4">
                   <div className="bg-white/80 dark:bg-slate-950/80 rounded-lg p-3 text-[11px] font-semibold text-slate-600 dark:text-slate-400 border border-teal-100/40 dark:border-teal-900/10 space-y-2">
                     <div className="flex items-start gap-2">
                       <span className="bg-teal-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-black shrink-0 mt-0.5">1</span>

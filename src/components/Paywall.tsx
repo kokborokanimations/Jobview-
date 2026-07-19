@@ -123,6 +123,22 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
       } else {
         // Run Real Cashfree SDK Flow
         try {
+          const isWrongDomain = window.location.hostname !== 'sebok.in' && 
+            window.location.hostname !== 'www.sebok.in' &&
+            !window.location.hostname.includes('localhost') && 
+            !window.location.hostname.includes('127.0.0.1');
+
+          if (isWrongDomain) {
+            console.log('[Cashfree] Non-authorized testing domain detected. Bypassing SDK inline checkout to prevent domain-lock error, falling back to secure payment tab.');
+            setPaymentLink(orderData.payment_link);
+            setCurrentOrderId(orderData.order_id);
+            setIsPolling(true);
+            if (orderData.payment_link) {
+              window.open(orderData.payment_link, '_blank');
+            }
+            return;
+          }
+
           await loadCashfreeScript();
           
           const cashfree = window.Cashfree({
@@ -148,6 +164,9 @@ export default function Paywall({ user, settings, onPaymentSuccess, onClose }: P
           setPaymentLink(orderData.payment_link);
           setCurrentOrderId(orderData.order_id);
           setIsPolling(true);
+          if (orderData.payment_link) {
+            window.open(orderData.payment_link, '_blank');
+          }
         }
       }
     } catch (err: any) {

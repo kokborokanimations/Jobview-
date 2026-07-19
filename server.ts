@@ -131,7 +131,7 @@ function initDB() {
       tagline: 'Your Premium Portal to Verified Careers & Networking',
       logoUrl: '',
       faviconUrl: '',
-      bannerUrl: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop',
+      bannerUrl: 'https://crdmccidgzknnylyggbf.supabase.co/storage/v1/object/public/branding/app_logo_1783614864312.jpg',
       premiumMode: true,
       membershipPrice: 499,
       currency: 'INR',
@@ -613,6 +613,7 @@ function mapSettingsFromSupabase(s: any, currentSettings: any = {}) {
     bannerUrl: getStr(s.banner_url, currentSettings.bannerUrl, ''),
     bannerHtml: getStr(s.banner_html, currentSettings.bannerHtml, ''),
     premiumMode: getBool(s.premium_mode, currentSettings.premiumMode, true),
+    communityPremiumMode: getBool(s.community_premium_mode, currentSettings.communityPremiumMode, true),
     membershipPrice: getNum(s.membership_price, currentSettings.membershipPrice, 499),
     currency: getStr(s.currency, currentSettings.currency, 'INR'),
     paywallFeatures: paywallFeatures,
@@ -669,6 +670,7 @@ function mapSettingsToSupabase(s: any) {
     banner_url: s.bannerUrl,
     banner_html: s.bannerHtml,
     premium_mode: s.premiumMode,
+    community_premium_mode: s.communityPremiumMode !== false,
     membership_price: s.membershipPrice,
     currency: s.currency,
     paywall_features: JSON.stringify(s.paywallFeatures || []),
@@ -708,6 +710,55 @@ function mapSettingsToSupabase(s: any) {
     banner_object_fit: s.bannerObjectFit,
     banner_position: s.bannerPosition
   };
+}
+
+async function cleanSettingsRowForSupabase(supabase: any, row: any): Promise<any> {
+  try {
+    const { data, error } = await supabase
+      .from('admin_settings')
+      .select('*')
+      .eq('id', 'global_settings')
+      .maybeSingle();
+
+    if (!error && data) {
+      const validColumns = new Set(Object.keys(data));
+      const cleaned: any = {};
+      for (const [key, val] of Object.entries(row)) {
+        if (validColumns.has(key)) {
+          cleaned[key] = val;
+        } else {
+          console.log(`[Supabase Auto-Pruning] Pruning column "${key}" because it is not defined in the remote schema cache.`);
+        }
+      }
+      return cleaned;
+    }
+  } catch (err: any) {
+    console.warn('[Supabase Warning] Failed to dynamically inspect admin_settings columns, using fallback set:', err.message || String(err));
+  }
+
+  // Fallback set of standard/legacy columns guaranteed to exist on earlier schemas
+  const basicColumns = new Set([
+    'id', 'created_at', 'brand_name', 'tagline', 'share_title', 'share_desc', 'share_img', 'logo_url', 'favicon_url', 'banner_url', 'banner_html',
+    'premium_mode', 'community_premium_mode', 'membership_price', 'currency', 'paywall_features', 'paywall_title', 'paywall_subtitle',
+    'paywall_button_text', 'paywall_price_description', 'paywall_footer_text', 'paywall_extend_title',
+    'paywall_extend_subtitle', 'paywall_extend_button_text', 'razorpay_key_id', 'razorpay_key_secret',
+    'cashfree_app_id', 'cashfree_secret_key', 'post_approval_mode', 'supabase_url', 'supabase_anon_key',
+    'supabase_service_role_key', 'google_site_verification', 'one_signal_code', 'one_signal_app_id', 'one_signal_rest_api_key',
+    'one_signal_auto_notify', 'one_signal_community_notify', 'one_signal_prompt_title', 'one_signal_prompt_subtitle',
+    'one_signal_prompt_desc', 'one_signal_prompt_btn_dismiss', 'one_signal_prompt_btn_allow', 'community_mind_placeholder',
+    'community_review_notice', 'login_title', 'login_subtitle', 'google_only', 'show_job_filters', 'banner_height_type',
+    'banner_height_custom_value', 'banner_object_fit', 'banner_position'
+  ]);
+
+  const cleaned: any = {};
+  for (const [key, val] of Object.entries(row)) {
+    if (basicColumns.has(key)) {
+      cleaned[key] = val;
+    } else {
+      console.log(`[Supabase Fallback Auto-Pruning] Pruned column "${key}" as part of safety fallback list.`);
+    }
+  }
+  return cleaned;
 }
 
 function mapResumeFromSupabase(r: any) {
@@ -920,24 +971,29 @@ app.post('/api/settings', async (req, res) => {
   db.adminSettings = { ...db.adminSettings, ...req.body };
   writeDB(db);
 
+  let supabaseError = null;
+
   if (isCustomSupabaseConfigured(db)) {
     try {
       const supabase = getAdminSupabase() || getServerSupabase();
       if (supabase) {
         const dbRow = mapSettingsToSupabase(db.adminSettings);
+        const cleanedDbRow = await cleanSettingsRowForSupabase(supabase, dbRow);
         const { error } = await supabase
           .from('admin_settings')
-          .upsert(dbRow);
+          .upsert(cleanedDbRow);
         if (error) {
-          console.log('[Supabase Info] Local settings updated, but Supabase upsert skipped:', error.message);
+          supabaseError = error.message;
+          console.error('[Supabase Error] Settings upsert failed:', error.message);
         }
       }
     } catch (err: any) {
-      console.log('[Supabase Info] Local settings updated, but Supabase upsert skipped. Details:', err.message || String(err));
+      supabaseError = err.message || String(err);
+      console.error('[Supabase Error] Settings upsert exception:', err.message || String(err));
     }
   }
 
-  res.json({ success: true, settings: db.adminSettings });
+  res.json({ success: true, settings: db.adminSettings, supabaseError });
 });
 
 // 2. Jobs endpoints
@@ -2580,12 +2636,33 @@ app.post('/api/payments/create-order', async (req, res) => {
 
   try {
     const isSandbox = cfAppId.startsWith('TEST') || settings.cashfreeSandbox === true;
+    const reqHost = req.headers.host || 'sebok.in';
+
+    // Cashfree production API keys are domain-restricted to 'sebok.in'.
+    // If running in development/preview/AI Studio environments, we must fall back to the Simulator
+    // to avoid the fatal "error 0: Can only be used on: https://sebok.in" SDK crash.
+    const isProductionOnWrongDomain = !isSandbox && 
+      !reqHost.includes('sebok.in') && 
+      !reqHost.includes('localhost') && 
+      !reqHost.includes('127.0.0.1');
+
+    if (isProductionOnWrongDomain) {
+      console.log(`[Cashfree Sync Bypass] Host is "${reqHost}" but production keys are configured. Activating Simulator Mode.`);
+      return res.json({
+        isMock: true,
+        order_id: orderId,
+        order_amount: amount || settings.membershipPrice || 499,
+        order_currency: settings.currency || 'INR',
+        message: 'Your production Cashfree Gateway is configured for sebok.in. Since you are running on a development/preview domain, we have automatically loaded the Cashfree Simulator for safe testing.',
+        warning: 'Cashfree production keys are domain-restricted to https://sebok.in.'
+      });
+    }
+
     const cashfreeUrl = isSandbox 
       ? 'https://sandbox.cashfree.com/pg/orders' 
       : 'https://api.cashfree.com/pg/orders';
 
     const finalAmount = Number(amount || settings.membershipPrice || 499);
-    const reqHost = req.headers.host || 'sebok.in';
     const protocol = reqHost.includes('localhost') ? 'http' : 'https';
     const dynamicReturnUrl = `${protocol}://${reqHost}/payments/success?order_id=${orderId}`;
 
@@ -2901,9 +2978,11 @@ async function startServer() {
           
           // Seed Admin Settings
           if (dbData.adminSettings) {
+            const dbRow = mapSettingsToSupabase(dbData.adminSettings);
+            const cleanedDbRow = await cleanSettingsRowForSupabase(supabase, dbRow);
             await supabase.from('admin_settings').upsert({
               id: 'global_settings',
-              ...mapSettingsToSupabase(dbData.adminSettings)
+              ...cleanedDbRow
             });
           }
           
@@ -3070,7 +3149,7 @@ async function startServer() {
         title = `${brand} - ${tagline}`;
       }
       let description = settings.shareDesc && settings.shareDesc.trim() ? settings.shareDesc : tagline;
-      let imageUrl = settings.shareImg && settings.shareImg.trim() ? settings.shareImg : (bannerUrl || logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=1200&auto=format&fit=crop');
+      let imageUrl = settings.shareImg && settings.shareImg.trim() ? settings.shareImg : (logoUrl || bannerUrl || 'https://crdmccidgzknnylyggbf.supabase.co/storage/v1/object/public/branding/app_logo_1783614864312.jpg');
 
       // Detect specific job preview
       let jobId = req.query.job_id;
