@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, AdminSettings } from '../types';
 import { 
-  Sparkles, Plus, Trash2, Printer, RefreshCw, Eye, Edit3, 
+  Plus, Trash2, Printer, RefreshCw, Eye, Edit3, 
   Copy, Check, FileText, Download, Briefcase, GraduationCap, 
   Terminal, ShieldAlert, Award, FileUp, ListRestart, HelpCircle,
   ZoomIn, ZoomOut, Phone, Mail, Globe, MapPin, Save, FolderOpen
@@ -462,10 +462,6 @@ export default function ResumeBuilder({ user, settings, onLoginTrigger }: Resume
     }
   };
   
-  // AI enhancement states
-  const [aiLoading, setAiLoading] = useState<string | null>(null); // section id or "summary", etc.
-  const [aiError, setAiError] = useState<string | null>(null);
-
   // Sync with localStorage on change
   useEffect(() => {
     localStorage.setItem(storageKey, JSON.stringify(resume));
@@ -953,56 +949,6 @@ ${(resume.references || []).map(ref => `
     }
   };
 
-  // AI-powered Gemini Enhancer
-  const callGeminiEnhance = async (section: string, text: string, idToUpdate?: string) => {
-    if (!text.trim()) {
-      alert('Please enter some text draft first before asking the AI to enhance it!');
-      return;
-    }
-    
-    setAiLoading(idToUpdate || section);
-    setAiError(null);
-
-    try {
-      const res = await fetch('/api/resume/enhance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section,
-          text,
-          role: resume.personal.title || 'Professional'
-        })
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || 'AI enhancement server request failed');
-      }
-
-      const data = await res.json();
-      if (data.enhancedText) {
-        // Automatically apply the enhanced text
-        if (section === 'summary') {
-          handlePersonalChange('summary', data.enhancedText);
-        } else if (section === 'skills') {
-          setResume(prev => ({ ...prev, skills: data.enhancedText }));
-        } else if (section === 'experience' && idToUpdate) {
-          handleExperienceChange(idToUpdate, 'description', data.enhancedText);
-        }
-        
-        if (window.showSuccessToast) {
-          window.showSuccessToast('AI polished successfully!');
-        }
-      }
-    } catch (err: any) {
-      console.error(err);
-      setAiError(err.message || 'Could not connect to Gemini service.');
-      alert(`AI Polish Error: ${err.message || 'Make sure GEMINI_API_KEY is configured under Settings > Secrets'}`);
-    } finally {
-      setAiLoading(null);
-    }
-  };
-
   const parsedSkills = resume.skills
     .split(',')
     .map(s => s.trim())
@@ -1080,7 +1026,7 @@ ${(resume.references || []).map(ref => `
               Smart Resume Builder
             </h1>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">
-              Draft, style, and polish with Gemini AI magic
+              Draft, style, and print your professional resume
             </p>
           </div>
         </div>
@@ -1444,7 +1390,7 @@ ${(resume.references || []).map(ref => `
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
                 <Briefcase size={14} className="text-teal-600" />
-                Work Experience (कार्य अनुभव)
+                Work Experience
               </h2>
               <button
                 onClick={addExperience}
@@ -1473,7 +1419,7 @@ ${(resume.references || []).map(ref => `
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Designation / Job Title (पद)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Designation / Job Title</label>
                         <input
                           type="text"
                           value={exp.position}
@@ -1483,7 +1429,7 @@ ${(resume.references || []).map(ref => `
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Organization / Company Name (संस्था)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Organization / Company Name</label>
                         <input
                           type="text"
                           value={exp.company}
@@ -1493,7 +1439,7 @@ ${(resume.references || []).map(ref => `
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Start Date / Year (आरंभ तिथि)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Start Date / Year</label>
                         <input
                           type="text"
                           value={exp.startDate}
@@ -1503,7 +1449,7 @@ ${(resume.references || []).map(ref => `
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">End Date / Year (समाप्ति तिथि)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">End Date / Year</label>
                         <input
                           type="text"
                           disabled={exp.current}
@@ -1527,21 +1473,7 @@ ${(resume.references || []).map(ref => `
                     </div>
 
                     <div className="space-y-1 pt-1">
-                      <div className="flex items-center justify-between">
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Responsibilities / Description (दायित्व)</label>
-                        <button
-                          onClick={() => callGeminiEnhance('experience', exp.description, exp.id)}
-                          disabled={aiLoading !== null}
-                          className="text-[9px] font-extrabold text-teal-600 hover:text-teal-700 flex items-center gap-1 border border-teal-100 hover:border-teal-200 bg-teal-50/50 hover:bg-teal-50 px-1.5 py-0.5 rounded-md transition-all disabled:opacity-50 cursor-pointer"
-                        >
-                          {aiLoading === exp.id ? (
-                            <div className="w-2.5 h-2.5 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <Sparkles size={10} className="stroke-[2.5]" />
-                          )}
-                          <span>Polish bullets</span>
-                        </button>
-                      </div>
+                      <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">Responsibilities / Description</label>
                       <textarea
                         value={exp.description}
                         onChange={(e) => handleExperienceChange(exp.id, 'description', e.target.value)}
@@ -1561,7 +1493,7 @@ ${(resume.references || []).map(ref => `
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h2 className="text-xs font-black uppercase tracking-widest text-slate-800 font-display flex items-center gap-1.5">
                 <GraduationCap size={15} className="text-teal-600" />
-                Education Details (शैक्षणिक योग्यता)
+                Education Details
               </h2>
               <button
                 onClick={addEducation}
@@ -1590,7 +1522,7 @@ ${(resume.references || []).map(ref => `
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Qualification / Degree (डिग्री/कक्षा)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Qualification / Degree</label>
                         <input
                           type="text"
                           value={edu.degree}
@@ -1600,7 +1532,7 @@ ${(resume.references || []).map(ref => `
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Institution Name (स्कूल/कॉलेज)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Institution Name</label>
                         <input
                           type="text"
                           value={edu.school}
@@ -1610,7 +1542,7 @@ ${(resume.references || []).map(ref => `
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Passing Year (उत्तीर्ण वर्ष)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Passing Year</label>
                         <input
                           type="text"
                           value={edu.endDate}
@@ -1620,7 +1552,7 @@ ${(resume.references || []).map(ref => `
                         />
                       </div>
                       <div>
-                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Marks / Percentage / CGPA (अंक %)</label>
+                        <label className="block text-[9px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Marks / Percentage / CGPA</label>
                         <input
                           type="text"
                           value={edu.description}
@@ -2179,7 +2111,7 @@ ${(resume.references || []).map(ref => `
 
             {/* Classic Blue Bio Data Template */}
             {activeTemplate === 'classic-blue-biodata' && (
-              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white pb-8">
+              <div className="text-slate-800 font-sans leading-relaxed text-[11px] bg-white p-8 print:pt-14 print:px-12 print:pb-12">
                 {/* Header Blue Band */}
                 <div className="bg-[#2c75b8] text-white p-6 text-center select-none mb-8 rounded-t-lg print:rounded-none">
                   <h1 className="text-2xl font-black tracking-[0.1em] uppercase font-sans mb-1.5">
@@ -2209,7 +2141,7 @@ ${(resume.references || []).map(ref => `
                 </div>
 
                 {/* Top Section: Aligned Details + Photo */}
-                <div className="flex justify-between items-start gap-6 mb-8 px-6">
+                <div className="flex justify-between items-start gap-6 mb-8">
                   {/* Key-Value Details */}
                   <div className="flex-1 grid grid-cols-[160px_20px_1fr] gap-y-2.5 text-[12px] text-slate-800 font-medium font-sans">
                     <div className="font-bold text-slate-950 font-sans">Date of Birth</div>
@@ -2306,7 +2238,7 @@ ${(resume.references || []).map(ref => `
                 </div>
 
                 {/* Education Section */}
-                <div className="mb-6 px-6">
+                <div className="mb-6">
                   <h3 className="text-[13px] font-bold text-slate-900 mb-2 font-sans">Education Details:</h3>
                   <table className="w-full border-collapse border border-slate-300 text-[11px] text-slate-800">
                     <thead>
@@ -2375,7 +2307,7 @@ ${(resume.references || []).map(ref => `
                 </div>
 
                 {/* Experience & Address Details Section */}
-                <div className="grid grid-cols-[160px_20px_1fr] gap-y-3 text-[12px] text-slate-800 font-medium font-sans mb-8 px-6">
+                <div className="grid grid-cols-[160px_20px_1fr] gap-y-3 text-[12px] text-slate-800 font-medium font-sans mb-8">
                   <div className="font-bold text-slate-900 font-sans">Experience</div>
                   <div className="font-sans">:</div>
                   <div className="font-sans">
@@ -2390,7 +2322,19 @@ ${(resume.references || []).map(ref => `
                               placeholder="- Responsibilities"
                               multiline
                               className="w-full text-slate-600 pl-2 text-[11px] font-sans"
-                            />
+                            >
+                              {exp.description ? (
+                                <ul className="list-disc pl-4 space-y-0.5 text-left font-sans text-slate-600">
+                                  {exp.description.split('\n').map((bullet, bIdx) => {
+                                    const cleaned = bullet.replace(/^[•\-\s*]+/, '').trim();
+                                    if (!cleaned) return null;
+                                    return <li key={bIdx}>{cleaned}</li>;
+                                  })}
+                                </ul>
+                              ) : (
+                                <span className="text-slate-400 italic">Click to enter responsibilities...</span>
+                              )}
+                            </InlineEdit>
                             <button
                               onClick={() => deleteExperience(exp.id)}
                               className="absolute -right-6 top-0 p-1 bg-red-50 text-red-600 rounded opacity-0 group-hover/exp:opacity-100 transition-opacity print:hidden cursor-pointer"
@@ -2444,7 +2388,7 @@ ${(resume.references || []).map(ref => `
                 </div>
 
                 {/* Declaration Section */}
-                <div className="mb-10 font-sans px-6">
+                <div className="mb-10 font-sans">
                   <p className="text-[11.5px] text-slate-800 leading-relaxed font-sans">
                     <strong className="font-bold text-slate-900 font-sans">Declaration: </strong>
                     <span className="italic font-sans">
@@ -2460,7 +2404,7 @@ ${(resume.references || []).map(ref => `
                 </div>
 
                 {/* Footer Section: Place, Date, Signature */}
-                <div className="flex justify-between items-end text-[12px] text-slate-800 font-medium font-sans pt-4 px-6">
+                <div className="flex justify-between items-end text-[12px] text-slate-800 font-medium font-sans pt-4">
                   <div className="space-y-1.5 font-sans">
                     <p className="flex items-center gap-1 font-sans">
                       <span className="font-bold text-slate-900 font-sans">Place:</span>

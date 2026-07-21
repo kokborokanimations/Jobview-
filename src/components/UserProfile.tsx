@@ -7,6 +7,7 @@ import React, { useState } from 'react';
 import { User, CommunityPost, AdminSettings, Job } from '../types';
 import { User as UserIcon, Calendar, FileText, BadgeCheck, AlertTriangle, Clock, Edit3, Save, X, Sparkles, Image as ImageIcon, Bookmark, Heart, Share2, Check, Flag, Briefcase, MapPin, Trash2, Camera, Upload } from 'lucide-react';
 import { getUserBadge, getTrialInfo, getPremiumInfo } from '../lib/badgeUtils';
+import { getRelativeTime } from './JobFeed';
 
 interface UserProfileProps {
   user: User | null;
@@ -239,26 +240,7 @@ export default function UserProfile({
 
   // Human relative/absolute timestamp logic
   const getRelativeTimestamp = (dateStr: string) => {
-    const postDate = new Date(dateStr);
-    const now = new Date();
-    const diffMs = now.getTime() - postDate.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    if (diffHours < 24) {
-      const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-      if (mins < 60) {
-        return `${mins} min${mins > 1 ? 's' : ''} ago`;
-      }
-      const hrs = Math.floor(diffHours);
-      return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
-    } else {
-      // Return absolute date: "Posted: 15 Oct 2023"
-      return `Posted: ${postDate.toLocaleDateString(undefined, {
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric'
-      })}`;
-    }
+    return getRelativeTime(dateStr);
   };
 
   // Get premium badge styling

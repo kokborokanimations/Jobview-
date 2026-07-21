@@ -9,7 +9,7 @@ import {
   Settings, Briefcase, Users, CreditCard, Shield, Plus, 
   Trash2, Edit, Save, ToggleLeft, ToggleRight, Check, RefreshCw, EyeOff, Eye,
   Clock, CheckCircle, FileText, Globe, Database, UploadCloud, X, Search, Mail, LogIn,
-  ArrowUp, ArrowDown, Bell, Share2
+  ArrowUp, ArrowDown, Bell, Share2, Flame
 } from 'lucide-react';
 import WysiwygEditor from './WysiwygEditor';
 import { getUserBadge, getTrialInfo } from '../lib/badgeUtils';
@@ -112,6 +112,21 @@ export default function AdminPanel({
   const [loginTitle, setLoginTitle] = useState(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
   const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
   const [googleOnly, setGoogleOnly] = useState(settings.googleOnly || false);
+  const [hotJobsTitle, setHotJobsTitle] = useState(settings.hotJobsTitle || 'Hot Openings');
+  const [hotJobsSubtitle, setHotJobsSubtitle] = useState(settings.hotJobsSubtitle || 'Featured premium handpicked listings');
+  const [hotJobsSliderTimer, setHotJobsSliderTimer] = useState<number>(settings.hotJobsSliderTimer || 3);
+  const [hotJobsSliderEnabled, setHotJobsSliderEnabled] = useState<boolean>(settings.hotJobsSliderEnabled !== false);
+  const [hotJobsShowSlider, setHotJobsShowSlider] = useState<boolean>(settings.hotJobsShowSlider !== false);
+  const [hotJobsAutoSlideEnabled, setHotJobsAutoSlideEnabled] = useState<boolean>(settings.hotJobsAutoSlideEnabled !== false);
+  const [hotJobsCardBgType, setHotJobsCardBgType] = useState<'preset' | 'custom_solid' | 'custom_gradient'>(settings.hotJobsCardBgType || 'preset');
+  const [hotJobsCardPresetTheme, setHotJobsCardPresetTheme] = useState<'amber' | 'emerald' | 'indigo' | 'rose' | 'ocean' | 'dark'>(settings.hotJobsCardPresetTheme || 'amber');
+  const [hotJobsCardBgColor, setHotJobsCardBgColor] = useState(settings.hotJobsCardBgColor || '#ffffff');
+  const [hotJobsCardBgGradientFrom, setHotJobsCardBgGradientFrom] = useState(settings.hotJobsCardBgGradientFrom || '#fff7ed');
+  const [hotJobsCardBgGradientTo, setHotJobsCardBgGradientTo] = useState(settings.hotJobsCardBgGradientTo || '#ffedd5');
+  const [hotJobsCardTextColor, setHotJobsCardTextColor] = useState(settings.hotJobsCardTextColor || '#475569');
+  const [hotJobsCardBorderColor, setHotJobsCardBorderColor] = useState(settings.hotJobsCardBorderColor || '#fde68a');
+  const [hotJobsCardTitleColor, setHotJobsCardTitleColor] = useState(settings.hotJobsCardTitleColor || '#0f172a');
+  const [hotJobsCardAccentColor, setHotJobsCardAccentColor] = useState(settings.hotJobsCardAccentColor || '#f59e0b');
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   // OneSignal Test State
@@ -148,6 +163,7 @@ export default function AdminPanel({
   const [jobCallEnabled, setJobCallEnabled] = useState(true);
   const [jobEmailEnabled, setJobEmailEnabled] = useState(true);
   const [jobApplyEnabled, setJobApplyEnabled] = useState(true);
+  const [jobIsHot, setJobIsHot] = useState(false);
 
   // Payment Logs
   const [paymentLogs, setPaymentLogs] = useState<PaymentLog[]>([]);
@@ -328,6 +344,21 @@ export default function AdminPanel({
     setLoginTitle(settings.loginTitle || `Welcome to ${settings.brandName || 'Sebok'}`);
     setLoginSubtitle(settings.loginSubtitle || 'Sign in to unlock verified hiring managers, contact details, and our community wall.');
     setGoogleOnly(settings.googleOnly || false);
+    setHotJobsTitle(settings.hotJobsTitle || 'Hot Openings');
+    setHotJobsSubtitle(settings.hotJobsSubtitle || 'Featured premium handpicked listings');
+    setHotJobsSliderTimer(settings.hotJobsSliderTimer || 3);
+    setHotJobsSliderEnabled(settings.hotJobsSliderEnabled !== false);
+    setHotJobsShowSlider(settings.hotJobsShowSlider !== false);
+    setHotJobsAutoSlideEnabled(settings.hotJobsAutoSlideEnabled !== false);
+    setHotJobsCardBgType(settings.hotJobsCardBgType || 'preset');
+    setHotJobsCardPresetTheme(settings.hotJobsCardPresetTheme || 'amber');
+    setHotJobsCardBgColor(settings.hotJobsCardBgColor || '#ffffff');
+    setHotJobsCardBgGradientFrom(settings.hotJobsCardBgGradientFrom || '#fff7ed');
+    setHotJobsCardBgGradientTo(settings.hotJobsCardBgGradientTo || '#ffedd5');
+    setHotJobsCardTextColor(settings.hotJobsCardTextColor || '#475569');
+    setHotJobsCardBorderColor(settings.hotJobsCardBorderColor || '#fde68a');
+    setHotJobsCardTitleColor(settings.hotJobsCardTitleColor || '#0f172a');
+    setHotJobsCardAccentColor(settings.hotJobsCardAccentColor || '#f59e0b');
   }, [settings]);
 
   const handleApprovePost = async (postId: string) => {
@@ -585,6 +616,21 @@ export default function AdminPanel({
       loginTitle !== (settings.loginTitle || '') ||
       loginSubtitle !== (settings.loginSubtitle || '') ||
       googleOnly !== (settings.googleOnly || false) ||
+      hotJobsTitle !== (settings.hotJobsTitle || 'Hot Openings') ||
+      hotJobsSubtitle !== (settings.hotJobsSubtitle || 'Featured premium handpicked listings') ||
+      hotJobsSliderTimer !== (settings.hotJobsSliderTimer || 3) ||
+      hotJobsSliderEnabled !== (settings.hotJobsSliderEnabled !== false) ||
+      hotJobsShowSlider !== (settings.hotJobsShowSlider !== false) ||
+      hotJobsAutoSlideEnabled !== (settings.hotJobsAutoSlideEnabled !== false) ||
+      hotJobsCardBgType !== (settings.hotJobsCardBgType || 'preset') ||
+      hotJobsCardPresetTheme !== (settings.hotJobsCardPresetTheme || 'amber') ||
+      hotJobsCardBgColor !== (settings.hotJobsCardBgColor || '#ffffff') ||
+      hotJobsCardBgGradientFrom !== (settings.hotJobsCardBgGradientFrom || '#fff7ed') ||
+      hotJobsCardBgGradientTo !== (settings.hotJobsCardBgGradientTo || '#ffedd5') ||
+      hotJobsCardTextColor !== (settings.hotJobsCardTextColor || '#475569') ||
+      hotJobsCardBorderColor !== (settings.hotJobsCardBorderColor || '#fde68a') ||
+      hotJobsCardTitleColor !== (settings.hotJobsCardTitleColor || '#0f172a') ||
+      hotJobsCardAccentColor !== (settings.hotJobsCardAccentColor || '#f59e0b') ||
       JSON.stringify(features) !== JSON.stringify(propFeatures);
 
     if (!hasChanges) {
@@ -649,7 +695,22 @@ export default function AdminPanel({
         communityReviewNotice,
         loginTitle,
         loginSubtitle,
-        googleOnly
+        googleOnly,
+        hotJobsTitle,
+        hotJobsSubtitle,
+        hotJobsSliderTimer: Number(hotJobsSliderTimer),
+        hotJobsSliderEnabled,
+        hotJobsShowSlider,
+        hotJobsAutoSlideEnabled,
+        hotJobsCardBgType,
+        hotJobsCardPresetTheme,
+        hotJobsCardBgColor,
+        hotJobsCardBgGradientFrom,
+        hotJobsCardBgGradientTo,
+        hotJobsCardTextColor,
+        hotJobsCardBorderColor,
+        hotJobsCardTitleColor,
+        hotJobsCardAccentColor
       });
 
       if (success) {
@@ -696,7 +757,8 @@ export default function AdminPanel({
         whatsappEnabled: jobWhatsappEnabled,
         callEnabled: jobCallEnabled,
         emailEnabled: jobEmailEnabled,
-        applyEnabled: jobApplyEnabled
+        applyEnabled: jobApplyEnabled,
+        isHot: jobIsHot
       });
       setEditingJobId(null);
     } else {
@@ -719,7 +781,8 @@ export default function AdminPanel({
         whatsappEnabled: jobWhatsappEnabled,
         callEnabled: jobCallEnabled,
         emailEnabled: jobEmailEnabled,
-        applyEnabled: jobApplyEnabled
+        applyEnabled: jobApplyEnabled,
+        isHot: jobIsHot
       });
       setIsAddingJob(false);
     }
@@ -746,6 +809,7 @@ export default function AdminPanel({
     setJobCallEnabled(true);
     setJobEmailEnabled(true);
     setJobApplyEnabled(true);
+    setJobIsHot(false);
   };
 
   const handleEditJobClick = (job: Job) => {
@@ -768,11 +832,16 @@ export default function AdminPanel({
     setJobCallEnabled(job.callEnabled !== false);
     setJobEmailEnabled(job.emailEnabled !== false);
     setJobApplyEnabled(job.applyEnabled !== false);
+    setJobIsHot(job.isHot || false);
     setIsAddingJob(true);
   };
 
   const handleToggleJobLive = async (job: Job) => {
     await onUpdateJob(job.id, { isLive: !job.isLive });
+  };
+
+  const handleToggleJobHot = async (job: Job) => {
+    await onUpdateJob(job.id, { isHot: !job.isHot });
   };
 
   const handleTrialExtend = async (user: User) => {
@@ -1583,6 +1652,308 @@ export default function AdminPanel({
                 />
               </div>
 
+              {/* Hot Jobs Slider Customization */}
+              <div className="bg-amber-50/50 border border-amber-200/80 p-4 rounded-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-amber-200 pb-2">
+                  <span className="text-[11px] font-bold text-amber-900 font-display flex items-center gap-1.5">
+                    <Flame size={14} className="text-amber-500 fill-amber-500" />
+                    Hot Openings Slider Customization
+                  </span>
+                  <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.5 rounded-sm uppercase tracking-wider">Slider Controls</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Slider completely Show/Hide Toggle */}
+                  <div className="md:col-span-2 bg-white/80 p-3 rounded-lg border border-amber-100 flex items-center justify-between">
+                    <div>
+                      <label className="text-[10px] text-amber-800 font-bold uppercase tracking-wider font-display block mb-0.5">Show Hot Openings Slider</label>
+                      <p className="text-[9px] text-slate-500">Toggle whether the Hot Openings slider section appears on the job board.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setHotJobsShowSlider(!hotJobsShowSlider)}
+                        className="text-amber-600 hover:text-amber-800 transition-colors cursor-pointer"
+                      >
+                        {hotJobsShowSlider ? <ToggleRight size={30} /> : <ToggleLeft size={30} />}
+                      </button>
+                      <span className="text-xs font-bold text-amber-900 w-12 text-right">
+                        {hotJobsShowSlider ? 'Show' : 'Hide'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Slider Title text edit */}
+                  <div>
+                    <label className="text-[10px] text-amber-800 font-bold uppercase tracking-wider font-display block mb-1">Slider Card Title</label>
+                    <input
+                      type="text"
+                      value={hotJobsTitle}
+                      onChange={(e) => setHotJobsTitle(e.target.value)}
+                      placeholder="e.g. Hot Openings"
+                      disabled={!hotJobsShowSlider}
+                      className="w-full px-2.5 py-1.5 bg-white disabled:bg-slate-50 disabled:text-slate-400 border border-amber-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* Slider Auto slide enabled toggle */}
+                  <div>
+                    <label className="text-[10px] text-amber-800 font-bold uppercase tracking-wider font-display block mb-1">Enable Auto-Slide</label>
+                    <div className="flex items-center gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        disabled={!hotJobsShowSlider}
+                        onClick={() => setHotJobsAutoSlideEnabled(!hotJobsAutoSlideEnabled)}
+                        className="text-amber-600 hover:text-amber-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                      >
+                        {hotJobsAutoSlideEnabled ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+                      </button>
+                      <span className="text-xs font-medium text-amber-900">
+                        {hotJobsAutoSlideEnabled ? 'Active (Rotates automatically)' : 'Manual (Tap to slide only)'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Slider Auto Slide Timer */}
+                  {hotJobsAutoSlideEnabled && (
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] text-amber-800 font-bold uppercase tracking-wider font-display block mb-1">Auto-Slide Delay (seconds)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="60"
+                        value={hotJobsSliderTimer}
+                        disabled={!hotJobsShowSlider}
+                        onChange={(e) => setHotJobsSliderTimer(Number(e.target.value))}
+                        className="w-full max-w-xs px-2.5 py-1.5 bg-white disabled:bg-slate-50 border border-amber-200 rounded-lg text-xs font-medium text-slate-700 focus:outline-none focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                      />
+                      <p className="text-[9px] text-amber-700/80 mt-1 font-medium">Automatic interval timer (e.g. 3 seconds).</p>
+                    </div>
+                  )}
+
+                  {/* Theme / Color Customization Block */}
+                  {hotJobsShowSlider && (
+                    <div className="md:col-span-2 border-t border-amber-200/60 pt-4 mt-2 space-y-4">
+                      <div className="flex items-center gap-1.5 mb-1">
+                        <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider font-display">
+                          Card Theme & Color Styling
+                        </span>
+                      </div>
+
+                      {/* Theme type selector */}
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['preset', 'custom_solid', 'custom_gradient'] as const).map((type) => (
+                          <button
+                            key={type}
+                            type="button"
+                            onClick={() => setHotJobsCardBgType(type)}
+                            className={`py-1.5 px-2 rounded-lg text-[10px] font-bold transition-all border ${
+                              hotJobsCardBgType === type
+                                ? 'bg-amber-600 text-white border-amber-600 shadow-sm'
+                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                            }`}
+                          >
+                            {type === 'preset' && '🎨 Theme Presets'}
+                            {type === 'custom_solid' && '🔳 Custom Solid'}
+                            {type === 'custom_gradient' && '🌈 Custom Gradient'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Render Presets selection */}
+                      {hotJobsCardBgType === 'preset' && (
+                        <div className="space-y-2 bg-white/60 p-3 rounded-lg border border-amber-100">
+                          <label className="text-[9px] font-bold text-amber-900 uppercase tracking-widest font-display block">Select Theme Preset</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {[
+                              { id: 'amber', label: 'Sunset Amber 🍊', preview: 'bg-gradient-to-r from-amber-500 to-orange-500' },
+                              { id: 'emerald', label: 'Fresh Emerald 🌿', preview: 'bg-gradient-to-r from-emerald-500 to-teal-600' },
+                              { id: 'indigo', label: 'Royal Indigo 🌌', preview: 'bg-gradient-to-r from-indigo-500 to-violet-600' },
+                              { id: 'rose', label: 'Crimson Fire 🌹', preview: 'bg-gradient-to-r from-rose-500 to-pink-500' },
+                              { id: 'ocean', label: 'Ocean Wave 🌊', preview: 'bg-gradient-to-r from-blue-500 to-cyan-500' },
+                              { id: 'dark', label: 'Cosmic Slate 🪐', preview: 'bg-gradient-to-r from-slate-800 to-slate-950' },
+                            ].map((theme) => (
+                              <button
+                                key={theme.id}
+                                type="button"
+                                onClick={() => setHotJobsCardPresetTheme(theme.id as any)}
+                                className={`flex items-center gap-2 p-1.5 rounded-lg border transition-all text-[10px] font-medium ${
+                                  hotJobsCardPresetTheme === theme.id
+                                    ? 'bg-amber-50 border-amber-500 text-amber-950 font-bold shadow-xs'
+                                    : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50/50'
+                                }`}
+                              >
+                                <span className={`w-3.5 h-3.5 rounded-full ${theme.preview} shrink-0 border border-black/10`} />
+                                <span>{theme.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Render Custom Solid Color picker */}
+                      {hotJobsCardBgType === 'custom_solid' && (
+                        <div className="bg-white/60 p-3 rounded-lg border border-amber-100 space-y-3">
+                          <label className="text-[9px] font-bold text-amber-900 uppercase tracking-widest font-display block">Configure Custom Colors</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Background Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardBgColor}
+                                  onChange={(e) => setHotJobsCardBgColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardBgColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Card Title Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardTitleColor}
+                                  onChange={(e) => setHotJobsCardTitleColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardTitleColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Description / Text Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardTextColor}
+                                  onChange={(e) => setHotJobsCardTextColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardTextColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Border Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardBorderColor}
+                                  onChange={(e) => setHotJobsCardBorderColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardBorderColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Highlight / Accent Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardAccentColor}
+                                  onChange={(e) => setHotJobsCardAccentColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardAccentColor}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Render Custom Gradient Color picker */}
+                      {hotJobsCardBgType === 'custom_gradient' && (
+                        <div className="bg-white/60 p-3 rounded-lg border border-amber-100 space-y-3">
+                          <label className="text-[9px] font-bold text-amber-900 uppercase tracking-widest font-display block">Configure Custom Gradient Colors</label>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Gradient From</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardBgGradientFrom}
+                                  onChange={(e) => setHotJobsCardBgGradientFrom(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardBgGradientFrom}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Gradient To</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardBgGradientTo}
+                                  onChange={(e) => setHotJobsCardBgGradientTo(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardBgGradientTo}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Card Title Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardTitleColor}
+                                  onChange={(e) => setHotJobsCardTitleColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardTitleColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Description / Text Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardTextColor}
+                                  onChange={(e) => setHotJobsCardTextColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardTextColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Border Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardBorderColor}
+                                  onChange={(e) => setHotJobsCardBorderColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardBorderColor}</span>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="text-[9px] text-slate-500 font-bold block mb-1 uppercase">Highlight / Accent Color</label>
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  type="color"
+                                  value={hotJobsCardAccentColor}
+                                  onChange={(e) => setHotJobsCardAccentColor(e.target.value)}
+                                  className="w-7 h-7 rounded border border-slate-200 cursor-pointer overflow-hidden p-0"
+                                />
+                                <span className="text-[10px] font-mono text-slate-600 uppercase font-medium">{hotJobsCardAccentColor}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={isSavingSettings}
@@ -1978,6 +2349,25 @@ export default function AdminPanel({
                     </div>
                   </div>
 
+                  {/* Premium Promotion Feature Toggle */}
+                  <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 space-y-2">
+                    <span className="text-[10px] text-amber-800 font-extrabold uppercase tracking-wider block font-display flex items-center gap-1">
+                      <Flame size={12} className="text-amber-500 fill-amber-500 animate-pulse" /> Promote to Hot Jobs Carousel
+                    </span>
+                    <p className="text-[10px] text-gray-500 leading-tight">
+                      Enabling this displays this job in the "Hot Jobs" featured carousel right below the job feed banner.
+                    </p>
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer select-none pt-1">
+                      <input
+                        type="checkbox"
+                        checked={jobIsHot}
+                        onChange={(e) => setJobIsHot(e.target.checked)}
+                        className="w-4 h-4 text-amber-600 focus:ring-amber-500 border-gray-300 rounded accent-amber-500"
+                      />
+                      <span>Mark as Hot Job (Featured)</span>
+                    </label>
+                  </div>
+
                   <div>
                     <label className="text-[10px] text-gray-400 font-bold uppercase tracking-wider font-display">Company Logo Image (Optional)</label>
                     <div className="mt-1 flex flex-col sm:flex-row items-center gap-4">
@@ -2124,6 +2514,7 @@ export default function AdminPanel({
                       <th className="py-2">Job Title & Company</th>
                       <th className="py-2">Location</th>
                       <th className="py-2">Status</th>
+                      <th className="py-2 text-center">Hot Job</th>
                       <th className="py-2 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -2164,6 +2555,20 @@ export default function AdminPanel({
                             }`}
                           >
                             {job.isLive ? 'Active / Live' : 'Expired'}
+                          </button>
+                        </td>
+                        <td className="py-3 text-center">
+                          <button
+                            onClick={() => handleToggleJobHot(job)}
+                            className={`p-1.5 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 ${
+                              job.isHot
+                                ? 'bg-amber-50 text-amber-600 hover:bg-amber-100/80 border border-amber-100'
+                                : 'text-gray-300 hover:text-amber-500 hover:bg-gray-50'
+                            }`}
+                            title={job.isHot ? 'Remove from Hot Jobs' : 'Mark as Hot Job'}
+                          >
+                            <Flame size={15} className={job.isHot ? 'fill-amber-500' : ''} />
+                            <span className="text-[10px] font-bold">{job.isHot ? 'Hot' : 'Promote'}</span>
                           </button>
                         </td>
                         <td className="py-3 text-right space-x-1">
@@ -3963,24 +4368,6 @@ ON CONFLICT (id) DO NOTHING;`;
                   onChange={(val) => setPageContent(val)}
                   placeholder="<p>Our refund policy outlines...</p>"
                 />
-              </div>
-
-              <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-slate-100 font-display">
-                <div className="space-y-0.5">
-                  <span className="text-[10px] text-slate-800 font-bold uppercase block">Footer Visibility</span>
-                  <span className="text-[9px] text-gray-400 leading-none">Toggle to show in website footer link group.</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPageIsVisible(!pageIsVisible)}
-                  className="text-teal-600 hover:text-teal-700 transition-colors cursor-pointer"
-                >
-                  {pageIsVisible ? (
-                    <ToggleRight size={38} className="text-teal-600" />
-                  ) : (
-                    <ToggleLeft size={38} className="text-gray-300" />
-                  )}
-                </button>
               </div>
 
               <div className="flex gap-2 font-display">

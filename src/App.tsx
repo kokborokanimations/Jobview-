@@ -896,7 +896,7 @@ export default function App() {
                     Resume Builder Locked
                   </h3>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-sm leading-relaxed">
-                    Access to our premium Resume Builder, templates, and AI assistant is exclusive to active Trial and Premium members. Upgrade your plan now to unlock unlimited access.
+                    Access to our premium Resume Builder and bio-data templates is exclusive to active Trial and Premium members. Upgrade your plan now to unlock unlimited manual editing, customization, and high-quality PDF downloads.
                   </p>
                   <button
                     onClick={() => {

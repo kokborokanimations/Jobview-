@@ -26,6 +26,7 @@ export interface Job {
   emailEnabled?: boolean;
   applyEnabled?: boolean;
   contractType?: string;
+  isHot?: boolean;
 }
 
 export interface CommunityPost {
@@ -123,6 +124,21 @@ export interface AdminSettings {
   loginTitle?: string;
   loginSubtitle?: string;
   googleOnly?: boolean;
+  hotJobsTitle?: string;
+  hotJobsSubtitle?: string;
+  hotJobsSliderTimer?: number;
+  hotJobsSliderEnabled?: boolean;
+  hotJobsShowSlider?: boolean;
+  hotJobsAutoSlideEnabled?: boolean;
+  hotJobsCardBgType?: 'preset' | 'custom_solid' | 'custom_gradient';
+  hotJobsCardPresetTheme?: 'amber' | 'emerald' | 'indigo' | 'rose' | 'ocean' | 'dark';
+  hotJobsCardBgColor?: string;
+  hotJobsCardBgGradientFrom?: string;
+  hotJobsCardBgGradientTo?: string;
+  hotJobsCardTextColor?: string;
+  hotJobsCardBorderColor?: string;
+  hotJobsCardTitleColor?: string;
+  hotJobsCardAccentColor?: string;
 }
 
 export interface PaymentLog {

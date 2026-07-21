@@ -9,6 +9,7 @@ import {
   Heart, Bookmark, Share2, Image as ImageIcon, Send, 
   Trash2, Plus, UploadCloud, X, Check, Clock
 } from 'lucide-react';
+import { getRelativeTime } from './JobFeed';
 
 interface CommunityFeedProps {
   posts: CommunityPost[];
@@ -284,25 +285,7 @@ export default function CommunityFeed({
       <div className="space-y-6">
         {(() => {
           const getRelativeTimestamp = (dateStr: string) => {
-            const postDate = new Date(dateStr);
-            const now = new Date();
-            const diffMs = now.getTime() - postDate.getTime();
-            const diffHours = diffMs / (1000 * 60 * 60);
-
-            if (diffHours < 24) {
-              const mins = Math.max(1, Math.floor(diffMs / (1000 * 60)));
-              if (mins < 60) {
-                return `${mins} min${mins > 1 ? 's' : ''} ago`;
-              }
-              const hrs = Math.floor(diffHours);
-              return `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
-            } else {
-              const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-              const day = postDate.getDate();
-              const month = months[postDate.getMonth()];
-              const year = postDate.getFullYear();
-              return `Posted: ${day} ${month} ${year}`;
-            }
+            return getRelativeTime(dateStr);
           };
 
           const visiblePosts = posts.filter((post) => {
@@ -327,7 +310,7 @@ export default function CommunityFeed({
                   className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs animate-slide-up"
                 >
                   {/* Author Card Header */}
-                  <div className="p-4 flex items-center justify-between border-b border-slate-100 bg-slate-50/30">
+                  <div className="px-4 py-1.5 flex items-center justify-between border-b border-slate-100 bg-slate-50/30">
                     <div className="flex items-center gap-3">
                       <img
                         src={post.userAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(post.userName)}`}
@@ -388,7 +371,7 @@ export default function CommunityFeed({
                   )}
 
                   {/* Bottom Interactive Toolbar */}
-                  <div className="px-4 py-2 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
+                  <div className="px-4 py-1.5 bg-slate-50/50 flex items-center justify-between border-t border-slate-100">
                     <div className="flex items-center gap-2">
                       {/* Like/Support Button */}
                       <button

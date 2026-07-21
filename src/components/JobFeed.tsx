@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Job, AdminSettings } from '../types';
-import { Search, MapPin, Briefcase, Calendar, ChevronRight, Activity, Bookmark, Share2, Check, Clock } from 'lucide-react';
+import { Search, MapPin, Briefcase, Calendar, ChevronRight, ChevronLeft, Activity, Bookmark, Share2, Check, Clock, Flame } from 'lucide-react';
 
 export function getRelativeTime(dateString: string | undefined, createdAtString?: string): string {
   const targetStr = dateString || createdAtString;
@@ -86,6 +86,25 @@ export const LOGO_GRADIENTS = [
 export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
   const [search, setSearch] = useState('');
   const [location, setLocation] = useState('');
+  const [currentHotIndex, setCurrentHotIndex] = useState(0);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(settings.hotJobsAutoSlideEnabled !== false);
+
+  useEffect(() => {
+    setIsAutoPlaying(settings.hotJobsAutoSlideEnabled !== false);
+  }, [settings.hotJobsAutoSlideEnabled]);
+
+  // Auto-slide hot jobs with dynamic timing support
+  const hotJobsCount = jobs.filter((job) => job.isHot && job.isLive).length;
+  useEffect(() => {
+    if (hotJobsCount <= 1 || !isAutoPlaying) return;
+
+    const timerSeconds = settings.hotJobsSliderTimer || 3;
+    const interval = setInterval(() => {
+      setCurrentHotIndex((prev) => (prev >= hotJobsCount - 1 ? 0 : prev + 1));
+    }, timerSeconds * 1000);
+
+    return () => clearInterval(interval);
+  }, [hotJobsCount, isAutoPlaying, settings.hotJobsSliderTimer]);
 
   const [bookmarkedJobIds, setBookmarkedJobIds] = useState<string[]>(() => {
     const saved = localStorage.getItem('sebok_bookmarked_jobs') || localStorage.getItem('jobview_bookmarked_jobs');
@@ -196,6 +215,302 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
         </div>
       </div>
 
+      {/* Hot Jobs Carousel Section */}
+      {(() => {
+        if (settings.hotJobsShowSlider === false) return null;
+        const hotJobs = jobs.filter((job) => job.isHot && job.isLive);
+        if (hotJobs.length === 0) return null;
+
+        const activeIndex = currentHotIndex >= hotJobs.length ? 0 : currentHotIndex;
+        const hotJob = hotJobs[activeIndex];
+        if (!hotJob) return null;
+
+        const bgType = settings.hotJobsCardBgType || 'preset';
+        const presetTheme = settings.hotJobsCardPresetTheme || 'amber';
+
+        let containerClass = "rounded-2xl pt-[14px] pb-[14px] px-5 transition-all duration-300 cursor-pointer flex flex-col relative group overflow-hidden shadow-xs hover:scale-[1.002]";
+        let containerStyle: React.CSSProperties = {};
+        
+        let leftAccentClass = "absolute left-0 top-0 bottom-0 w-1.5 rounded-l-2xl";
+        let leftAccentStyle: React.CSSProperties = {};
+        
+        let titleColorClass = "font-extrabold transition-colors tracking-tight text-sm md:text-base font-display";
+        let titleColorStyle: React.CSSProperties = {};
+
+        let textColorClass = "text-xs line-clamp-2 leading-normal font-medium pt-1.5 border-t";
+        let textColorStyle: React.CSSProperties = {};
+
+        let badgeClass = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wider uppercase shadow-xs";
+        let badgeStyle: React.CSSProperties = {};
+
+        let controlsBtnClass = "p-1 rounded-full border text-slate-600 hover:text-slate-900 active:scale-95 transition-all cursor-pointer shadow-xs";
+        let controlsIndicatorClass = "text-[10px] font-mono font-bold px-0.5 select-none text-slate-400";
+        let dotClassBase = "h-1 transition-all duration-300 cursor-pointer";
+
+        let isDarkTheme = false;
+
+        // Apply Preset Themes
+        if (bgType === 'preset') {
+          if (presetTheme === 'amber') {
+            containerClass += " bg-gradient-to-br from-amber-50/60 via-white to-orange-50/40 hover:from-amber-100/50 hover:via-white hover:to-orange-100/30 border border-amber-200 hover:border-amber-300";
+            leftAccentClass += " bg-gradient-to-b from-amber-400 to-orange-500";
+            titleColorClass += " text-slate-900 group-hover:text-amber-800";
+            textColorClass += " text-slate-500 border-amber-200/20";
+            badgeClass += " bg-amber-500 text-white";
+            controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+          } else if (presetTheme === 'emerald') {
+            containerClass += " bg-gradient-to-br from-emerald-50/60 via-white to-teal-50/40 hover:from-emerald-100/50 hover:via-white hover:to-teal-100/30 border border-emerald-200 hover:border-emerald-300";
+            leftAccentClass += " bg-gradient-to-b from-emerald-400 to-teal-500";
+            titleColorClass += " text-slate-900 group-hover:text-teal-800";
+            textColorClass += " text-slate-500 border-emerald-200/20";
+            badgeClass += " bg-emerald-600 text-white";
+            controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+          } else if (presetTheme === 'indigo') {
+            containerClass += " bg-gradient-to-br from-indigo-50/60 via-white to-violet-50/40 hover:from-indigo-100/50 hover:via-white hover:to-violet-100/30 border border-indigo-200 hover:border-indigo-300";
+            leftAccentClass += " bg-gradient-to-b from-indigo-400 to-violet-500";
+            titleColorClass += " text-slate-900 group-hover:text-indigo-800";
+            textColorClass += " text-slate-500 border-indigo-200/20";
+            badgeClass += " bg-indigo-600 text-white";
+            controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+          } else if (presetTheme === 'rose') {
+            containerClass += " bg-gradient-to-br from-rose-50/60 via-white to-pink-50/40 hover:from-rose-100/50 hover:via-white hover:to-pink-100/30 border border-rose-200 hover:border-rose-300";
+            leftAccentClass += " bg-gradient-to-b from-rose-400 to-pink-500";
+            titleColorClass += " text-slate-900 group-hover:text-rose-800";
+            textColorClass += " text-slate-500 border-rose-200/20";
+            badgeClass += " bg-rose-500 text-white";
+            controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+          } else if (presetTheme === 'ocean') {
+            containerClass += " bg-gradient-to-br from-blue-50/60 via-white to-cyan-50/40 hover:from-blue-100/50 hover:via-white hover:to-cyan-100/30 border border-blue-200 hover:border-blue-300";
+            leftAccentClass += " bg-gradient-to-b from-blue-400 to-cyan-500";
+            titleColorClass += " text-slate-900 group-hover:text-blue-800";
+            textColorClass += " text-slate-500 border-blue-200/20";
+            badgeClass += " bg-blue-500 text-white";
+            controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+          } else if (presetTheme === 'dark') {
+            containerClass += " bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 hover:from-slate-800 hover:via-slate-900 hover:to-slate-850 border border-slate-700 hover:border-slate-600 shadow-md";
+            leftAccentClass += " bg-gradient-to-b from-amber-400 to-orange-500";
+            titleColorClass += " text-white group-hover:text-amber-400";
+            textColorClass += " text-slate-400 border-slate-800";
+            badgeClass += " bg-amber-500 text-white";
+            controlsBtnClass += " bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300 hover:text-white";
+            controlsIndicatorClass += " text-slate-500";
+            isDarkTheme = true;
+          }
+        } else if (bgType === 'custom_solid') {
+          const bgColor = settings.hotJobsCardBgColor || '#ffffff';
+          const titleColor = settings.hotJobsCardTitleColor || '#0f172a';
+          const textColor = settings.hotJobsCardTextColor || '#475569';
+          const borderColor = settings.hotJobsCardBorderColor || '#fde68a';
+          const accentColor = settings.hotJobsCardAccentColor || '#f59e0b';
+
+          containerStyle = { backgroundColor: bgColor, borderColor: borderColor, borderWidth: '1px' };
+          leftAccentStyle = { backgroundColor: accentColor };
+          titleColorStyle = { color: titleColor };
+          textColorStyle = { color: textColor, borderTopColor: `${borderColor}30` };
+          badgeStyle = { backgroundColor: accentColor, color: '#ffffff' };
+          controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+
+          // Determine if custom bg is dark for icon/text styling
+          const hex = bgColor.replace('#', '');
+          if (hex.length === 6) {
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            if (brightness < 140) {
+              isDarkTheme = true;
+            }
+          }
+        } else if (bgType === 'custom_gradient') {
+          const fromColor = settings.hotJobsCardBgGradientFrom || '#fff7ed';
+          const toColor = settings.hotJobsCardBgGradientTo || '#ffedd5';
+          const titleColor = settings.hotJobsCardTitleColor || '#0f172a';
+          const textColor = settings.hotJobsCardTextColor || '#475569';
+          const borderColor = settings.hotJobsCardBorderColor || '#fde68a';
+          const accentColor = settings.hotJobsCardAccentColor || '#f59e0b';
+
+          containerStyle = { 
+            background: `linear-gradient(135deg, ${fromColor}, ${toColor})`, 
+            borderColor: borderColor, 
+            borderWidth: '1px' 
+          };
+          leftAccentStyle = { backgroundColor: accentColor };
+          titleColorStyle = { color: titleColor };
+          textColorStyle = { color: textColor, borderTopColor: `${borderColor}30` };
+          badgeStyle = { backgroundColor: accentColor, color: '#ffffff' };
+          controlsBtnClass += " bg-white hover:bg-slate-50 border-slate-200/60";
+
+          // Check brightness of 'from' to determine theme brightness
+          const hex = fromColor.replace('#', '');
+          if (hex.length === 6) {
+            const r = parseInt(hex.substring(0, 2), 16);
+            const g = parseInt(hex.substring(2, 4), 16);
+            const b = parseInt(hex.substring(4, 6), 16);
+            const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            if (brightness < 140) {
+              isDarkTheme = true;
+            }
+          }
+        }
+
+        return (
+          <div 
+            onClick={() => {
+              if (isAutoPlaying) {
+                setIsAutoPlaying(false);
+              }
+              onSelectJob(hotJob);
+            }}
+            className={containerClass}
+            style={containerStyle}
+          >
+            {/* Glowing left highlight accent line */}
+            <div className={leftAccentClass} style={leftAccentStyle} />
+
+            {/* Glowing ambient background glow effect */}
+            {!isDarkTheme && (
+              <>
+                <div className="absolute right-0 top-0 w-36 h-36 bg-amber-100/20 rounded-full blur-2xl pointer-events-none" />
+                <div className="absolute left-1/4 bottom-0 w-24 h-24 bg-orange-100/10 rounded-full blur-xl pointer-events-none" />
+              </>
+            )}
+
+            {/* Header row with controls & badge */}
+            <div className="flex items-center justify-between mb-4 relative z-10 pl-1.5">
+              <div className="flex items-center gap-2">
+                <span className={badgeClass} style={badgeStyle}>
+                  <Flame size={12} className="fill-white text-white animate-pulse" />
+                  {settings.hotJobsTitle || 'Hot Openings'}
+                </span>
+              </div>
+
+              {/* Minimal Slider Controls */}
+              {hotJobs.length > 1 && (
+                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAutoPlaying(false);
+                      setCurrentHotIndex((prev) => (prev === 0 ? hotJobs.length - 1 : prev - 1));
+                    }}
+                    className={controlsBtnClass}
+                    aria-label="Previous Slide"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <span className={controlsIndicatorClass}>
+                    {activeIndex + 1}/{hotJobs.length}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsAutoPlaying(false);
+                      setCurrentHotIndex((prev) => (prev >= hotJobs.length - 1 ? 0 : prev + 1));
+                    }}
+                    className={controlsBtnClass}
+                    aria-label="Next Slide"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Active Hot Job Details Inside Card */}
+            <div className="flex flex-col gap-3 pl-1.5 relative z-10 mb-4 w-full">
+              <div className="flex items-start sm:items-center justify-between gap-4 w-full">
+                <div className="space-y-1 min-w-0 flex-1">
+                  <h4 className={titleColorClass} style={titleColorStyle}>
+                    {hotJob.title}
+                  </h4>
+
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-slate-500">
+                    <span className={isDarkTheme ? "text-amber-400 font-extrabold" : "text-amber-700 font-extrabold"}>
+                      {hotJob.companyName}
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className={`flex items-center gap-0.5 font-medium text-[13px] ${isDarkTheme ? "text-slate-300" : "text-slate-600"}`}>
+                      <MapPin size={11} className={isDarkTheme ? "text-amber-400" : "text-amber-500"} />
+                      {hotJob.location}
+                    </span>
+                    {hotJob.contractType && (
+                      <>
+                        <span className="text-slate-300">•</span>
+                        <span className={`px-1.5 py-0.5 border rounded text-[9px] font-extrabold uppercase ${
+                          isDarkTheme 
+                            ? "bg-slate-800 text-amber-400 border-slate-700" 
+                            : "bg-amber-50 text-amber-700 border-amber-100/60"
+                        }`}>
+                          {hotJob.contractType}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Clean lightweight click indicator */}
+                <div className={`shrink-0 self-center hidden sm:block p-1.5 rounded-lg border transition-colors ${
+                  isDarkTheme 
+                    ? "text-amber-400 hover:text-amber-300 bg-slate-800 border-slate-700" 
+                    : "text-amber-500 group-hover:text-amber-600 bg-amber-50 border-amber-100/50"
+                }`}>
+                  <ChevronRight size={18} />
+                </div>
+              </div>
+
+              {/* Description spanning the entire card width with more breathing space */}
+              <p className={textColorClass} style={textColorStyle}>
+                {hotJob.shortDescription}
+              </p>
+            </div>
+
+            {/* Slider Dots indicators */}
+            {hotJobs.length > 1 && (
+              <div className="flex items-center justify-center gap-1.5 mt-auto relative z-10" onClick={(e) => e.stopPropagation()}>
+                {hotJobs.map((_, dotIdx) => {
+                  const isDotActive = dotIdx === activeIndex;
+                  let dotStyle: React.CSSProperties = {};
+                  let dotClass = dotClassBase;
+
+                  if (isDotActive) {
+                    dotClass += " w-5";
+                    if (bgType !== 'preset') {
+                      dotStyle = { backgroundColor: settings.hotJobsCardAccentColor || '#f59e0b' };
+                    } else {
+                      dotClass += presetTheme === 'emerald' ? " bg-emerald-500" :
+                                 presetTheme === 'indigo' ? " bg-indigo-500" :
+                                 presetTheme === 'rose' ? " bg-rose-500" :
+                                 presetTheme === 'ocean' ? " bg-blue-500" : " bg-amber-500";
+                    }
+                  } else {
+                    dotClass += " w-2";
+                    if (isDarkTheme) {
+                      dotClass += " bg-slate-700 hover:bg-slate-600";
+                    } else {
+                      dotClass += " bg-slate-200 hover:bg-slate-300";
+                    }
+                  }
+
+                  return (
+                    <button
+                      key={dotIdx}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIsAutoPlaying(false);
+                        setCurrentHotIndex(dotIdx);
+                      }}
+                      className={dotClass}
+                      style={dotStyle}
+                      aria-label={`Go to slide ${dotIdx + 1}`}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Modern Filter Bars */}
       {settings.showJobFilters !== false && (
         <div className="bg-white p-3 rounded-xl shadow-xs border border-slate-200 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -253,7 +568,7 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
               <div
                 key={job.id}
                 onClick={() => onSelectJob(job)}
-                className="group relative bg-white p-5 rounded-xl shadow-xs border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 cursor-pointer flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                className="group relative bg-white p-5 rounded-xl shadow-xs border border-slate-200 hover:border-teal-300 hover:shadow-sm transition-all duration-200 cursor-pointer flex flex-col gap-3.5"
               >
                 {/* Dynamic Absolutely Positioned LIVE Badge with Pulsing Red Dot */}
                 {job.isLive && (
@@ -266,7 +581,7 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                   </div>
                 )}
 
-                {/* Job Logo & Basic details */}
+                {/* Job Logo & Basic details row */}
                 <div className="flex items-start gap-4 min-w-0 w-full">
                   {/* Styled logo container: display image if available, else show the selected color preset gradient */}
                   {job.companyLogoUrl ? (
@@ -312,14 +627,13 @@ export default function JobFeed({ jobs, settings, onSelectJob }: JobFeedProps) {
                         <span>{getRelativeTime(job.datePosted, job.createdAt)}</span>
                       </span>
                     </p>
-
-                    <p className="text-xs text-slate-600 line-clamp-2 pr-6 mt-1.5 leading-relaxed">
-                      {job.shortDescription}
-                    </p>
-
-
                   </div>
                 </div>
+
+                {/* Description spanning the entire job card width with more horizontal and vertical breathing space */}
+                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed pt-1.5 border-t border-slate-100">
+                  {job.shortDescription}
+                </p>
 
               </div>
             );

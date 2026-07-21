@@ -103,7 +103,7 @@ export default function JobDetails({ job, settings, onBack }: JobDetailsProps) {
   const emailBody = encodeURIComponent(`Dear Hiring Team,\n\nI am writing to express my strong interest in the "${job.title}" position at "${job.companyName}" advertised on Sebok.\n\nPlease find attached my resume for your consideration.\n\nBest regards,\n[Your Name]`);
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
+    <div className="w-full max-w-4xl mx-auto px-4 py-6 space-y-6">
       
       {/* Back Button & Action Header */}
       <div className="flex items-center justify-between">
@@ -148,10 +148,10 @@ export default function JobDetails({ job, settings, onBack }: JobDetailsProps) {
       </div>
 
       {/* Main Job Detail Card */}
-      <div className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200 space-y-6 shadow-xs">
+      <article className="bg-white rounded-2xl p-6 md:p-8 border border-slate-200 space-y-6 shadow-xs">
         
         {/* Header Summary */}
-        <div className="flex flex-col sm:flex-row items-start gap-4 border-b border-slate-100 pb-6">
+        <div className="flex flex-col sm:flex-row items-start gap-4 border-b border-slate-100 pt-[6px] pb-[6px]">
           {/* Logo container */}
           {job.companyLogoUrl ? (
             <div className="w-16 h-16 rounded-2xl overflow-hidden border border-slate-200/80 flex items-center justify-center shrink-0 bg-slate-50 shadow-xs">
@@ -184,7 +184,7 @@ export default function JobDetails({ job, settings, onBack }: JobDetailsProps) {
             <h2 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight leading-tight">
               {job.title}
             </h2>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-semibold text-slate-500">
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs font-semibold text-slate-500">
               <span className="text-slate-900 font-bold text-sm">{job.companyName}</span>
               <span className="text-slate-300">•</span>
               <span className="flex items-center gap-0.5">
@@ -199,7 +199,7 @@ export default function JobDetails({ job, settings, onBack }: JobDetailsProps) {
                   </span>
                 </>
               )}
-            </div>
+            </p>
           </div>
         </div>
 
@@ -217,19 +217,19 @@ export default function JobDetails({ job, settings, onBack }: JobDetailsProps) {
         </div>
 
         {/* Full Job Description Section */}
-        <div className="space-y-3">
+        <div className="space-y-4 pt-[6px] pb-[6px] border-t border-slate-100">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 font-display">
-            <span className="w-1 h-3 bg-teal-600 rounded-full" />
+            <span className="w-1.5 h-3.5 bg-teal-600 rounded-full" />
             Job Description
           </h3>
-          <p className="text-[14px] text-slate-600 leading-relaxed whitespace-pre-line bg-slate-50 p-5 rounded-xl border border-slate-200/50">
+          <div className="text-[15px] text-slate-700 leading-relaxed whitespace-pre-line px-1">
             {job.fullDescription}
-          </p>
+          </div>
         </div>
 
 
 
-      </div>
+      </article>
 
       {/* Action Sheet (Sleek Bottom Section) */}
       {((job.emailEnabled !== false && job.email) || (job.callEnabled !== false && job.phone) || (job.whatsappEnabled !== false && job.whatsapp) || (job.applyEnabled !== false && job.applyLink)) && (

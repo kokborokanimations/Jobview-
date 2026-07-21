@@ -37,6 +37,7 @@ CREATE TABLE public.jobs (
     email_enabled BOOLEAN DEFAULT true,
     apply_enabled BOOLEAN DEFAULT true,
     qualifications TEXT DEFAULT '',
+    is_hot BOOLEAN DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
@@ -53,7 +54,15 @@ DROP POLICY IF EXISTS "Admin can manage jobs" ON public.jobs;
 CREATE POLICY "Admin can manage jobs" ON public.jobs
     FOR ALL USING (true) WITH CHECK (true);
 
+-- 6. Safe Column Addition (In case the table already exists but lacks is_hot column)
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='jobs' AND column_name='is_hot') THEN
+        ALTER TABLE public.jobs ADD COLUMN is_hot BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
 -- =========================================================================
--- SQL Execution finished. Your 'jobs' table has been recreated from scratch
--- with all columns (Whatsapp, Phone, Email, Logo Presets, etc.)!
+-- SQL Execution finished. Your 'jobs' table has been recreated or updated
+-- with all columns (Whatsapp, Phone, Email, Logo Presets, is_hot, etc.)!
 -- =========================================================================

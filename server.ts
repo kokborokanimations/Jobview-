@@ -65,7 +65,20 @@ app.use(async (req, res, next) => {
           .then(({ data: jData, error: jErr }) => {
             if (!jErr && jData) {
               const freshDb = readDB();
-              freshDb.jobs = jData.map(mapJobFromSupabase);
+              const localJobs = freshDb.jobs || [];
+              const localJobsMap = new Map(localJobs.map((j: any) => [j.id, j]));
+              
+              freshDb.jobs = jData.map((jobRow: any) => {
+                const mapped = mapJobFromSupabase(jobRow);
+                // Preserve local isHot if missing/undefined in Supabase row
+                if (jobRow.is_hot === undefined && jobRow.isHot === undefined) {
+                  const localJob: any = localJobsMap.get(mapped.id);
+                  if (localJob && localJob.isHot !== undefined) {
+                    mapped.isHot = localJob.isHot;
+                  }
+                }
+                return mapped;
+              });
               writeDB(freshDb);
             }
           });
@@ -518,6 +531,7 @@ function mapJobFromSupabase(job: any) {
     emailEnabled: job.email_enabled !== undefined ? job.email_enabled : (job.emailEnabled !== undefined ? job.emailEnabled : true),
     applyEnabled: job.apply_enabled !== undefined ? job.apply_enabled : (job.applyEnabled !== undefined ? job.applyEnabled : true),
     qualifications: job.qualifications || '',
+    isHot: job.is_hot !== undefined ? job.is_hot : (job.isHot !== undefined ? job.isHot : false),
   };
 }
 
@@ -546,7 +560,8 @@ function mapJobToSupabase(job: any) {
     call_enabled: job.callEnabled !== undefined ? job.callEnabled : true,
     email_enabled: job.emailEnabled !== undefined ? job.emailEnabled : true,
     apply_enabled: job.applyEnabled !== undefined ? job.apply_enabled : true,
-    qualifications: job.qualifications || ''
+    qualifications: job.qualifications || '',
+    is_hot: job.isHot !== undefined ? job.isHot : false
   };
 }
 
@@ -1010,7 +1025,18 @@ app.get('/api/jobs', async (req, res) => {
         .order('created_at', { ascending: false });
       
       if (!error && data) {
-        const mappedJobs = data.map(mapJobFromSupabase);
+        const localJobsMap = new Map(localJobs.map((j: any) => [j.id, j]));
+        const mappedJobs = data.map((jobRow: any) => {
+          const mapped = mapJobFromSupabase(jobRow);
+          // Preserve local isHot if missing/undefined in Supabase row
+          if (jobRow.is_hot === undefined && jobRow.isHot === undefined) {
+            const localJob: any = localJobsMap.get(mapped.id);
+            if (localJob && localJob.isHot !== undefined) {
+              mapped.isHot = localJob.isHot;
+            }
+          }
+          return mapped;
+        });
 
         // Merge localJobs and mappedJobs by ID to prevent any job from being lost
         const mergedJobsMap = new Map();
@@ -2151,7 +2177,12 @@ app.post('/api/resume/enhance', async (req, res) => {
     if (section === 'summary') {
       prompt = `Write a professional, impactful 2-3 sentence resume summary statement for a ${role || 'professional'} based on this draft/notes: "${text}". Make it high-impact and compelling. Return only the final text, no introductions or markdown styling.`;
     } else if (section === 'experience') {
-      prompt = `Enhance this job description/achievement for a resume. Turn it into 2-3 polished, action-oriented bullet points (starting with strong action verbs) suitable for a ${role || 'professional'}. Draft: "${text}". Return only the formatted bullet points (use standard hyphen '-' or bullet '•' prefix), no other comments.`;
+      prompt = `Enhance this job description/achievement for a resume. Turn it into 2-3 polished, action-oriented bullet points (starting with strong action verbs) suitable for a ${role || 'professional'}. Draft: "${text}". 
+CRITICAL: Do NOT include any introductory text, preamble, conversational filler, markdown code blocks, or explanations. 
+Return ONLY the bullet points, each starting with a hyphen '-' followed by a space, on a new line.
+Example output format:
+- Designed and executed strategic marketing campaigns.
+- Managed a high-performing team of developers.`;
     } else if (section === 'skills') {
       prompt = `Review this draft list of skills: "${text}". Suggest a refined, comma-separated list of professional, industry-standard skill terms suitable for a ${role || 'professional'}. Return only the clean comma-separated terms, no explanations.`;
     } else {
@@ -2163,7 +2194,58 @@ app.post('/api/resume/enhance', async (req, res) => {
       contents: prompt,
     });
 
-    res.json({ enhancedText: response.text?.trim() });
+    let enhancedText = response.text?.trim() || '';
+
+    // Advanced cleaning for robust bullet formatting
+    if (section === 'experience') {
+      // Remove markdown code blocks if present
+      enhancedText = enhancedText.replace(/```[a-z]*\n?/gi, '');
+      enhancedText = enhancedText.replace(/```/g, '');
+      enhancedText = enhancedText.trim();
+
+      const lines = enhancedText.split('\n');
+      const validBullets: string[] = [];
+
+      for (let line of lines) {
+        line = line.trim();
+        if (!line) continue;
+
+        const lower = line.toLowerCase();
+        // Skip conversational lines
+        if (
+          lower.startsWith('here is') ||
+          lower.startsWith('here are') ||
+          lower.startsWith('sure,') ||
+          lower.startsWith('i hope') ||
+          lower.startsWith('polished') ||
+          lower.startsWith('bullet points:') ||
+          lower.startsWith('improved') ||
+          lower.startsWith('revised') ||
+          lower.startsWith('edited') ||
+          lower.includes('suitable for') ||
+          lower.endsWith(':')
+        ) {
+          continue;
+        }
+
+        // Standardize prefix to standard hyphen '-'
+        const match = line.match(/^([•\-\s*]+)(.*)/);
+        if (match) {
+          const content = match[2].trim();
+          if (content) {
+            validBullets.push(`- ${content}`);
+          }
+        } else {
+          validBullets.push(`- ${line}`);
+        }
+      }
+
+      if (validBullets.length > 0) {
+        enhancedText = validBullets.join('\n');
+      }
+    }
+
+    res.json({ enhancedText });
   } catch (err: any) {
     console.error('Error enhancing resume via Gemini:', err);
     res.status(500).json({ error: 'AI processing failed: ' + (err.message || String(err)) });
@@ -3035,7 +3117,19 @@ async function startServer() {
           // Hydrate Jobs
           const { data: jData } = await supabase.from('jobs').select('*');
           if (jData && jData.length > 0) {
-            dbData.jobs = jData.map(mapJobFromSupabase);
+            const localJobs = dbData.jobs || [];
+            const localJobsMap = new Map(localJobs.map((j: any) => [j.id, j]));
+            dbData.jobs = jData.map((jobRow: any) => {
+              const mapped = mapJobFromSupabase(jobRow);
+              // Preserve local isHot if missing/undefined in Supabase row
+              if (jobRow.is_hot === undefined && jobRow.isHot === undefined) {
+                const localJob: any = localJobsMap.get(mapped.id);
+                if (localJob && localJob.isHot !== undefined) {
+                  mapped.isHot = localJob.isHot;
+                }
+              }
+              return mapped;
+            });
           }
           
           // Hydrate Community Posts
